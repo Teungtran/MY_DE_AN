@@ -31,4 +31,4 @@ embedding_model_config:
   deployment_name: "text-embedding-3-small"
   # kwargs for EmbeddingModel
   kwargs:
-    chunk_size: 2048
+    chunk_size: 512

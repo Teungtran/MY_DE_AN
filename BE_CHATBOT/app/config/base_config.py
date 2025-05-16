@@ -37,27 +37,6 @@ class DynamoDBConfig(BaseModel):
     region_name: str = Field(default_factory=from_env("REGION_NAME"))
 
 
-class PortgresDBConfig(BaseModel):
-    server: str = Field(
-        default_factory=from_env("POSTGRES_SERVER"), description="The hostname or IP address of the PostgreSQL server."
-    )
-    port: str = Field(
-        default_factory=from_env("POSTGRES_PORT"),
-        description="The port number on which the PostgreSQL server is listening.",
-    )
-    db: str = Field(
-        default_factory=from_env("POSTGRES_DB"), description="The name of the PostgreSQL database to connect to."
-    )
-    user: str = Field(
-        default_factory=from_env("POSTGRES_USER"),
-        description="The username used for authenticating with the PostgreSQL database.",
-    )
-    password: SecretStr = Field(
-        default_factory=secret_from_env("POSTGRES_PASSWORD"),
-        description="The password used for authenticating with the PostgreSQL database.",
-    )
-    table_name: str = Field(default_factory=from_env("CONVERSATION_TABLE_NAME"))
-
 
 class QdrantConfig(BaseModel):
     url: str = Field(default_factory=from_env("QDRANT_URL"))
@@ -106,7 +85,6 @@ class BaseConfiguration(BaseModel):
     vector_store_config: Union[QdrantConfig] = QdrantConfig()
     mongo_config: Union[MongoDBConfig] = MongoDBConfig()
     dynamo_config: Union[DynamoDBConfig] = DynamoDBConfig()
-    postgres_config: Union[PortgresDBConfig] = PortgresDBConfig()
     oauth_config: Union[OauthConfig] = OauthConfig()
 
     @model_validator(mode="after")

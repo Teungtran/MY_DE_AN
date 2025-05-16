@@ -1,0 +1,63 @@
+services:
+  # vault:
+  #   image: hashicorp/vault:latest
+  #   container_name: vault-dev
+  #   ports:
+  #     - "8200:8200"
+  #   environment:
+  #     - VAULT_DEV_ROOT_TOKEN_ID=dev-token
+  #     - VAULT_DEV_LISTEN_ADDRESS=0.0.0.0:8200
+  #   cap_add:
+  #     - IPC_LOCK
+  #   command: server -dev
+  #   volumes:
+  #     - ./vault/init:/vault/init:ro
+
+  # vault-init:
+  #   image: hashicorp/vault:latest
+  #   container_name: vault-init
+  #   depends_on:
+  #     - vault
+  #   environment:
+  #     - VAULT_ADDR=http://vault:8200
+  #     - VAULT_TOKEN=dev-token
+  #   tty: true
+  #   stdin_open: true
+  #   volumes:
+  #     - ./vault/init:/vault/init:rw
+  #   command: "chmod +x /vault/init/setup-vault.sh && sh -c  sleep 5 && /vault/init/setup-vault.sh"
+
+  be-pre-processing:
+    container_name: be-pre-processing
+    labels:
+      log_type: app
+      log_env: dev
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: ".env"
+    ports:
+      - "8000:8000"
+    restart: always
+    depends_on:
+      - changedetection
+  
+  changedetection:
+    container_name: changedetection
+    labels:
+      log_type: app
+      log_env: dev
+    image: ghcr.io/dgtlmoon/changedetection.io
+    hostname: changedetection
+    volumes:
+      - changedetection-data:/datastore
+      - ./scripts/custom-changedetection.txt:/app/changedetectionio/model/App.py
+    ports:
+      - 5000:5000
+    environment:
+      API_ACCESS_TOKEN: ${API_KEY_CHANGE_DETECTION}
+    restart: unless-stopped
+
+
+volumes:
+  changedetection-data:

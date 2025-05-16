@@ -5,7 +5,6 @@ __pycache__/
 
 # C extensions
 *.so
-
 # Distribution / packaging
 .Python
 build/
@@ -25,7 +24,7 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-.history
+
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -116,8 +115,7 @@ ipython_config.py
 .pdm.toml
 .pdm-python
 .pdm-build/
-markdown_dir
-Makefile
+
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
 
@@ -131,7 +129,6 @@ celerybeat.pid
 # Environments
 .env
 .venv
-dean_env
 env/
 venv/
 ENV/
@@ -178,5 +175,6 @@ cython_debug/
 # PyPI certificate
 pythonhosted.crt
 
-assets/sample_data/
+*.lock
 
+assets/sample_data/
