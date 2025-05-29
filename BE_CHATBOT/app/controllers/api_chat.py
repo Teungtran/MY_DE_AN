@@ -1,18 +1,22 @@
 import datetime
+import asyncio
+from typing_extensions import AsyncGenerator
+import json 
 from decimal import Decimal
 from schemas.chunk_message import ChunkMessage
-from typing import Optional, Dict, Any, Union, AsyncGenerator
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from typing import Optional, Dict
+from fastapi import APIRouter, HTTPException,Request
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
-from langdetect import detect, LangDetectException
+from langdetect import detect
 from orchestrator.graph.main_graph import setup_agentic_graph
-from orchestrator.graph.tools.support_nodes import format_message
+from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
+from sse_starlette.sse import EventSourceResponse
 
 from utils.logging.logger import get_logger
 from utils.token_counter import tiktoken_counter
 from config.base_config import APP_CONFIG
 from services.dynamodb import DynamoHistory
+from services.redis_caching import redis_caching
 from schemas.user_inputs import UserInputs
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 
@@ -53,38 +57,193 @@ def initialize_dynamo():
         manager = None
 
 initialize_dynamo()
+redis_connect = redis_caching()
 
-async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[tuple, None]:
+graph = setup_agentic_graph()
+
+
+async def stream_and_save_response(conversation_id: str, user_id: str, user_message: str, 
+                                final_response, final_tool_call, prompt_token: int, 
+                                completion_token: int, start_time, history_lang: str,
+                                tool_call_name, tool_call_args, tool_call_id, tool_call_type):
+    """Helper function to stream response and save to database."""
+    content = extract_content_from_response(final_response)
+    await save_message_to_redis(conversation_id, "ai", content)
+    
+    # Stream characters
+    for char in content:
+        print(char, end="|")
+        payload = ChunkMessage(
+            response=char,
+            tools=[final_tool_call] if final_tool_call else None,
+            prompt_token=prompt_token,
+            completion_token=completion_token
+        )
+        yield f"data: {payload.model_dump_json()}\n\n"
+    
+    # Log and save to database after streaming is complete
+    end_time = datetime.datetime.now(datetime.timezone.utc)
+    execution_time = (end_time - start_time).total_seconds()
+    logger.info(f"Stream finished, execution_time={execution_time}s")
+    
+    if manager:  # Always save if manager exists, regardless of final_response
+        try:
+            decimal_execution_time = Decimal(str(execution_time)) if execution_time is not None else None
+            # Extract content for saving
+            response_content = extract_content_from_response(final_response) if final_response else None
+            
+            manager.save_chat_history(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                user_input=user_message,
+                prompt_token=prompt_token,
+                completion_token=completion_token,
+                total_token=prompt_token+completion_token,
+                end_time=end_time,
+                start_time=start_time,
+                execution_time=decimal_execution_time,
+                language=history_lang,
+                tool_call_name=final_tool_call['name'] if final_tool_call else tool_call_name,
+                tool_call_args=final_tool_call['args'] if final_tool_call else tool_call_args,
+                tool_call_id=final_tool_call['id'] if final_tool_call else tool_call_id,
+                tool_call_type=final_tool_call['type'] if final_tool_call else tool_call_type,
+                response=response_content
+            )
+            logger.info("Chat history saved successfully")
+        except Exception as save_exc:
+            logger.error("Error saving chat history to DynamoDB", exc_info=save_exc)
+    else:
+        logger.warning("DynamoDB manager not available; skipping save to history.")
+
+#_____________________SETUP CACHING______________________________
+async def publish_to_channel(channel: str, message: dict):
+    if not redis_connect:
+        logger.warning("Redis not available, skipping channel publish")
+        return
+    try:
+        message_json = json.dumps(message)
+        await asyncio.to_thread(redis_connect.publish, channel, message_json)
+    except Exception as e:
+        logger.error(f"Error publishing to channel {channel}: {str(e)}")
+
+async def save_message_to_redis(conversation_id: str, role: str, message: str):
+    if not conversation_id or not redis_connect:
+        logger.warning("Redis not available or no conversation_id, skipping message save")
+        return
+    
+    message_data = {"role": role, "content": message}
+    message_json = json.dumps(message_data)
+    try:
+        await asyncio.to_thread(redis_connect.rpush, f"chat:{conversation_id}", message_json)
+        await asyncio.to_thread(redis_connect.ltrim, f"chat:{conversation_id}", -100, -1)
+        await asyncio.to_thread(redis_connect.expire, f"chat:{conversation_id}", 86400)  
+        await publish_to_channel(f"chat:{conversation_id}", message_data)
+    except Exception as e:
+        logger.error(f"Error saving message to Redis: {str(e)}")
+##_______________________SETUP SSE____________________________________
+async def retrieve_events(request: Request, conversation_id: str) -> AsyncGenerator[str, None]:
+    pubsub = None
+    try:
+        if not redis_connect:
+            logger.error("Redis not available for SSE")
+            yield json.dumps({"error": "Chat history service unavailable"})
+            return
+            
+        pubsub = redis_connect.pubsub()
+        await asyncio.to_thread(pubsub.subscribe, f"chat:{conversation_id}")
+        
+        # Send existing chat history first
+        try:
+            history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conversation_id}", 0, -1)
+            for msg in history:
+                msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
+                try:
+                    message_data = json.loads(msg_str)
+                    yield f"data: {json.dumps(message_data)}\n\n"
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping invalid JSON in history: {msg_str}")
+        except Exception as e:
+            logger.error(f"Error retrieving chat history: {e}")
+        
+        # Listen for new messages
+        while not await request.is_disconnected():
+            try:
+                message = await asyncio.to_thread(pubsub.get_message, timeout=1.0, ignore_subscribe_messages=True)
+                if message and message["type"] == "message":
+                    data = message["data"]
+                    if isinstance(data, bytes):
+                        data = data.decode('utf-8')
+                    yield f"data: {data}\n\n"
+            except Exception as e:
+                logger.error(f"Error in SSE message loop: {e}")
+                break
+    
+    except asyncio.CancelledError:
+        logger.info(f"SSE connection for conversation {conversation_id} was cancelled")
+    except Exception as e:
+        logger.error(f"Error in SSE connection: {e}")
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    finally:
+        if pubsub:
+            try:
+                await asyncio.to_thread(pubsub.unsubscribe, f"chat:{conversation_id}")
+                await asyncio.to_thread(pubsub.close)
+            except Exception as e:
+                logger.error(f"Error closing pubsub: {e}")
+
+@router.get("/{conversation_id}/subscribe")
+async def subscribe_to_stream(request: Request, conversation_id: str):
+    return EventSourceResponse(retrieve_events(request, conversation_id))
+
+@router.get("/{conversation_id}/messages")
+async def get_chat_history(conversation_id: str):
+    try:
+        if not redis_connect:
+            logger.warning("Redis not available, returning empty history")
+            return []
+            
+        exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conversation_id}")
+        if exists:
+            history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conversation_id}", 0, -1)
+            messages = []
+            for msg in history:
+                try:
+                    msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
+                    message_data = json.loads(msg_str)
+                    messages.append(message_data)
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping invalid JSON in history: {msg}")
+            return messages
+        return []
+    except Exception as e:
+        logger.error(f"Error retrieving chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving chat history: {str(e)}")
+async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[str, None]:
     """
-    Stream responses following the test_fpt_shop_assistant logic but with streaming
+    Send a message to the FPT Shop Assistant with a given thread_id,
+    return only the final AI response and the final tool call.
+    Handles both regular messages and tool call confirmations.
     """
     try:
         start_time = datetime.datetime.now(datetime.timezone.utc)
         conversation_id = user_inputs.conversation_id
         user_id = user_inputs.user_id
         logger.info(f"Starting event_stream: conversation_id={conversation_id}")
+
         user_message = user_inputs.message
+        await save_message_to_redis(conversation_id, "human", user_message) 
         tool_call_name = None
         tool_call_args = None
         tool_call_id = None
         tool_call_type = None
-        history_lang = None
-        prompt_token = 0
-        completion_token = 0
+        history_lang = detect(user_message) if user_message else None
         
-        # Safe language detection
-        try:
-            history_lang = detect(user_message) if user_message else None
-        except LangDetectException:
-            history_lang = None
-            logger.warning("Could not detect language for user message")
-            
-        graph = setup_agentic_graph()
         initial_snapshot = graph.get_state(config)
         if isinstance(initial_snapshot, tuple):
             initial_snapshot = initial_snapshot[0]
         initial_chat_history = initial_snapshot.get("messages", []) if hasattr(initial_snapshot, 'get') else []
         initial_prompt_token = tiktoken_counter(initial_chat_history) if initial_chat_history else 0
+
         snapshot = graph.get_state(config)
         if snapshot and snapshot.next:
             last_toolcall_message = None
@@ -115,7 +274,6 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                         config,
                     )
                 
-                # Process the result
                 if "messages" in result:
                     for msg in result["messages"]:
                         msg_content = format_message(msg)
@@ -160,22 +318,20 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                     snapshot = snapshot[0]
                 
                 chat_history = snapshot.get("messages", []) if hasattr(snapshot, 'get') else []
-                prompt_token = tiktoken_counter(chat_history) if chat_history else 0
+                total_prompt_token = tiktoken_counter(chat_history) if chat_history else 0
+                prompt_token = total_prompt_token - initial_prompt_token
                 
-                # Stream the response
-                if final_response:
-                    yield final_response, None, prompt_token, completion_token
+                # Use helper function for streaming and saving
+                async for chunk in stream_and_save_response(
+                    conversation_id, user_id, user_message, final_response, 
+                    final_tool_call, prompt_token, completion_token, start_time, 
+                    history_lang, tool_call_name, tool_call_args, tool_call_id, tool_call_type
+                ):
+                    yield chunk
                 
-                # Save to history and return
-                await save_chat_history(
-                    manager, conversation_id, user_message, prompt_token, 
-                    completion_token, start_time, history_lang, 
-                    final_tool_call, tool_call_name, tool_call_args, 
-                    tool_call_id, tool_call_type, final_response
-                )
-                return
+                return  
         
-        # Normal flow - process new message
+        # Only execute this part if there's no pending tool call
         processed_set = set()
         all_messages = []
         all_tool_calls = []
@@ -184,7 +340,6 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
             "conversation_id": conversation_id,  
             "dialog_state": ["primary_assistant"]
         }
-        
         events = graph.stream(
             initial_state,
             config,
@@ -203,6 +358,7 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                             "message": message
                         })
                         
+                        # Collect all tool calls
                         if hasattr(message, "tool_calls") and message.tool_calls:
                             for tool_call in message.tool_calls:
                                 all_tool_calls.append({
@@ -212,7 +368,6 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                                     "type": tool_call['type']
                                 })
 
-        # Check if there's a pending tool call that needs confirmation
         snapshot = graph.get_state(config)
         if snapshot and snapshot.next:
             if hasattr(snapshot, 'values') and "messages" in snapshot.values:
@@ -223,10 +378,19 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                         f"Please confirm your request: {tool_args}, press 'y' to confirm or 'n' to reject.\n"
                         f"Vui lòng xác nhận yêu cầu: {tool_args}, nhấn 'y' để xác nhận hoặc 'n' để từ chối."
                     )
-                    yield confirmation_message, None, 0, 0
+                    await save_message_to_redis(conversation_id, "ai", confirmation_message)
+                    for char in confirmation_message:
+                        print(char, end="|")
+                        payload = ChunkMessage(
+                            response=char,
+                            tools=None,
+                            prompt_token=0,
+                            completion_token=0
+                        )
+                        yield f"data: {payload.model_dump_json()}\n\n"
                     return
 
-        # Get final response from processed messages
+        # Get final response
         final_response = ""
         for msg_data in reversed(all_messages):
             content = msg_data["content"]
@@ -243,7 +407,7 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                 break
 
         final_tool_call = all_tool_calls[-1] if all_tool_calls else None
-        completion_token = tiktoken_counter([AIMessage(content=final_response)]) if final_response else 0
+        completion_token = tiktoken_counter([AIMessage(content=final_response)])
 
         snapshot = graph.get_state(config)
         if isinstance(snapshot, tuple):
@@ -251,108 +415,24 @@ async def event_stream(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
         chat_history = snapshot.get("messages", []) if hasattr(snapshot, 'get') else []
         total_prompt_token = tiktoken_counter(chat_history) if chat_history else 0
         prompt_token = total_prompt_token - initial_prompt_token
-
-        end_time = datetime.datetime.now(datetime.timezone.utc)
-        execution_time = (end_time - start_time).total_seconds()
-        logger.info(f"Stream finished, execution_time={execution_time}s")
         
-        total_token = prompt_token + completion_token
-        logger.info(f"Token usage - prompt: {prompt_token}, completion: {completion_token}, total: {total_token}")
-        print(f"Token usage - prompt: {prompt_token}, completion: {completion_token}, total: {total_token}")
-        
-        # Stream the final response
-        if final_response:
-            yield final_response, final_tool_call, prompt_token, completion_token
-        else:
-            yield "No response generated", None, prompt_token, completion_token
-        
-        # Save chat history
-        await save_chat_history(
-            manager, user_id,conversation_id, user_message, prompt_token, 
-            completion_token, start_time, history_lang, 
-            final_tool_call, tool_call_name, tool_call_args, 
-            tool_call_id, tool_call_type, final_response
-        )
-        
+        # Use helper function for streaming and saving
+        async for chunk in stream_and_save_response(
+            conversation_id, user_id, user_message, final_response, 
+            final_tool_call, prompt_token, completion_token, start_time, 
+            history_lang, tool_call_name, tool_call_args, tool_call_id, tool_call_type
+        ):
+            yield chunk
+                
     except Exception as exc:
         logger.error("Error in event_stream", exc_info=exc)
-        error_message = f"Error: {str(exc)}"
-        yield error_message, None, 0, 0
-        raise HTTPException(status_code=500, detail=str(exc))
-
-async def save_chat_history(
-    manager, user_id, conversation_id, user_message, prompt_token, 
-    completion_token, start_time, history_lang, 
-    final_tool_call, tool_call_name, tool_call_args, 
-    tool_call_id, tool_call_type, final_response
-):
-    """Helper function to save chat history to DynamoDB"""
-    if manager and final_response:
-        try:
-            end_time = datetime.datetime.now(datetime.timezone.utc)
-            execution_time = (end_time - start_time).total_seconds()
-            decimal_execution_time = Decimal(str(execution_time)) if execution_time is not None else None
-            total_token = prompt_token + completion_token
-            
-            manager.save_chat_history(
-                conversation_id=conversation_id,
-                user_id=user_id,
-                user_input=user_message,
-                prompt_token=prompt_token,
-                completion_token=completion_token,
-                total_token=total_token,
-                end_time=end_time,
-                start_time=start_time,
-                execution_time=decimal_execution_time,
-                language=history_lang,
-                tool_call_name=final_tool_call['name'] if final_tool_call else tool_call_name,
-                tool_call_args=final_tool_call['args'] if final_tool_call else tool_call_args,
-                tool_call_id=final_tool_call['id'] if final_tool_call else tool_call_id,
-                tool_call_type=final_tool_call['type'] if final_tool_call else tool_call_type,
-                response=final_response
-            )
-            logger.info("Chat history saved successfully")
-        except Exception as save_exc:
-            logger.error("Error saving chat history to DynamoDB", exc_info=save_exc)
-    else:
-        if not manager:
-            logger.warning("DynamoDB not initialized; skipping save to history.")
-        elif not final_response:
-            logger.warning("No final response available; skipping save to history.")
-
-async def format_stream_response(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[str, None]:
-    """
-    Wrapper to format the tuple response from event_stream into strings for StreamingResponse
-    """
-    try:
-        async for response_tuple in event_stream(user_inputs, config):
-            message, tool_call, prompt_tokens, completion_tokens = response_tuple
-            
-            # Format as JSON string for structured response
-            response_data = {
-                "message": message,
-                "tool_call": tool_call,
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
-                "total_tokens": prompt_tokens + completion_tokens
-            }
-            
-            # Convert to JSON string and add newline for streaming
-            import json
-            yield f"data: {json.dumps(response_data)}\n\n"
-            
-    except Exception as exc:
-        logger.error("Error in format_stream_response", exc_info=exc)
-        error_response = {
-            "message": f"Error: {str(exc)}",
-            "tool_call": None,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0
-        }
-        import json
-        yield f"data: {json.dumps(error_response)}\n\n"
-
+        error_payload = ChunkMessage(
+            response=f"An error occurred: {str(exc)}",
+            prompt_token=0,
+            completion_token=0,
+            tools=None
+        )
+        yield f"data: {error_payload.model_dump_json()}\n\n"
 @router.post("/streaming-answer")
 async def stream(user_inputs: UserInputs):
     exception_handler = ExceptionHandler(
@@ -364,9 +444,9 @@ async def stream(user_inputs: UserInputs):
         logger.info(f"Received /stream request: conversation_id={user_inputs.conversation_id}")
         config = {
             "configurable": {"thread_id": user_inputs.conversation_id},
-            "recursion_limit": 10
+            "recursion_limit": 50
         }
-        return StreamingResponse(format_stream_response(user_inputs, config), media_type="text/event-stream")
+        return EventSourceResponse(stream_event(user_inputs, config))
     except Exception as exc:
         logger.error("Error in stream endpoint", exc_info=exc)
         return exception_handler.handle_exception(e=str(exc), extra={"user_inputs": user_inputs.model_dump()})

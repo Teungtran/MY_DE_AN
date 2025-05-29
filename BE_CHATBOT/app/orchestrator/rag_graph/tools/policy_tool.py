@@ -16,7 +16,7 @@ from .llm import extend_query,translate_language,llm_history
 from .reranking import  most_relevant
 from factories.chat_factory import create_chat_model
 from services.dynamodb import DynamoHistory
-from prompts import GENERATE_PROMPT
+from ..prompts import GENERATE_PROMPT
 chat_config = APP_CONFIG.chat_model_config
 import os
 if not chat_config:
@@ -50,7 +50,7 @@ def setup_multi_retrieval(semantic_retriever, llm):
 
 qdrant_client = QdrantClient(
     url=QDRANT_URL,
-    api_key=QDRANT_API_KEY,
+    api_key=QDRANT_API_KEY.get_secret_value(),
 )
 
 def initialize_system():
@@ -58,7 +58,7 @@ def initialize_system():
     if VECTOR_CACHE["VECTOR_DB"] is not None:
         return VECTOR_CACHE["VECTOR_DB"]
     embedding = create_embedding_model(APP_CONFIG.embedding_model_config)
-    vector_db = create_policy_store(APP_CONFIG.vector_store_config, embedding)
+    vector_db = create_policy_store(APP_CONFIG, embedding_model=embedding)
     VECTOR_CACHE["VECTOR_DB"] = vector_db
     return vector_db
 
@@ -88,13 +88,17 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
             [("system", GENERATE_PROMPT), ("human", "{input}")]
         )
         
+        # Get extended queries and translated language in parallel operations
         try:
-            extended_queries = extend_query(user_input, llm)
+            extended_queries = extend_query(user_input)
+            language = translate_language(user_input)
             print(f"Extended queries: {extended_queries}")
         except Exception as e:
-            print(f"Error in extend_query: {e}")
+            print(f"Error in query processing: {e}")
             extended_queries = [user_input]
+            language = user_input
         
+        # Set up retriever once
         semantic_retriever = vector_db.as_retriever(
             search_type="mmr",  
             search_kwargs={
@@ -106,7 +110,6 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
         
         try:
             multi_retriever = setup_multi_retrieval(semantic_retriever, llm)
-            language = translate_language(user_input, llm)
         except Exception as e:
             print(f"Error setting up retrieval: {e}")
             return "I'm having trouble processing your question right now.", []
@@ -121,6 +124,7 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
             )
             print(f"Found {len(relevant_docs)} relevant documents")
         except Exception as e:
+            print(f"Error in document retrieval: {e}")
             return "I couldn't find good information about your question.", []
         
         if not relevant_docs:
@@ -138,16 +142,16 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
             print(f"Error in QA chain: {e}")
             return "I found some information but couldn't process it properly.", []
         
+        # Extract answer from response
         if isinstance(rag_response, dict):
             answer = rag_response.get("answer", rag_response)
         else:
             answer = rag_response
         
-
-        
         return answer
         
     except Exception as e:
+        print(f"General error in RAG_Agent: {e}")
         return "I apologize, but I encountered an error while searching for information.", []
 
 

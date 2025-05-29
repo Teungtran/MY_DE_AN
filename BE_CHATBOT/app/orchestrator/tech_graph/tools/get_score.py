@@ -4,8 +4,7 @@ from rapidfuzz import fuzz
 from typing import List, Dict, Optional
 from qdrant_client import QdrantClient
 import time
-from sentence_transformers import SentenceTransformer
-from keybert import KeyBERT
+import joblib
 import os
 from config.base_config import APP_CONFIG
 
@@ -13,20 +12,25 @@ QDRANT_URL = APP_CONFIG.recommend_config.url
 QDRANT_API_KEY = APP_CONFIG.recommend_config.api_key
 COLLECTION = APP_CONFIG.recommend_config.collection_name
 KEYBERT = APP_CONFIG.key_bert_config.model
+FALLBACK_MODEL_PATH = r"C:\Users\Admin\Desktop\DE_AN\BE_CHATBOT\saved_models\keybert.pkl"
 
-model_name = APP_CONFIG.key_bert_config.model
-model = SentenceTransformer(model_name)
-model.save(f"saved_models/{model_name.split('/')[-1]}")
+# Global variables for caching
+_vectorizer = None
 _cached_all_points = None
 _cache_timestamp = 0
-_CACHE_TTL = 300  # 5 minutes in seconds
-_vectorizer = None
+_client_cache = None
+_model_cache = None
+CACHE_DURATION = 300  # 5 minutes cache duration
 
 def get_client():
-    return QdrantClient(
-    url=QDRANT_URL,
-    api_key=QDRANT_API_KEY
-)
+    """Get cached Qdrant client to avoid repeated connections."""
+    global _client_cache
+    if _client_cache is None:
+        _client_cache = QdrantClient(
+            url=QDRANT_URL,
+            api_key=QDRANT_API_KEY.get_secret_value()
+        )
+    return _client_cache
 
 def convert_to_string(value) -> str:
     """Convert any value to a string in a standardized way."""
@@ -42,11 +46,12 @@ def fuzzy_score(user_query: str, metadata: Dict) -> float:
     user_query_lower = user_query.lower()
     priority_fields = ['device_name','brand','category','discount_percent', 'sales_perks',
                     'payment_perks','sales_price']
-    fuzzy_sim = 0
-    for field in priority_fields:
-        if field in metadata:
-            value_str = convert_to_string(metadata[field])
-            fuzzy_sim += fuzz.partial_ratio(user_query_lower, value_str.lower())
+    
+    # Use sum with generator for better performance
+    fuzzy_sim = sum(
+        fuzz.partial_ratio(user_query_lower, convert_to_string(metadata.get(field, "")).lower())
+        for field in priority_fields if field in metadata
+    )
     return fuzzy_sim
 
 def check_similarity(text1: str, texts: Optional[List[str]], vectorizer=None) -> float:
@@ -75,7 +80,7 @@ def get_all_points(batch_size: int = 100, force_refresh: bool = False):
     global _cached_all_points, _cache_timestamp
     
     current_time = time.time()
-    cache_expired = (current_time - _cache_timestamp) > _CACHE_TTL
+    cache_expired = (current_time - _cache_timestamp) > CACHE_DURATION
     
     # Return cached results if valid and not forcing refresh
     if _cached_all_points is not None and not cache_expired and not force_refresh:
@@ -98,7 +103,6 @@ def get_all_points(batch_size: int = 100, force_refresh: bool = False):
             
             all_points.extend(points)
             
-            # If no more results or offset is None, break
             if not points or offset is None:
                 break
         
@@ -107,40 +111,39 @@ def get_all_points(batch_size: int = 100, force_refresh: bool = False):
         return _cached_all_points
         
     except Exception as e:
+        print(f"Error retrieving points: {e}")
         return _cached_all_points if _cached_all_points is not None else []
 
-_kw_model = None  # Initialize globally or in your class/module
-
-def get_keybert_model():
-    """Lazy-load the KeyBERT model only when needed."""
-    global _kw_model
-    if _kw_model is None:
+def get_cached_model():
+    """Get cached KeyBERT model to avoid repeated loading."""
+    global _model_cache
+    
+    if _model_cache is not None:
+        return _model_cache
+    
+    try:
+        _model_cache = joblib.load(KEYBERT)
+        print(f"[INFO] Loaded model from config: {KEYBERT}")
+    except Exception as e:
+        print(f"[WARN] Failed to load model from config: {e}")
         try:
-            model_path = APP_CONFIG.key_bert_config.model
-
-            if os.path.isdir(model_path):
-                sentence_model = SentenceTransformer(model_path)
-            else:
-                sentence_model = SentenceTransformer(model_path)
-                save_path = f"saved_models/{model_path.split('/')[-1]}"
-                sentence_model.save(save_path)
-
-            _kw_model = KeyBERT(model=sentence_model)
-
-        except Exception as e:
-            print(f"Error initializing KeyBERT model: {e}")
-            return None
-    return _kw_model
+            _model_cache = joblib.load(FALLBACK_MODEL_PATH)
+            print(f"[INFO] Loaded fallback model from: {FALLBACK_MODEL_PATH}")
+        except Exception as fallback_error:
+            print(f"[ERROR] Failed to load fallback model: {fallback_error}")
+            _model_cache = None
+    
+    return _model_cache
 
 def keyword(user_query: str) -> str:
-    """Extract keywords from user query with error handling while preserving the original query."""
+    """Extract keywords from user query with error handling and fallback support."""
     if not user_query or not user_query.strip():
         return ""
-    
-    model = get_keybert_model()
-    if not model:
-        return user_query  
-    
+
+    model = get_cached_model()
+    if model is None:
+        return user_query
+
     try:
         keywords_with_scores = model.extract_keywords(
             user_query,
@@ -149,15 +152,18 @@ def keyword(user_query: str) -> str:
             top_n=5,
             use_mmr=True,
             diversity=0.5,
-            seed_keywords=["phone", "laptop/pc", "earphone", "power bank", "mouse", "case", "keyboard", "apple", "xiaomi", "realme", "honor", "samsung", "oppo", "dell", "macbook", "msi", "asus", "hp", "lenovo", "acer", "gigabyte", "logitech", "marshall"]
+            seed_keywords=[
+                "phone", "laptop/pc", "earphone", "power bank", "mouse", "case", "keyboard",
+                "apple", "xiaomi", "realme", "honor", "samsung", "oppo", "dell", "macbook",
+                "msi", "asus", "hp", "lenovo", "acer", "gigabyte", "logitech", "marshall"
+            ]
         )
 
         if not keywords_with_scores:
             return user_query
-        
-        keywords_str = ", ".join([kw for kw, _ in keywords_with_scores])
-        
-        return keywords_str
+
+        return ", ".join([kw for kw, _ in keywords_with_scores])
+
     except Exception as e:
-        print(f"Error extracting keywords: {e}")
-        return user_query  
+        print(f"[ERROR] Keyword extraction failed: {e}")
+        return user_query

@@ -31,51 +31,57 @@ def recommend_system(
     """
     recommendation_config = RecommendationConfig()
     
+    # Pre-process inputs once
     main_query = ""
     main_query_lower = ""
     if user_input:
         main_query = keyword(user_input)
         main_query_lower = main_query.lower()
     
+    # Determine language once
     language_input = user_input or types or ""
-    if not language_input and preference:
-        if "brand" in preference and isinstance(preference["brand"], list) and preference["brand"]:
-            language_input = preference["brand"][0]
+    if not language_input and preference and "brand" in preference and preference["brand"]:
+        language_input = preference["brand"][0]
     language = detect_langs(language_input)
 
-    all_points = get_all_points()
-    matched_docs = []
-    has_brands = has_types = has_history = has_price = False
+    # Pre-process preference filters
     brands = []
+    user_types = []
+    history_device_names = []
+    price_min = price_max = None
+    
     if preference and "brand" in preference and preference["brand"]:
         brands = [brand.lower() for brand in preference["brand"]]
-        has_brands = len(brands) > 0
     
-    user_types = []
     if types:
         user_types = types.lower().split()
-        has_types = len(user_types) > 0
     
-    history_device_names = []
     if recent_history:
         history_device_names = [rh["device_name"].lower() for rh in recent_history 
                             if isinstance(rh, dict) and "device_name" in rh]
-        has_history = len(history_device_names) > 0
     
-    price_min = price_max = None
     if preference and "price_range" in preference and preference["price_range"]:
         price_range = preference["price_range"]
         if isinstance(price_range, list):
-            has_price = True
             if len(price_range) == 1:
                 price_max = price_range[0]
             elif len(price_range) >= 2:
                 price_min, price_max = price_range[:2]
 
+    # Use flags to check if filters exist
+    has_brands = len(brands) > 0
+    has_types = len(user_types) > 0
+    has_history = len(history_device_names) > 0
+    has_price = price_min is not None or price_max is not None
+
+    all_points = get_all_points()
+    matched_docs = []
+
     for doc in all_points:
         metadata = doc.payload.get("metadata", {})
         total_score = 0
         
+        # User input scoring (most expensive operation first to potentially skip)
         if user_input:
             combined_fields = [
                 convert_to_string(metadata.get("device_name", "")),
@@ -90,18 +96,25 @@ def recommend_system(
             user_input_score = fuzzy_score(main_query_lower, metadata)
             total_score += user_input_score * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
         
+        # Early filtering - skip if score is too low and we have user input
+        if user_input and total_score < 50:  # Threshold to skip low-scoring items early
+            continue
+        
+        # Type matching
         if has_types:
             doc_category = metadata.get("suitable_for", "").lower()
             if doc_category:
                 type_score = sum(fuzz.partial_ratio(t, doc_category) for t in user_types)
                 total_score += (type_score / len(user_types)) * recommendation_config.TYPE_MATCH_BOOST / 100
         
+        # Brand matching
         if has_brands:
             doc_brand = metadata.get("brand", "").lower()
             if doc_brand:
                 brand_score = sum(fuzz.partial_ratio(b, doc_brand) for b in brands)
                 total_score += (brand_score / len(brands)) * recommendation_config.BRAND_MATCH_BOOST / 100
         
+        # Price filtering
         if has_price:
             sale_price = metadata.get("sale_price")
             if isinstance(sale_price, (int, float)):
@@ -112,6 +125,7 @@ def recommend_system(
                 elif price_min is not None and sale_price >= price_min:
                     total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
         
+        # History matching
         if has_history:
             doc_info = f"{metadata.get('category', '').lower()} {metadata.get('brand', '').lower()} {metadata.get('device_name', '').lower()}"
             history_score = sum(fuzz.partial_ratio(h, doc_info) for h in history_device_names)
@@ -122,49 +136,55 @@ def recommend_system(
             "score": total_score
         })
 
+    # Sort and get top matches
     matched_docs.sort(key=lambda x: x["score"], reverse=True)
     top_match_count = min(len(matched_docs), recommendation_config.MAX_RESULTS)
     top_matches = matched_docs[:top_match_count]
     
-    top_device_names = []
-    for match in top_matches:
-        device_name = match["doc"].payload.get("metadata", {}).get("device_name")
-        if device_name:
-            top_device_names.append(device_name)
+    # Extract device names once
+    top_device_names = [match["doc"].payload.get("metadata", {}).get("device_name") 
+                       for match in top_matches if match["doc"].payload.get("metadata", {}).get("device_name")]
 
     if not top_matches:
         return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
 
-    search_context = ""
-
+    # Build search context efficiently
     meta_fields = [
         "device_name", "cpu", "card", "screen", "storage", "image_link",
         "sale_price", "discount_percent", "installment_price",
         "colors", "sales_perks", "guarantee_program", "payment_perks", "source"
     ]
 
+    search_context_parts = []
     for idx, item in enumerate(top_matches, start=1):
         meta = item["doc"].payload.get("metadata", {})
-        content = f"Product {idx}:\n"
+        content_parts = [f"Product {idx}:"]
+        
         for field in meta_fields:
             if field in meta:
-                if field in ["sale_price","installment_price"]:
-                    value = meta[field]
+                value = meta[field]
+                if field in ["sale_price", "installment_price"]:
                     if isinstance(value, (int, float)):
-                        content += f"- {field}: {value:,} VND\n"
+                        content_parts.append(f"- {field}: {value:,} VND")
                     else:
-                        content += f"- {field}: {value} VND\n"
+                        content_parts.append(f"- {field}: {value} VND")
                 elif field == "discount_percent":
-                    content += f"- {field}: {meta[field]}%\n"
+                    content_parts.append(f"- {field}: {value}%")
                 else:
-                    content += f"- {field}: {meta[field]}\n"
-        search_context += content + "\n\n"
+                    content_parts.append(f"- {field}: {value}")
+        
+        search_context_parts.append("\n".join(content_parts))
     
-    source = top_matches[0]["doc"].payload.get("metadata", {}).get("source") if top_matches else ""
-    images = top_matches[0]["doc"].payload.get("metadata", {}).get("image_link") if top_matches else ""
+    search_context = "\n\n".join(search_context_parts)
+    
+    # Get source and images from first match
+    first_meta = top_matches[0]["doc"].payload.get("metadata", {}) if top_matches else {}
+    source = first_meta.get("source", "")
+    images = first_meta.get("image_link", "")
 
-    response= llm_recommend(user_input, search_context, language, top_device_names, source, images)
+    response = llm_recommend(user_input, search_context, language, top_device_names, source, images)
 
+    # Update global cache
     global recommended_devices_cache
     recommended_devices_cache = top_device_names
     

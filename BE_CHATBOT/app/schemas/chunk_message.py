@@ -7,10 +7,7 @@ from pydantic import BaseModel
 
 # Define the Message model
 class ChunkMessage(BaseModel):
-    finishReason: Optional[str]
-    content: Optional[str] = ""
-    language: Optional[str] = ""
-    tool_call_id: Optional[str] = None
-    tool_call_name: Optional[str] = None
-    tool_call_args: Optional[Dict[str, Any]] = None
-    tool_call_type: Optional[str] = None
+    response: Optional[str] = ""
+    tools: Optional[List[Dict[str, Any]]] = None
+    prompt_token: Optional[int] = None
+    completion_token: Optional[int] = None

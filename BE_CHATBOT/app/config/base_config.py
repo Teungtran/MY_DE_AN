@@ -30,38 +30,39 @@ class EmbeddingConfig(BaseModel):
     kwargs: Dict = Field(default={})
 
 class RedisConfig(BaseModel):
-    url: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("REDIS_URL", default="redis://default:MnUje1PHs9HeGKDbKHwnLRv7JLqUghbM@redis-16594.crce178.ap-east-1-1.ec2.redns.redis-cloud.com:16594"))
+    host: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_HOST")())[1])
+    password: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_PASS")())[1])
 class MongoDBConfig(BaseModel):
-    url: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("MONGO_URL", default="mongodb+srv://teungtran:wY6HWt#hhEkQr6G@dean.iahbe1n.mongodb.net/?retryWrites=true&w=majority&appName=DEAN"))
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_URL", default="mongodb+srv://nguyentrantrung2504:NBg7vdR1KSDlW1E3@cluster0.hpkg9.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0")())[1])
 class OpenAIConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
     model: Optional[str] = Field(default="gpt-4o-mini")
     kwargs: Dict = Field(default_factory=dict)
     
 class KeyBERTConfig(BaseModel):
-    model: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("KEYBERT_MODEL"))
+    model: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("KEYBERT_MODEL")())[1])
 
 class DynamoDBConfig(BaseModel):
-    aws_access_key_id: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("AWS_ACCESS_KEY_ID"))
-    aws_secret_access_key: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("AWS_SECRET_ACCESS_KEY"))
-    table_name: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("TABLE_NAME"))
-    region_name: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("AWS_REGION"))
+    aws_access_key_id: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_ACCESS_KEY_ID")())[1])
+    aws_secret_access_key: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_SECRET_ACCESS_KEY")())[1])
+    table_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("TABLE_NAME")())[1])
+    region_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_REGION")())[1])
 
 
 class PolicyConfig(BaseModel):
-    url: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("QDRANT_URL"))
-    api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or from_env("QDRANT_API_KEY"))
-    collection_name: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("POLICY"))
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
+    collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POLICY")())[1])
 
 class RecommendConfig(BaseModel):
-    url: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("QDRANT_URL"))
-    api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or from_env("QDRANT_API_KEY"))
-    collection_name: str = Field(default_factory=lambda: ensure_env_loaded() or from_env("STORAGE"))
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
+    collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("STORAGE")())[1])
     
     
 class OauthConfig(BaseModel):
     token_url: str = Field(
-        default_factory=lambda: ensure_env_loaded() or from_env("OAUTH_TOKEN_URL"), 
+        default_factory=lambda: (ensure_env_loaded(), from_env("OAUTH_TOKEN_URL")())[1], 
         description="The URL to obtain the OAuth token."
     )
 

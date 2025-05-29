@@ -1,6 +1,7 @@
-from langgraph.checkpoint.mongodb import MongoDBSaver
 from config.base_config import APP_CONFIG
 from utils.logging.logger import get_logger
+from langgraph.checkpoint.mongodb import MongoDBSaver
+from pymongo import MongoClient
 MONGO_DB_URL = APP_CONFIG.mongo_config.url
 logger = get_logger(__name__)
 
@@ -16,8 +17,7 @@ def test_mongo_connection(mongo_url):
         logger.error(f"MongoDB connection test failed: {str(e)}")
         return False
 
-from langgraph.checkpoint.mongodb import MongoDBSaver
-from pymongo import MongoClient
+
 
 def create_checkpointer():
     status  = test_mongo_connection(MONGO_DB_URL)
@@ -27,9 +27,7 @@ def create_checkpointer():
 
     # Create checkpointer directly
     checkpointer = MongoDBSaver(
-        client=client,
-        database_name="langgraph",
-        collection_name="checkpoints"
+        client=client
     )
 
     if hasattr(checkpointer, "setup"):

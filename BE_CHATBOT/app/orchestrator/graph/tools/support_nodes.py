@@ -1,10 +1,9 @@
 from typing import Callable
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import ToolMessage,AIMessage
 
-from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableLambda
-from state import AgenticState
+from ..state import AgenticState
 from langgraph.prebuilt import ToolNode
 def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable:
     def entry_node(state: AgenticState) -> dict:
@@ -56,3 +55,13 @@ def format_message(message):
         elif isinstance(content, list) and content and isinstance(content[0], dict):
             return content[0].get("text", "")
     return str(message)
+def extract_content_from_response(response):
+    """Extract content from various response types."""
+    if isinstance(response, AIMessage):
+        return response.content
+    elif isinstance(response, dict) and "content" in response:
+        return response["content"]
+    elif isinstance(response, str):
+        return response
+    else:
+        return str(response)

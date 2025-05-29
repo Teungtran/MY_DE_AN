@@ -58,7 +58,7 @@ class DynamoHistory:
     def check_id_exists(self, message_id: str) -> bool:
         try:
             response = self.table.get_item(Key={"id": message_id})
-            return bool(response.get("Items"))
+            return bool(response.get("Item"))
         except Exception as e:
             print(f"[ERROR] Failed to check ID existence: {str(e)}")
             return False
@@ -118,14 +118,20 @@ class DynamoHistory:
             "latency_s": execution_time,
         }
 
+        # Determine required_form_value
         if response:
             required_form_value = "no"
         elif tool_call_name:
             required_form_value = "yes"
+        else:
+            required_form_value = "no"  # Default value
+
         human_id = self.snowflake_gen.generate_snowflake_id(time=start_time)
         ai_id = self.snowflake_gen.generate_snowflake_id(time=end_time)
         human_exists = self.check_id_exists(str(human_id))
         ai_exists = self.check_id_exists(str(ai_id))
+        
+        # Always save human message if it doesn't exist
         if not human_exists:
             user_item = {
                 "id": human_id,
@@ -135,7 +141,9 @@ class DynamoHistory:
                 **fields,
             }
             self.table.put_item(Item=user_item)
+            logger.info(f"Saved human message with ID: {human_id}")
 
+        # Save AI message if it doesn't exist and we have response or tool call
         if not ai_exists:
             if response:
                 ai_item = {
@@ -146,6 +154,7 @@ class DynamoHistory:
                     **fields,
                 }
                 self.table.put_item(Item=ai_item)
+                logger.info(f"Saved AI response with ID: {ai_id}")
 
             elif tool_call_name:
                 tool_item = {
@@ -156,10 +165,11 @@ class DynamoHistory:
                     **fields,
                 }
                 self.table.put_item(Item=tool_item)
+                logger.info(f"Saved AI tool call with ID: {ai_id}")
 
         if human_exists and ai_exists:
             logger.info(f"Both human_id and ai_id already exist: {human_id}, {ai_id}")
-            return False
+            return {"conversation_id": conversation_id, "reply_to_message_id": reply_to_message_id}
 
         return {"conversation_id": conversation_id, "reply_to_message_id": reply_to_message_id}
 

@@ -4,14 +4,38 @@ from langgraph.graph import END, StateGraph, START
 from .state import AgenticState, Assistant,pop_dialog_state
 from .tools.support_nodes import create_entry_node, create_tool_node_with_fallback
 from .primary_assistant import assistant_runnable, update_tech_runnable, update_policy_runnable,route_policy_agent,route_primary_assistant,route_update_tech
-from tech_graph.tech_agent import tech_sensitive_tools,tech_safe_tools
-from rag_graph.policy_agent import tools
+from ..tech_graph.tech_agent import tech_sensitive_tools,tech_safe_tools
+from ..rag_graph.policy_agent import tools
 from services.mongo_checkpoint import create_checkpointer
 from utils.logging.logger import get_logger
 from utils.token_counter import tiktoken_counter
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from.tools.support_nodes import format_message
+
 logger = get_logger(__name__)
+
+# Cache for graph state to avoid redundant calls
+_graph_state_cache = {}
+
+def get_cached_graph_state(graph, config, cache_key=None):
+    """Get graph state with caching to avoid redundant calls."""
+    if cache_key and cache_key in _graph_state_cache:
+        return _graph_state_cache[cache_key]
+    
+    state = graph.get_state(config)
+    if isinstance(state, tuple):
+        state = state[0]
+        
+    if cache_key:
+        _graph_state_cache[cache_key] = state
+    
+    return state
+
+def clear_graph_state_cache():
+    """Clear the graph state cache."""
+    global _graph_state_cache
+    _graph_state_cache.clear()
+
 def setup_agentic_graph():
     """Create the main agent graph with all nodes and edges."""
     builder = StateGraph(AgenticState)
@@ -73,6 +97,7 @@ def setup_agentic_graph():
         interrupt_before=["update_tech_sensitive_tools"],
     )
     return graph
+
 graph = setup_agentic_graph()
 
 def format_message(message):
@@ -96,13 +121,17 @@ def test_fpt_shop_assistant(thread_id: str, user_message: str):
             "thread_id": thread_id,
         }
     }
-    initial_snapshot = graph.get_state(config)
-    if isinstance(initial_snapshot, tuple):
-        initial_snapshot = initial_snapshot[0]
+    
+    # Clear cache at start of new interaction
+    clear_graph_state_cache()
+    
+    # Get initial state once and cache it
+    initial_snapshot = get_cached_graph_state(graph, config, f"initial_{thread_id}")
     initial_chat_history = initial_snapshot.get("messages", []) if hasattr(initial_snapshot, 'get') else []
     initial_prompt_token = tiktoken_counter(initial_chat_history) if initial_chat_history else 0
 
-    snapshot = graph.get_state(config)
+    # Check for pending tool calls
+    snapshot = get_cached_graph_state(graph, config, f"current_{thread_id}")
     if snapshot and snapshot.next:
         last_toolcall_message = None
         
@@ -175,14 +204,14 @@ def test_fpt_shop_assistant(thread_id: str, user_message: str):
             final_tool_call = all_tool_calls[-1] if all_tool_calls else None
             completion_token = tiktoken_counter([AIMessage(content=final_response)])
             
-            snapshot = graph.get_state(config)
-            if isinstance(snapshot, tuple):
-                snapshot = snapshot[0]
-            
-            chat_history = snapshot.get("messages", []) if hasattr(snapshot, 'get') else []
+            # Get final state for token calculation  
+            final_snapshot = get_cached_graph_state(graph, config, f"final_{thread_id}")
+            chat_history = final_snapshot.get("messages", []) if hasattr(final_snapshot, 'get') else []
             prompt_token = tiktoken_counter(chat_history) if chat_history else 0
             
+            return final_response, final_tool_call, prompt_token - initial_prompt_token, completion_token
     
+    # Process new message
     processed_set = set()
     all_messages = []
     all_tool_calls = []
@@ -220,10 +249,10 @@ def test_fpt_shop_assistant(thread_id: str, user_message: str):
                             })
 
     # Check if there's a pending tool call that needs approval
-    snapshot = graph.get_state(config)
-    if snapshot and snapshot.next:
-        if hasattr(snapshot, 'values') and "messages" in snapshot.values:
-            last_message = snapshot.values["messages"][-1]
+    post_snapshot = get_cached_graph_state(graph, config, f"post_{thread_id}")
+    if post_snapshot and post_snapshot.next:
+        if hasattr(post_snapshot, 'values') and "messages" in post_snapshot.values:
+            last_message = post_snapshot.values["messages"][-1]
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 tool_args = last_message.tool_calls[0]["args"]
                 confirmation_message = (
@@ -251,10 +280,9 @@ def test_fpt_shop_assistant(thread_id: str, user_message: str):
     final_tool_call = all_tool_calls[-1] if all_tool_calls else None
     completion_token = tiktoken_counter([AIMessage(content=final_response)])
 
-    snapshot = graph.get_state(config)
-    if isinstance(snapshot, tuple):
-        snapshot = snapshot[0]
-    chat_history = snapshot.get("messages", []) if hasattr(snapshot, 'get') else []
+    # Get final state for token calculation
+    final_snapshot = get_cached_graph_state(graph, config, f"final_{thread_id}")
+    chat_history = final_snapshot.get("messages", []) if hasattr(final_snapshot, 'get') else []
     total_prompt_token = tiktoken_counter(chat_history) if chat_history else 0
     prompt_token = total_prompt_token - initial_prompt_token
 
