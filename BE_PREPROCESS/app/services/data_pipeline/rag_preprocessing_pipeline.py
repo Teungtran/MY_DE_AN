@@ -17,9 +17,8 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# This will be the main pipeline for the preprocessing service
 class RAGPreprocessingPipeline:
-    def __init__(self, config: BaseConfiguration = APP_CONFIG,type="url"):
+    def __init__(self, config: BaseConfiguration = APP_CONFIG,type="urls"):
         self.config = config
 
         self.embedding_model = create_embedding_model(config.embedding_model_config)

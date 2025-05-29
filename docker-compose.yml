@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  be_preprocess:
+    build:
+      context: ./BE_PREPROCESS
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./BE_PREPROCESS/app:/code/app
+      - ./BE_PREPROCESS/config:/code/config
+      - ./BE_PREPROCESS/logs:/code/logs
+    environment:
+      - PYTHONUNBUFFERED=1 # For seeing print statements in logs immediately
+
+  be_chatbot:
+    build:
+      context: ./BE_CHATBOT
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./BE_CHATBOT/app:/code/app
+      - ./BE_CHATBOT/config:/code/config
+      - ./BE_CHATBOT/logs:/code/logs
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  be_admin:
+    build:
+      context: ./BE_ADMIN
+      dockerfile: Dockerfile
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./BE_ADMIN/app:/code/app
+      - ./BE_ADMIN/config:/code/config
+      - ./BE_ADMIN/logs:/code/logs
+    environment:
+      - PYTHONUNBUFFERED=1 

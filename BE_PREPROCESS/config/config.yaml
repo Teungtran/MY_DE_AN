@@ -3,7 +3,7 @@ embedding_model_config:
   model: "text-embedding-3-small"
   # kwargs for EmbeddingModel
   kwargs:
-    chunk_size: 512
+    chunk_size: 1000
 
 chat_model_config:
   provider: "openai"
@@ -17,8 +17,8 @@ chat_model_config:
     max_retries: 1
 
 chunking_method_config:
-  method: "recursive"
-  chunk_size: 1000
+  method: "table"
+  chunk_size: 2000
   chunk_overlap: 100
 
 retrieval_config:

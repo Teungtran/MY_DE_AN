@@ -44,7 +44,30 @@ class FPTData(BaseModel):
         str,
         "Name of the electronic device. Example: 'iPhone 15'"
     ]
+    
+    brand: Annotated[
+        Literal[
+            "apple","xiaomi","realme","honor","samsung", "oppo", "dell", "macbook", "msi", "asus", "hp","lenovo","acer",'gigabyte',"logitech","marshall"
+        ],
+        "Brand of the electronic device ( phone, laptop, PC,), Check device_name carefully, the brand is mentioned in device_name."
+    ]
 
+
+    category: Annotated[
+        Literal[
+            "phone", "laptop/pc", "earphone", "power bank", "mouse", "case", "keyboard"
+        ],
+        "Category of the electronic device. Follow strictly this rule: "
+        "if device_name is related to phone, smartphone, category == 'phone'; "
+        "if device_name is related to laptop or pc, category == 'laptop/pc'; "
+        "if device_name is related to earphone, tai nghe, category == 'earphone'; "
+        "if device_name is related to mouse, chuột, category == 'mouse'; "
+        "if device_name is related to power bank, sạc dự phòng, category == 'power bank'; "
+        "if device_name is related to case, ốp lưng, category == 'case'; "
+        "if device_name is related to keyboard, bàn phím, category == 'keyboard'."
+    ] = None
+
+    
     storage: Annotated[
         List[str],
         "Storage capacitíe in GB. Example: ['256', '512']"
@@ -69,10 +92,6 @@ class FPTData(BaseModel):
         int,
         "Current discounted price in VND. Digits only, no symbols or separators. Example: 4990000"
     ]
-    original_price: Annotated[
-        Optional[int],
-        "Original price before discount (if available). Digits only. Example: 6490000"
-    ]
     discount_percent: Annotated[
         Optional[int],
         "Discount percentage without % symbol. Example: 23"
@@ -81,15 +100,11 @@ class FPTData(BaseModel):
         Optional[int],
         "Monthly installment amount in VND, digits only. Example: 972750"
     ]
-    bonus_points: Annotated[
-        Optional[int],
-        "Promotional bonus points awarded. Digits only. Example: 1247"
-    ]
     suitable_for: Annotated[
         Optional[Literal[
             "students", "adults"
         ]],
-        "what type of customer is suitable for this device based on sale_price. follow strictly this rule: if sale_price less than 1000000 then suitable_for is 'students' and if sale_price is more than 10000000 then suitable_for is 'adult'"
+        "what type of customer is suitable for this device based on sale_price. follow strictly this rule: if sale_price less than 10000000 then suitable_for is 'students' and if sale_price is more than 10000000 then suitable_for is 'adult'"
     ] = None
     
     colors: Annotated[

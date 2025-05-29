@@ -14,7 +14,7 @@ retrieval_config:
     # lambda_mult: 0.5
 
 chat_model_config:
-  provider: "azure_openai"
+  provider: "openai"
   deployment_name: "gpt-4o-mini"
   # actual top-k documents use as context
   top_k: 10
@@ -27,7 +27,7 @@ chat_model_config:
     max_retries: 1
 
 embedding_model_config:
-  provider: "azure_openai"
+  provider: "openai"
   deployment_name: "text-embedding-3-small"
   # kwargs for EmbeddingModel
   kwargs:

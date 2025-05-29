@@ -8,7 +8,7 @@ from opentelemetry import context
 from opentelemetry.trace import SpanKind, StatusCode, Tracer
 import structlog
 
-from controllers import chat_controller, conver_controller, history_controller, init_conver_controller
+from controllers import api_chat
 from utils.helpers import LoggingMiddleware
 from utils.logging.logger import get_logger, setup_logging
 from utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
@@ -180,14 +180,19 @@ async def root():
     }
 
 
-app.include_router(chat_controller.router, prefix="/v1/chat", tags=["Chat controller"])
-app.include_router(history_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
-app.include_router(init_conver_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
-app.include_router(conver_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
+app.include_router(api_chat.router, prefix="/v1/chat", tags=["Chat controller"])
+# app.include_router(history_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
+# app.include_router(init_conver_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
+# app.include_router(conver_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
 
 # For local development
 if __name__ == "__main__":
     import uvicorn
-
+    import os
+    import sys
+    
+    # Add the parent directory to sys.path to make absolute imports work
+    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+    
     # Start the server
-    uvicorn.run("main:app", host="0.0.0.0", port=8090, reload=True, log_level="debug")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8090, reload=True, log_level="debug")

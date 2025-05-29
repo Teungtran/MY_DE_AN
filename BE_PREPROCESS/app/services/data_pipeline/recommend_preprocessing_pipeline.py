@@ -3,8 +3,6 @@ from typing import Optional, Tuple, Dict, Any, List
 import asyncio
 import traceback
 import time
-from functools import lru_cache
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from qdrant_client import QdrantClient
@@ -19,21 +17,18 @@ from services.data_pipeline.vector_store import create_recommend_store
 
 logger = get_logger(__name__)
 
+# Optimized prompt - more concise while preserving intent
 TEXT_SUMMARIZE_PROMPT = """
-    You are tasked with extracting specific information from the "## Mô tả sản phẩm" section of a product description for FPT Shop. Your focus is on the following categories:
-    **FIND INFORMATION ABOUT**
+    Extract key information from the "## Mô tả sản phẩm" section focusing on:
     - Design & Materials
-    - Performance: RAM, 
-    - Camera & Photography Features
-    - Video Recording Capabilities
-    - Performance & Hardware
-    - Battery & Charging
-    - AI Features
-    - Comparison with Other Devices
-    **YOU MUST**
-    - Locate and extract all relevant information pertaining to the categories listed above.
-    - Ensure to keep the images links if it goes with the text, (Preserve the original format)
-    The text to extract from will be provided in the placeholder {input}.
+    - Performance (RAM, hardware)
+    - Camera features
+    - Video capabilities
+    - Battery & charging
+    - AI features
+    - Device comparisons
+    Preserve image links with original format.
+    Text: {input}
 """
 
 class RecommendProcessingPipeline:
@@ -49,13 +44,23 @@ class RecommendProcessingPipeline:
 
         self.vector_store = create_recommend_store(configuration=config, embedding_model=self.embedding_model)
         self.model = create_chat_model(APP_CONFIG.chat_model_config)
-        # Initialize connections at startup
         self.client, self.collection_name = self._connect_and_create_collection()
         if self.client and self.collection_name:
             self._apply_payload_schema(self.client, self.collection_name)
         
-
-
+    # Store extraction prompt as a class variable to avoid recreating it
+    METADATA_PROMPT = ChatPromptTemplate.from_messages([
+        (("system", """Extract FPT Shop product data with these rules:
+            - Extract sales_perks from "Quà tặng và ưu đãi khác"/"Khuyến mãi được hưởng" 
+            - Extract guarantee_program from "Bảo hành mở rộng"
+            - Extract payment_perks from "Khuyến mãi thanh toán"
+            - Use 'device_name' field to determine 'brand' field'
+            - If sale_price < 1000000 VND: suitable_for = 'students', else: 'adults'
+            - If sale_price > 20000000: category = 'luxury', else: category = 'office'
+            - Keep text exactly as it appears
+            - Use empty string if not found""")),
+        ("human", "{context}")
+    ])
 
     def _connect_and_create_collection(self):
         """Connect to Qdrant and create collection if it doesn't exist."""
@@ -82,20 +87,21 @@ class RecommendProcessingPipeline:
         """Apply the payload schema to the Qdrant collection."""
         payload_schema = {
             "device_name": {"type": "text"},
-            "storage": {"type": "keyword"},
+            "brand": {"type": "keyword"},
+            "storage": {"type": "text"},
             "battery": {"type": "text"},
-            "colors": {"type": "keyword"}, 
+            "colors": {"type": "text"}, 
             "cpu": {"type": "text"},
             "card": {"type": "text"},
             "screen": {"type": "text"},
             "suitable_for": {"type": "text"},
+            "category": {"type": "keyword"},
             "sales_perks": {"type": "text"},
             "payment_perks": {"type": "text"},
             "guarantee_program": {"type": "text"},
             "source": {"type": "text"},
             "image_link": {"type": "text"},
             "sale_price": {"type": "integer"},          
-            "original_price": {"type": "integer"},      
             "discount_percent": {"type": "integer"},   
             "installment_price": {"type": "integer"},  
             "bonus_points": {"type": "integer"},        
@@ -120,7 +126,6 @@ class RecommendProcessingPipeline:
     async def _summarize_content(self, content: str) -> str:
         """Summarize tour content using an AI model."""
         try:
-            
             prompt = ChatPromptTemplate.from_template(TEXT_SUMMARIZE_PROMPT)
             chain = prompt | self.model
             extraction = chain.invoke({"input": content})
@@ -132,25 +137,11 @@ class RecommendProcessingPipeline:
     async def _extract_metadata_from_context(self, context: str, source_url: Optional[str] = None) -> dict:
         """Extract structured metadata from tour content using an AI model."""
         try:
-            
-            prompt = ChatPromptTemplate.from_messages([
-                (("system", """You are a specialized extractor for FPT Shop product data. Your job is to extract specific fields from product pages exactly as they appear.
-                **IMPORTANT**:
-                
-                1. For sales_perks: Look for sections labeled "Quà tặng và ưu đãi khác" AND "Khuyến mãi được hưởng" or "Chính sách sản phẩm" - include ALL perks, gifts, offers, installment plans, B2B deals with exact wording.
-                2. For guarantee_program: Look for ALL warranty information, especially under "Bảo hành mở rộng" including extended warranties, care programs, and their prices.
-                3. For payment_perks: Look for section labeled "Khuyến mãi thanh toán" and extract ALL payment-related promotions, discounts, and installment options with full details and conditions.
-                4. Make sure the 'suitable_for' field CAN NOT be null, based on price , if price less than 1000000 VND, suitble_for = 'students' else 'adults' 
-                RULES
-                - Extract text EXACTLY as it appears in the source
-                - If a section is not found, return an empty string for that field""")),
-                ("human", "Extract the metadata from the following FPT Shop product page text:\n\n{context}")
-            ])
-
+            # Using the class-level prompt template
             llm = self.model.with_structured_output(schema=FPTData)
-            chain = prompt | llm 
+            chain = self.METADATA_PROMPT | llm 
             try:
-                result: FPTData = chain.invoke({"context": context})
+                result: FPTData = chain.invoke({"context": f"Extract the metadata from the following FPT Shop product page text:\n\n{context}"})
                 metadata = result.model_dump(mode='json')
                 time_update = datetime.datetime.now().strftime("%Y-%m-%d")
                 if source_url:
@@ -226,28 +217,28 @@ class RecommendProcessingPipeline:
         return valid_results
 
     async def _batch_process_documents(self, raw_tuples, batch_size=None):
-            """Process documents in batches for better concurrency."""
-            all_documents = []
+        """Process documents in batches for better concurrency."""
+        all_documents = []
+        
+        # Determine batch size based on input length
+        if batch_size is None:
+            input_length = len(raw_tuples)
+            if input_length <= 5:
+                batch_size = input_length
+            else:
+                batch_size = max(5, input_length // 4)
+        
+        for i in range(0, len(raw_tuples), batch_size):
+            batch = raw_tuples[i:i+batch_size]
+            tasks = [self._process_document(doc_tuple) for doc_tuple in batch]
+            processed_batch = await asyncio.gather(*tasks)
             
-            # Determine batch size based on input length
-            if batch_size is None:
-                input_length = len(raw_tuples)
-                if input_length <= 5:
-                    batch_size = input_length  # Process all at once for small inputs
-                else:
-                    batch_size = max(5, input_length // 4)  # Use at least 5, but no more than 1/4th
+            valid_docs = [doc for doc in processed_batch if doc is not None]
+            all_documents.extend(valid_docs)
             
-            for i in range(0, len(raw_tuples), batch_size):
-                batch = raw_tuples[i:i+batch_size]
-                tasks = [self._process_document(doc_tuple) for doc_tuple in batch]
-                processed_batch = await asyncio.gather(*tasks)
-                
-                valid_docs = [doc for doc in processed_batch if doc is not None]
-                all_documents.extend(valid_docs)
-                
-                logger.info(f"Processed batch {i//batch_size + 1}/{(len(raw_tuples) + batch_size - 1)//batch_size}, got {len(valid_docs)} valid documents")
-                
-            return all_documents
+            logger.info(f"Processed batch {i//batch_size + 1}/{(len(raw_tuples) + batch_size - 1)//batch_size}, got {len(valid_docs)} valid documents")
+            
+        return all_documents
 
     async def _run(
         self,

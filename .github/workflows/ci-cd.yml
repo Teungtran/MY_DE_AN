@@ -1,0 +1,54 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - dev # Or your primary branch
+
+jobs:
+  build_and_push_images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # Needed to push images to GitHub Container Registry
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push BE_PREPROCESS
+        uses: docker/build-push-action@v4
+        with:
+          context: ./BE_PREPROCESS
+          file: ./BE_PREPROCESS/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/be-preprocess:latest
+
+      - name: Build and push BE_CHATBOT
+        uses: docker/build-push-action@v4
+        with:
+          context: ./BE_CHATBOT
+          file: ./BE_CHATBOT/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/be-chatbot:latest
+
+      - name: Build and push BE_ADMIN
+        uses: docker/build-push-action@v4
+        with:
+          context: ./BE_ADMIN
+          file: ./BE_ADMIN/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/be-admin:latest 

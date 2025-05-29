@@ -1,0 +1,34 @@
+[
+  {
+    "question": "Mua sản phẩm FPT Shop được bảo hành như thế nào?",
+    "ground_truth": "Để đảm bảo quyền lợi của Quý khách hàng khi mua sản phẩm tại các cửa hàng thuộc hệ thống cửa hàng FPT Shop. Chúng tôi cam kết tất cả các sản phẩm được tuân theo các điều khoản bảo hành của sản phẩm tại thời điểm xuất hóa đơn cho Quý khách hàng. Các sản phẩm điện thoại sẽ có chính sách bảo hành khác nhau tùy thuộc vào hãng sản xuất. Khách hàng có thể bảo hành máy tại các cửa hàng FPT Shop trên toàn quốc cũng như các trung tâm bảo hành chính hãng sản phẩm.\n\nKhách hàng có thể truy cập các đường dẫn sau để tìm kiếm địa chỉ trung tâm bảo hoặc cửa hàng FPT Shop gần nhất và tham khảo chính sách bảo hành:\n\nChính sách bảo hành: Quý khách vui lòng Xem tại đây.\n\nCửa hàng FPT Shop gần nhất: Quý khách vui lòng Xem tại đây.\n\nĐể tra cứu thông tin máy gửi bảo hành, Quý khách hàng vui lòng tra cứu tại Trang kiểm tra bảo hành."
+  },
+  {
+    "question": "Mua sản phẩm tại FPT Shop có được đổi trả không? Nếu được thì phí đổi trả sẽ được tính như thế nào?",
+    "ground_truth": "Đối với các sản phẩm ĐTDĐ, MTB, MTXT, SMARTWATCH (Áp dụng bao gồm các sản phẩm Apple), sản phẩm cùng model, cùng màu, cùng dung lượng. Trong tình huống sản phẩm đổi hết hàng, khách hàng có thể đổi sang một sản phẩm khác tương đương hoặc cao hơn về giá trị so với sản phẩm lỗi. Trường hợp khách hàng muốn trả sản phẩm: FPTShop sẽ kiểm tra tình trạng máy và thông báo đến Khách hàng về giá trị thu lại sản phẩm ngay tại cửa hàng.\n\nĐể biết thêm thông tin chi tiết, Quý khách hàng có thể tra cứ phí đổi trả chi tiết Tại đây."
+  },
+  {
+    "question": "FPT Shop có chính sách giao hàng tận nhà không? Nếu giao hàng tại nhà mà không ưng sản phẩm có được trả lại không?",
+    "ground_truth": "FPT Shop cam kết giao hàng toàn bộ 63 tỉnh thành, FPT Shop nhận giao đơn hàng có thời gian hẹn giao tại nhà trước 20h00. Miễn phí giao hàng với các đơn hàng trong bán kính 20km có đặt shop (Với đơn hàng có giá trị nhỏ hơn 100.000đ sẽ thu phí 10.000đ) nhân viên FPT Shop sẽ tư vấn chi tiết về cách thức giao nhận thuận tiện nhất.\n\nNếu Quý khách hàng không ưng ý với sản phẩm khi nhận hàng, Quý khách có thể từ chối mua hàng mà không mất bất cứ chi phí nào. Để biết thêm thông tin, Quý khách có thể tham khảo Chính sách giao hàng Tại đây.\n\nLưu ý:\n\nĐối với các sản phẩm còn nguyên seal, khách hàng muốn bóc seal sẽ phải thanh toán 100% giá trị sản phẩm. Nếu không ưng, FPT Shop sẽ hỗ trợ đổi sản phẩm cho khách hàng theo chính sách đổi trả.\n\nĐối với các sản phẩm không seal, Quý khách hàng có thể kiểm tra máy mà không phải chịu bất cứ chi phí nào nếu không mua."
+  },
+  {
+    "question": "Làm thế nào để được mua hàng theo chính sách F.Friends?",
+    "ground_truth": "Để được mua hàng và hưởng quyền lợi theo chính sách mua hàng F.Friends, Quý khách hàng phải là hội viên. Để biết bạn có là hội viên hay không, bạn cần biết doanh nghiệp bạn đang công tác đã ký hợp đồng tham gia chương trình F.Friends hay chưa. Điều kiện tiếp theo là bạn đã ký hợp đồng chính thức với doanh nghiệp đó chưa.\n\nNếu bạn đã là hội viên của chương trình này, bạn sẽ được hưởng ưu đãi trả thẳng giảm 3% khi mua sản phẩm. Để được trả góp bạn phải đủ 8 tháng công tác tại doanh nghiệp.\n\nQuý khách có thể tham khảo chi tiết về Chính sách F. Friends Tại đây."
+  },
+  {
+    "question": "Cần hướng dẫn cách sử dụng về sản phẩm thì liên hệ hoặc xem ở đâu được?",
+    "ground_truth": "Quý khách có thể tham khảo sách hướng dẫn sử dụng kèm theo sản phẩm hoặc gọi vào tổng đài 1800.6601 nhánh số 2 để gặp điện thoại viên hướng dẫn thêm."
+  },
+  {
+    "question": "Sản phẩm mới mua về bị lỗi không sử dụng được thì liên hệ ai để xử lý nhanh mà không bị mất thời gian di chuyển nhiều lần?",
+    "ground_truth": "Khách hàng có thể mang máy đến tại các cửa hàng FPT Shop trên toàn quốc cũng như các trung tâm bảo hành chính hãng sản phẩm nơi gần nhà khách hàng nhất."
+  },
+  {
+    "question": "Cần hướng dẫn vấn đề điều chỉnh hoặc xuất lại hóa đơn do bị sai thông tin khách hàng?",
+    "ground_truth": "Quý khách vui lòng liên hệ tổng đài 1800.6616 để gặp điện thoại viên tư vấn hỗ trợ hoặc Quý khách tham khảo qua hướng dẫn Tại đây nếu liên quan đến hóa đơn công ty."
+  },
+  {
+    "question": "Điện thoại mua tại FPT Shop bị lỗi và gửi đi bảo hành nhưng muốn mượn một máy khác để dùng trong thời gian chờ bảo hành thì có được không và liên hệ đến ai để hỗ trợ vấn đề này?",
+    "ground_truth": "FPT Shop sẽ hỗ trợ cho khách hàng mượn điện thoại khác sử dụng theo quy định của công ty, mời Quý khách liên hệ tại cửa hàng FPT Shop nơi khách hàng gửi máy đi bảo hành để được tư vấn hỗ trợ."
+  }
+]

@@ -1,7 +1,7 @@
 import datetime
 import time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 from .snowflake_id import SnowflakeGenerator
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -10,30 +10,40 @@ from boto3.dynamodb.types import DYNAMODB_CONTEXT
 from utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
-
-
 class DynamoHistory:
     def __init__(
         self,
-        endpoint_url: str,
         region_name: str,
-        table_name: str = "name",
+        aws_access_key_id: str,
+        aws_secret_access_key: str,
+        table_name: str = "CHAT_HISTORY",
         snowflake_generator: Optional[SnowflakeGenerator] = None
     ):
-        self.endpoint_url = endpoint_url
         self.region_name = region_name
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
         self.table_name = table_name
         self.dynamodb = self.set_dynamodb()
         self.table = self.dynamodb.Table(self.table_name)
         self.snowflake_gen = snowflake_generator or SnowflakeGenerator(node_id=1)
 
     def set_dynamodb(self):
+        region = self.region_name
+        access_key = self.aws_access_key_id
+        secret_key = self.aws_secret_access_key
+        
+        if isinstance(region, Callable):
+            region = region()
+        if isinstance(access_key, Callable):
+            access_key = access_key()
+        if isinstance(secret_key, Callable):
+            secret_key = secret_key()
+            
         return boto3.resource(
             "dynamodb",
-            endpoint_url=self.endpoint_url,
-            region_name=self.region_name,
-            aws_access_key_id="fakeMyKeyId",
-            aws_secret_access_key="fakeSecretAccessKey",
+            region_name=region,
+            aws_access_key_id=access_key,
+            aws_secret_access_key=secret_key,
         )
 
     def check_table_exists(self) -> bool:
@@ -55,6 +65,7 @@ class DynamoHistory:
     def save_chat_history(
         self,
         conversation_id: str,
+        user_id: str,
         user_input: str,
         prompt_token: Optional[int] = None,
         completion_token: Optional[int] = None,
@@ -66,11 +77,8 @@ class DynamoHistory:
         execution_time: Optional[Decimal] = None,
         response: Optional[str] = None,
         language: Optional[str] = None,
-        category_id: Optional[str] = None,
-        category_name: Optional[str] = None,
         tool_call_name: Optional[str] = None,
         tool_call_type: Optional[str] = None,
-        source: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
 
         if not self.check_table_exists():
@@ -81,7 +89,6 @@ class DynamoHistory:
         end_time = end_time or now
         execution_time = execution_time or DYNAMODB_CONTEXT.create_decimal(str((end_time - start_time).total_seconds()))
 
-        metadata = {"category": [{"id": category_id or "general", "name": category_name or "general"}], "args": {}}
         reply_to_message_id = f"{conversation_id}-{int(start_time.timestamp())}"
 
         tools_array = (
@@ -99,9 +106,9 @@ class DynamoHistory:
 
         fields = {
             "conversation_id": conversation_id,
+            "user_id": user_id,
             "reply_to_message_id": reply_to_message_id,
             "language": language,
-            "metadata": metadata,
             "tools": tools_array,
             "created_at": start_time.isoformat(),
             "updated_at": end_time.isoformat(),
@@ -111,7 +118,6 @@ class DynamoHistory:
             "latency_s": execution_time,
         }
 
-        # Determine required_form based on whether it's a normal response or a tool call
         if response:
             required_form_value = "no"
         elif tool_call_name:
@@ -139,8 +145,6 @@ class DynamoHistory:
                     "message": response,
                     **fields,
                 }
-                if source:
-                    ai_item["source"] = source
                 self.table.put_item(Item=ai_item)
 
             elif tool_call_name:
@@ -159,31 +163,36 @@ class DynamoHistory:
 
         return {"conversation_id": conversation_id, "reply_to_message_id": reply_to_message_id}
 
-    def get_conversation_history(self, conversation_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def get_conversation_history(self, conversation_id: str, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
         if not conversation_id:
             raise ValueError("conversation_id is required.")
+        if not user_id:
+            raise ValueError("user_id is required.")
 
         try:
             response = self.table.query(
                 IndexName="conversation_index",
                 KeyConditionExpression=Key("conversation_id").eq(conversation_id),
-                ScanIndexForward=False,  # This returns items in descending order
+                ScanIndexForward=False,
             )
 
             items = []
             for item in response.get("Items", []):
-                if item.get("type") in {"HUMAN-MESSAGE", "AI-MESSAGE"}:
-                    try:
-                        if item.get("id") is not None:
-                            int(item["id"])
-                            items.append(item)
-                    except ValueError:
-                        logger.debug(f"Skipping non-integer ID: {item.get('id')}")
-                        continue
+                # Ensure it's owned by the correct user and is a valid message type
+                if item.get("user_id") != user_id:
+                    continue
+                if item.get("type") not in {"HUMAN-MESSAGE", "AI-MESSAGE"}:
+                    continue
+                try:
+                    if item.get("id") is not None:
+                        int(item["id"])  # Validate ID is numeric
+                        items.append(item)
+                except ValueError:
+                    logger.debug(f"Skipping non-integer ID: {item.get('id')}")
+                    continue
 
-            # If no items with valid IDs found, return empty list
             if not items:
-                logger.info(f"No items with valid snowflake IDs found for conversation {conversation_id}")
+                logger.info(f"No messages found for conversation_id={conversation_id}, user_id={user_id}")
                 return []
 
             # Group by reply_to_message_id
@@ -193,45 +202,35 @@ class DynamoHistory:
                 if reply_id:
                     grouped.setdefault(reply_id, []).append(item)
 
-            # Sort groups by snowflake ID (higher ID = newer)
+            # Sort groups by max message ID in group (chronological)
             sorted_groups = sorted(
                 grouped.items(),
                 key=lambda x: max([int(msg["id"]) for msg in x[1]]),
-                reverse=False,  # Higher IDs (newer) first
+                reverse=False,
             )
-            
+
             formatted = []
             pair_count = 0
 
             for reply_id, msgs in sorted_groups:
                 types_present = {msg["type"] for msg in msgs}
-                has_human = "HUMAN-MESSAGE" in types_present
-                has_ai = "AI-MESSAGE" in types_present
-
-                if has_human and has_ai:
-                    # Sort messages within group - human first, then AI
-                    msgs_sorted = sorted(
-                        msgs,
-                        key=lambda x: 0 if x["type"] == "HUMAN-MESSAGE" else 1,
-                    )
+                if "HUMAN-MESSAGE" in types_present and "AI-MESSAGE" in types_present:
+                    msgs_sorted = sorted(msgs, key=lambda x: 0 if x["type"] == "HUMAN-MESSAGE" else 1)
 
                     for msg in msgs_sorted:
-                        formatted_item = {
+                        formatted.append({
                             "id": msg.get("id"),
                             "conversation_id": msg.get("conversation_id"),
                             "reply_to_message_id": msg.get("reply_to_message_id"),
                             "type": msg.get("type"),
                             "language": msg.get("language"),
-                            "metadata": msg.get(
-                                "metadata", {"category": [{"id": "general", "name": "general"}], "args": {}}
-                            ),
                             "message": msg.get("message", ""),
                             "required_form": msg.get("required_form", ""),
                             "tools": [
                                 {
-                                    "name": tool.get("name",""),
-                                    "id": tool.get("id",""),
-                                    "type": tool.get("type",""),
+                                    "name": tool.get("name", ""),
+                                    "id": tool.get("id", ""),
+                                    "type": tool.get("type", ""),
                                     "args": tool.get("args", {}),
                                 }
                                 for tool in msg.get("tools", [])
@@ -240,11 +239,7 @@ class DynamoHistory:
                             "updated_at": msg.get("updated_at"),
                             "tokens": msg.get("tokens", []),
                             "latency_s": msg.get("latency_s"),
-                        }
-                        if "source" in msg:
-                            formatted_item["source"] = msg["source"]
-
-                        formatted.append(formatted_item)
+                        })
 
                     pair_count += 1
                     if pair_count >= limit:
@@ -254,7 +249,7 @@ class DynamoHistory:
 
         except Exception as e:
             logger.error(
-                f"Error fetching conversation history from DynamoDB: {str(e)}", conversation_id=conversation_id
+                f"Error fetching conversation history from DynamoDB: {str(e)} | conversation_id={conversation_id}, user_id={user_id}"
             )
             raise
 

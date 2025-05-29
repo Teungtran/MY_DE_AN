@@ -6,6 +6,7 @@ __pycache__/
 # C extensions
 *.so
 
+
 # Distribution / packaging
 .Python
 build/
@@ -42,6 +43,7 @@ htmlcov/
 .nox/
 .coverage
 .coverage.*
+*.ipynb
 .cache
 nosetests.xml
 coverage.xml
@@ -120,7 +122,7 @@ markdown_dir
 Makefile
 # PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
 __pypackages__/
-
+RAG_fusion
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid
