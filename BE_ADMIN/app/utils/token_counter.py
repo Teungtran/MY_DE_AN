@@ -37,6 +37,6 @@ def tiktoken_counter(messages: Any) -> int:
         num_tokens += (
             tokens_per_message + str_token_counter(cast(str, role)) + str_token_counter(cast(str, msg.content))
         )
-        if msg.name:
+        if hasattr(msg, "name") and msg.name:
             num_tokens += tokens_per_name + str_token_counter(cast(str, msg.name))
     return num_tokens
