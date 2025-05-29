@@ -13,10 +13,10 @@ from rag_graph.state import ToPolicyAssistant
 from .state import AgenticState
 from rag_graph.policy_agent import create_policy_tool
 chat_config = APP_CONFIG.chat_model_config
-
+import os
 if not chat_config:
     llm = ChatOpenAI(
-        openai_api_key="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",       
+        openai_api_key=os.getenv("OPENAI_API_KEY"),   
         model="gpt-4o-mini",     
         temperature=0,
         max_tokens=3000

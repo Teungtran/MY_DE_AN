@@ -3,12 +3,12 @@ from langchain_openai import ChatOpenAI
 from config.base_config import APP_CONFIG
 from factories.chat_factory import create_chat_model
 from typing import Union
-
+import os
 chat_config = APP_CONFIG.chat_model_config
 
 if not chat_config:
     llm = ChatOpenAI(
-        openai_api_key="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",       
+        openai_api_key=os.getenv("OPENAI_API_KEY"),   
         model="gpt-4o-mini",     
         temperature=0,
         max_tokens=3000
