@@ -72,7 +72,7 @@ async def stream_and_save_response(conversation_id: str, user_id: str, user_mess
     content = extract_content_from_response(final_response)
     await save_message_to_redis(conversation_id, "ai", content)
     
-    chunk_size = 10
+    chunk_size = 15
     for i in range(0, len(content), chunk_size):
         chunk = content[i:i+chunk_size]
         print(chunk, end="|")
