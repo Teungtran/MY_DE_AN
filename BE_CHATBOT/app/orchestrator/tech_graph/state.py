@@ -6,4 +6,3 @@ class ToTechAssistant(BaseModel):
     request: str = Field(
         description="Any necessary followup questions the tech assistant should clarify before proceeding."
     )
-    context: Optional[dict] = Field(None, description="Additional context if needed.")

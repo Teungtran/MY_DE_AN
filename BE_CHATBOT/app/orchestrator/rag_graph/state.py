@@ -7,4 +7,3 @@ class ToPolicyAssistant(BaseModel):
     request: str = Field(
         description="Any necessary followup questions the policy assistant should clarify before proceeding."
     )
-    context: Optional[dict] = Field(None, description="Additional context if needed.")
