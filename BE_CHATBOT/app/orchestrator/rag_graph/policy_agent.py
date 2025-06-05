@@ -2,6 +2,7 @@ from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import POLICY_SYSTEM_PROMPT
 from .tools.policy_tool import recall_memory,RAG_Agent
 from schemas.device_schemas import CompleteOrEscalate
+from .tools.it_support import it_support_agent
 
 import datetime
 POLICY_SYSTEM_MESSAGES = [
@@ -13,7 +14,7 @@ policy_assistant_prompt = ChatPromptTemplate.from_messages(POLICY_SYSTEM_MESSAGE
 
 
 # Use the modified RAG Agent
-tools = [RAG_Agent, recall_memory]
+tools = [RAG_Agent,it_support_agent, recall_memory]
 
 def create_policy_tool(model):
     """Creates a policy tool with the provided language model.

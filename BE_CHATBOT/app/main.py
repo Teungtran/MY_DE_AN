@@ -181,9 +181,7 @@ async def root():
 
 
 app.include_router(api_chat.router, prefix="/v1/chat", tags=["Chat controller"])
-# app.include_router(history_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
-# app.include_router(init_conver_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
-# app.include_router(conver_controller.router, prefix="/v1/conversations", tags=["Conversation controller"])
+
 
 # For local development
 if __name__ == "__main__":

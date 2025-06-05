@@ -82,7 +82,7 @@ async def stream_and_save_response(conversation_id: str, user_id: str, user_mess
             prompt_token=prompt_token,
             completion_token=completion_token
         )
-        yield f"data: {payload.model_dump_json()}\n\n"
+        yield f"{payload.model_dump_json()}\n\n"
     
     # Log and save to database after streaming is complete
     end_time = datetime.datetime.now(datetime.timezone.utc)
@@ -161,7 +161,7 @@ async def retrieve_events(request: Request, conversation_id: str) -> AsyncGenera
                 msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
                 try:
                     message_data = json.loads(msg_str)
-                    yield f"data: {json.dumps(message_data)}\n\n"
+                    yield f"{json.dumps(message_data)}\n\n"
                 except json.JSONDecodeError:
                     logger.warning(f"Skipping invalid JSON in history: {msg_str}")
         except Exception as e:
@@ -175,7 +175,7 @@ async def retrieve_events(request: Request, conversation_id: str) -> AsyncGenera
                     data = message["data"]
                     if isinstance(data, bytes):
                         data = data.decode('utf-8')
-                    yield f"data: {data}\n\n"
+                    yield f"{data}\n\n"
             except Exception as e:
                 logger.error(f"Error in SSE message loop: {e}")
                 break
@@ -184,7 +184,7 @@ async def retrieve_events(request: Request, conversation_id: str) -> AsyncGenera
         logger.info(f"SSE connection for conversation {conversation_id} was cancelled")
     except Exception as e:
         logger.error(f"Error in SSE connection: {e}")
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield f"{json.dumps({'error': str(e)})}\n\n"
     finally:
         if pubsub:
             try:
@@ -251,7 +251,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
         initial_prompt_token = tiktoken_counter(initial_chat_history) if initial_chat_history else 0
         logger.debug(f"Initial chat history length: {len(initial_chat_history)}")
 
-        # Log state before processing
         snapshot = graph.get_state(config)
         logger.debug(f"State before processing for {conversation_id}: {snapshot}")
         
@@ -340,7 +339,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                 
                 logger.debug(f"Final state after tool call processing: {snapshot}")
                 
-                # Use helper function for streaming and saving
                 async for chunk in stream_and_save_response(
                     conversation_id, user_id, user_message, final_response, 
                     final_tool_call, prompt_token, completion_token, start_time, 
@@ -380,7 +378,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                             "message": message
                         })
                         
-                        # Collect all tool calls
                         if hasattr(message, "tool_calls") and message.tool_calls:
                             for tool_call in message.tool_calls:
                                 all_tool_calls.append({
@@ -390,7 +387,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                                     "type": tool_call['type']
                                 })
 
-        # Log state after processing
         snapshot = graph.get_state(config)
         logger.debug(f"State after processing for {conversation_id}: {snapshot}")
         
@@ -413,7 +409,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                             prompt_token=0,
                             completion_token=0
                         )
-                        yield f"data: {payload.model_dump_json()}\n\n"
+                        yield f"{payload.model_dump_json()}\n\n"
                     return
 
         # Get final response
@@ -444,7 +440,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
         
         logger.debug(f"Final state after conversation: {snapshot}")
         
-        # Use helper function for streaming and saving
         async for chunk in stream_and_save_response(
             conversation_id, user_id, user_message, final_response, 
             final_tool_call, prompt_token, completion_token, start_time, 
@@ -460,7 +455,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
             completion_token=0,
             tools=None
         )
-        yield f"data: {error_payload.model_dump_json()}\n\n"
+        yield f"{error_payload.model_dump_json()}\n\n"
 @router.post("/streaming-answer")
 async def stream(user_inputs: UserInputs):
     exception_handler = ExceptionHandler(

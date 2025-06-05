@@ -4,7 +4,7 @@ from langdetect import detect_langs
 import numpy as np
 from functools import lru_cache
 from typing import List, Dict, Optional, Any, Tuple
-from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder
+from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder,BookAppointment
 from .get_score import (
     check_similarity, get_all_points, keyword, convert_to_string,
     batch_fuzzy_scoring, check_similarity_vectorized 
@@ -81,7 +81,6 @@ def vectorized_scoring(
     if not processed_docs:
         return []
     
-    # Extract all combined texts for batch cosine similarity
     combined_texts = [doc['combined_text'] for doc in processed_docs]
     
     # Batch cosine similarity calculation
@@ -189,7 +188,6 @@ def build_search_context_optimized(top_matches: List[Tuple[Dict, float]]) -> str
     
     # Pre-allocate list for better memory performance
     search_context_parts = []
-    search_context_parts_reserve = len(top_matches)
     
     for idx, (processed_doc, score) in enumerate(top_matches, start=1):
         meta = processed_doc['raw_metadata']
@@ -386,6 +384,7 @@ def order_purchase(
     address: str,
     customer_name: str = None,
     customer_phone: str = None,
+    time: str = None,
     quantity: str = None,
     payment: str = "cash on delivery",
     shipping: bool = "shipping",
@@ -417,3 +416,18 @@ def track_order(
     Tool to track order info and status by order id
     """
     return "tracking order, your order is being process"
+
+@tool("book_appointment", args_schema=BookAppointment)
+def book_appointment(
+    reason: str,
+    customer_name: Optional[str] = None,
+    customer_phone: Optional[str] = None,
+    time: str = None, 
+    note: Optional[str] = None,
+    conversation_id: Optional[str] = None
+) -> str:
+    """
+    Tool to book an appointment for the customer.
+    """
+
+    return f"Appointment booked for {customer_name or 'Customer'} on {time} for reason: {reason}."

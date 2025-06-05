@@ -7,7 +7,7 @@ from schemas.device_schemas import CompleteOrEscalate
 from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import MAIN_SYSTEM_PROMPT
 from factories.chat_factory import create_chat_model
-from ..tech_graph.tech_agent import create_tech_tool,tech_safe_tools
+from ..tech_graph.tech_agent import create_tech_tool, tech_safe_tools
 from ..tech_graph.state import ToTechAssistant
 from ..rag_graph.state import ToPolicyAssistant
 from .state import AgenticState

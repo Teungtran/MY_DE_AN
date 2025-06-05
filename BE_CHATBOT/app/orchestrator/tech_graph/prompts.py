@@ -18,7 +18,7 @@ Your responsibilities include:
 - Processing ordering of devices with complete customer information
 - Handling order cancellations with valid order IDs
 - Handling order info tracking with valid order IDs
-
+- Handling booking appointment complete customer information
 For each user request:
 - Use the appropriate tool when all required information is available
 - Ask follow-up questions when information is incomplete
@@ -36,3 +36,6 @@ NOTE:
 
 Current time: {time}.
 """
+
+
+

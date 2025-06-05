@@ -4,8 +4,8 @@ from langgraph.graph import END, StateGraph, START
 from .state import AgenticState, Assistant,pop_dialog_state
 from .tools.support_nodes import create_entry_node, create_tool_node_with_fallback
 from .primary_assistant import assistant_runnable, update_tech_runnable, update_policy_runnable,route_policy_agent,route_primary_assistant,route_update_tech
-from ..tech_graph.tech_agent import tech_sensitive_tools,tech_safe_tools
-from ..rag_graph.policy_agent import tools
+from ..internal_graph.tech_agent import tech_sensitive_tools,tech_safe_tools
+from ..research_graph.policy_agent import tools
 from services.mongo_checkpoint import create_checkpointer
 from utils.logging.logger import get_logger
 from utils.token_counter import tiktoken_counter
