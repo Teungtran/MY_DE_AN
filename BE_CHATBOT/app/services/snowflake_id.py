@@ -3,7 +3,6 @@ import datetime
 from typing import Optional
 
 class SnowflakeGenerator:
-    # Default custom epoch (January 1, 2025 00:00:00 UTC)
     DEFAULT_CUSTOM_EPOCH = 1735664400000
 
     def __init__(self, node_id: int = 1):

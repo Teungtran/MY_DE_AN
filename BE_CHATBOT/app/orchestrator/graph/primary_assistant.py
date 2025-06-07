@@ -14,6 +14,9 @@ from .state import AgenticState
 from ..rag_graph.policy_agent import create_policy_tool
 chat_config = APP_CONFIG.chat_model_config
 import os
+from ...utils.logging.logger import get_logger
+logger = get_logger(__name__)
+
 if not chat_config:
     llm = ChatOpenAI(
         openai_api_key=os.getenv("OPENAI_API_KEY"),   
@@ -44,9 +47,12 @@ def route_primary_assistant(state: AgenticState):
     
     if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
         tool_calls = last_message.tool_calls
-        if tool_calls[0]["name"] == ToTechAssistant.__name__:
+        tool_name = tool_calls[0]["name"]
+        logger.info(f"Primary Assistant called tool: {tool_name}")
+        
+        if tool_name == ToTechAssistant.__name__:
             return "enter_tech_node"
-        elif tool_calls[0]["name"] == ToPolicyAssistant.__name__:
+        elif tool_name == ToPolicyAssistant.__name__:
             return "enter_policy_node"
         return END
     
@@ -57,6 +63,9 @@ def route_update_tech(state: AgenticState):
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
+    for tool_call in tool_calls:
+        logger.info(f"Tech Assistant called tool: {tool_call['name']}")
+    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"
@@ -70,6 +79,9 @@ def route_policy_agent(state: AgenticState):
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
+    for tool_call in tool_calls:
+        logger.info(f"Policy Assistant called tool: {tool_call['name']}")
+    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"

@@ -14,7 +14,10 @@ QDRANT_URL = APP_CONFIG.recommend_config.url
 QDRANT_API_KEY = APP_CONFIG.recommend_config.api_key
 COLLECTION = APP_CONFIG.recommend_config.collection_name
 KEYBERT = APP_CONFIG.key_bert_config.model
-FALLBACK_MODEL_PATH = r"C:\Users\Admin\Desktop\DE_AN\BE_CHATBOT\saved_models\keybert.pkl"
+
+# Get the base directory (project root)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+FALLBACK_MODEL_PATH = os.path.join(BASE_DIR, "saved_models", "keybert.pkl")
 
 # Global variables for caching
 _vectorizer = None

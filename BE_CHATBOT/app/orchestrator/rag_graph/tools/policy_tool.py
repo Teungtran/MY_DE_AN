@@ -6,7 +6,6 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from typing_extensions import Optional
 from qdrant_client import QdrantClient
-from .evaluate import evaluate_rag_interaction
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from config.base_config import APP_CONFIG
