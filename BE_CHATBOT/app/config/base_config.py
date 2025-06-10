@@ -50,6 +50,11 @@ class DynamoDBConfig(BaseModel):
 
 class SearchConfig(BaseModel):
     api_key: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("TAVILY_API_KEY")())[1])
+
+class SQLConfig(BaseModel):
+    server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_SERVER")())[1])
+    database: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_DATABASE")())[1])
+    
 class PolicyConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
     api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
@@ -110,12 +115,17 @@ class BaseConfiguration(BaseModel):
     _redis_config = None
     _mongo_config = None
     _search_config = None
-
+    _sql_config = None
     @property
     def chat_model_config(self) -> Union[OpenAIConfig]:
         if self._chat_model_config is None:
             self._chat_model_config = OpenAIConfig()
         return self._chat_model_config
+    @property
+    def sql_config(self) -> Union[SQLConfig]:
+        if self._sql_config is None:
+            self._sql_config = SQLConfig()
+        return self._sql_config
     @property
     def search_config(self) -> Union[SearchConfig]:
         if self._search_config is None:

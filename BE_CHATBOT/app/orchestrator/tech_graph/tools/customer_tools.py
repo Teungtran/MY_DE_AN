@@ -4,18 +4,23 @@ from langdetect import detect_langs
 import numpy as np
 from functools import lru_cache
 from typing import List, Dict, Optional, Any, Tuple
-from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder,BookAppointment
+from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder,BookAppointment,TrackAppointment,CancelAppointment
 from .get_score import (
     check_similarity, get_all_points, keyword, convert_to_string,
     batch_fuzzy_scoring, check_similarity_vectorized 
 )
+from config.base_config import APP_CONFIG
 import time
 from .llm import llm_recommend, llm_device_detail
+from sqlalchemy import text
+from .get_sql import connect_to_db
+from .get_id import generate_short_id
+sql_config = APP_CONFIG.sql_config
 
-# Global cache for recommended devices
+db = connect_to_db(server=sql_config.server, database=sql_config.database)
+
 recommended_devices_cache = []
 
-# Cache for processed metadata to avoid repeated extraction
 _metadata_cache = {}
 _metadata_cache_timestamp = 0
 METADATA_CACHE_DURATION = 300  # 5 minutes
@@ -174,8 +179,6 @@ def build_search_context_cached(device_names_tuple: Tuple[str, ...], top_matches
 
 def _build_search_context(device_names_tuple: Tuple[str, ...], top_matches_data: str) -> str:
     """Internal function to build search context."""
-    # This would contain the actual context building logic
-    # For caching purposes, we need to serialize the top_matches_data
     return top_matches_data
 
 def build_search_context_optimized(top_matches: List[Tuple[Dict, float]]) -> str:
@@ -376,58 +379,237 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
     except Exception as e:
         return f"An error occurred: {str(e)}"
 
-
-
 @tool("order_purchase",args_schema=Order)
 def order_purchase(
     device_name: str,
     address: str,
     customer_name: str = None,
     customer_phone: str = None,
-    time: str = None,
-    quantity: str = None,
+    quantity: str = "1",
     payment: str = "cash on delivery",
-    shipping: bool = "shipping",
-    conversation_id: Optional[str] = None
-) -> str:
+    shipping: bool = True,
+    time: str = None,
+) -> list[dict]:
     """
     Tool to order electronic product
     """
-    
-    
-    
-    return "Order successfully."
+    try:
+        order_id = str(f"ORDER_{generate_short_id()}")
+        
+        try:
+            quantity_int = int(quantity)
+        except ValueError:
+            quantity_int = 1
 
+        check_stock_query = text("SELECT in_store FROM Item WHERE name = :device_name")
+        result = None
+        
+        with db._engine.connect() as conn:
+            result = conn.execute(check_stock_query, {"device_name": device_name}).fetchone()
+            
+            if not result:
+                return {"error": f"Product '{device_name}' not found in inventory."}
+            
+            if result[0] == 0:
+                return {"error": f"Product '{device_name}' is not available in store."}
+            
+            insert_query = text("""
+                INSERT INTO [Order] (
+                    order_id, device_name, address, customer_name, customer_phone,
+                    quantity, payment, shipping, status, time_reservation
+                ) VALUES (
+                    :order_id, :device_name, :address, :customer_name, :customer_phone,
+                    :quantity, :payment, :shipping, :status, :time_reservation
+                )
+            """)
+            
+            params = {
+                "order_id": order_id,
+                "device_name": device_name,
+                "address": address,
+                "customer_name": customer_name,
+                "customer_phone": customer_phone,
+                "quantity": quantity_int,
+                "payment": payment,
+                "shipping": shipping,
+                "status": "Processing",
+                "time_reservation": time
+            }
+            
+            conn.execute(insert_query, params)
+            conn.commit()
+        
+        return {
+            "order_id": order_id,
+            "device_name": device_name,
+            "address": address,
+            "customer_name": customer_name,
+            "customer_phone": customer_phone,
+            "quantity": quantity_int,
+            "payment": payment,
+            "shipping": shipping,
+            "status": "Processing",
+            "time_reservation": time,
+            "message": f"Order {order_id} has been successfully placed for {device_name}."
+        }
+
+    except Exception as e:
+        print(f"Error in order_purchase: {str(e)}")
+        return {"error": f"Error placing order: {str(e)}"}
 
 @tool("cancel_order",args_schema=CancelOrder)
 def cancel_order(
     order_id: str,
-    conversation_id: Optional[str] = None
 ) -> str:
     """
     Tool to cancel order by order id
     """
-    return "Cancel successfully."
+    try:
+        check_query = text("SELECT status FROM [Order] WHERE order_id = :order_id")
+        with db._engine.connect() as conn:
+            result = conn.execute(check_query, {"order_id": order_id}).fetchone()
+
+        if not result:
+            return f"Order with ID {order_id} not found."
+
+        if result[0] in ["Shipped", "Received", "Canceled", "Returned"]:
+            return f"Cannot cancel order. Current status: {result[0]}"
+
+        update_query = text("UPDATE [Order] SET status = 'Canceled' WHERE order_id = :order_id")
+        with db._engine.connect() as conn:
+            conn.execute(update_query, {"order_id": order_id})
+            conn.commit()
+
+        return f"Order {order_id} cancelled successfully."
+
+    except Exception as e:
+        return f"Error cancelling order: {str(e)}"
+
 @tool("track_order",args_schema=TrackOrder)
-def track_order(
-    order_id: str
-) -> str:
+def track_order(order_id: str) -> list[dict]:
     """
     Tool to track order info and status by order id
     """
-    return "tracking order, your order is being process"
+    try:
+        track_query = text("""
+            SELECT *
+            FROM [Order]
+            WHERE order_id = :order_id
+        """)
+        with db._engine.connect() as conn:
+            result = conn.execute(track_query, {"order_id": order_id}).fetchone()
 
-@tool("book_appointment", args_schema=BookAppointment)
+        if not result:
+            return f"Order with ID {order_id} not found."
+        return result
+
+
+    except Exception as e:
+        return f"Error tracking order: {str(e)}"
+@tool("book_appointment",args_schema=BookAppointment)
 def book_appointment(
     reason: str,
     customer_name: Optional[str] = None,
     customer_phone: Optional[str] = None,
-    time: str = None, 
+    time: str = None,  
     note: Optional[str] = None,
-    conversation_id: Optional[str] = None
-) -> str:
+    conversation_id: Optional[str] = None  
+) -> dict:
     """
     Tool to book an appointment for the customer.
     """
+    try:
+        # Generate booking_id first
+        booking_id = f"BOOKING_{generate_short_id()}"
+        
+        # Prepare parameters
+        params = {
+            "booking_id": booking_id,
+            "reason": reason,
+            "customer_name": customer_name,
+            "customer_phone": customer_phone,
+            "time": time,
+            "note": note,
+            "status": "Scheduled"
+        }
 
-    return f"Appointment booked for {customer_name or 'Customer'} on {time} for reason: {reason}."
+        # Prepare SQL query
+        insert_query = text("""
+            INSERT INTO Booking (
+                booking_id, reason, customer_name, customer_phone, time, note, status
+            ) VALUES (
+                :booking_id, :reason, :customer_name, :customer_phone, :time, :note, :status
+            )
+        """)
+
+        # Execute the query within a proper context manager
+        with db._engine.connect() as conn:
+            conn.execute(insert_query, params)
+            conn.commit()
+            
+        # Return booking confirmation with message
+        return {
+            "booking_id": booking_id,
+            "reason": reason,
+            "customer_name": customer_name,
+            "customer_phone": customer_phone,
+            "time": time,
+            "note": note,
+            "status": "Scheduled",
+            "message": f"Appointment {booking_id} for {reason} has been successfully scheduled."
+        }
+        
+    except Exception as e:
+        # Log error for debugging
+        print(f"Error in book_appointment: {str(e)}")
+        return {"error": f"Error booking appointment: {str(e)}"}
+@tool("track_appointment",args_schema=TrackAppointment)
+def track_appointment(booking_id: str) -> list[dict]:
+    """
+    Tool to track order info and status by order id
+    """
+    try:
+        track_query = text("""
+            SELECT *
+            FROM Booking
+            WHERE booking_id = :booking_id
+        """)
+        with db._engine.connect() as conn:
+            result = conn.execute(track_query, {"booking_id": booking_id}).fetchone()
+
+        if not result:
+            return f"Order with ID {booking_id} not found."
+
+
+        return result
+
+    except Exception as e:
+        return f"Error tracking order: {str(e)}"
+@tool("cancel_appointment",args_schema=CancelAppointment)
+def cancel_appointment(
+    booking_id: str,
+) -> str:
+    """
+    Tool to cancel order by order id
+    """
+    try:
+        check_query = text("SELECT status FROM Booking WHERE booking_id = :booking_id")
+        with db._engine.connect() as conn:
+            result = conn.execute(check_query, {"booking_id": booking_id}).fetchone()
+
+        if not result:
+            return f"Appointment with ID {booking_id} not found."
+
+        if result[0] in ["Finished", "Canceled",]:
+            return f"Cannot cancel appointment. Current status: {result[0]}"
+
+        update_query = text("UPDATE Booking SET status = 'Canceled' WHERE booking_id = :booking_id")
+        with db._engine.connect() as conn:
+            conn.execute(update_query, {"booking_id": booking_id})
+            conn.commit()
+
+        return f"Appointment {booking_id} cancelled successfully."
+
+    except Exception as e:
+        return f"Error cancelling Appointment: {str(e)}"
+

@@ -51,14 +51,13 @@ class AgenticState(InputState):
         update_dialog_stack,
     ]
     recommended_devices: Annotated[List[str], merge_recommended_devices]
-    conversation_id: str  
     user_id: str
 
 class Assistant:
     def __init__(self, runnable: Runnable):
         self.runnable = runnable
 
-    def __call__(self, state: AgenticState, config: RunnableConfig):
+    def __call__(self, state: AgenticState):
         while True:
             result = self.runnable.invoke(state)
 
@@ -68,11 +67,9 @@ class Assistant:
                 and not result.content[0].get("text")
             ):
                 messages = state["messages"] + [("user", "Respond with a real output.")]
-                
                 state = {**state, "messages": messages}
             else:
                 break
-        
         if hasattr(result, "tool_calls") and result.tool_calls:
             for tool_call in result.tool_calls:
                 if tool_call.get("name") == "recommend_system" and tool_call.get("return_value"):
@@ -83,8 +80,9 @@ class Assistant:
                         recommended_devices_cache = device_names
                         if isinstance(state, dict):
                             state["recommended_devices"] = device_names
-                
         return {"messages": result}
+    
+    
 def pop_dialog_state(state: AgenticState) -> dict:
     """Pop the dialog stack and return to the main assistant."""
     messages = []

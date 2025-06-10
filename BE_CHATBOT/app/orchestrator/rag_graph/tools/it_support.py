@@ -24,9 +24,9 @@ else:
     llm = create_chat_model(chat_config)
 
 trusted_tech_domains = [
-    "support.apple.com",
-    "support.microsoft.com",
-    "support.google.com",
+    "howtogeek.com",
+    "makeuseof.com",
+    "ifixit.com/Guide",
     "ifixit.com",
     "tomsguide.com",
     "cnet.com",
@@ -41,7 +41,7 @@ trusted_tech_domains = [
 
 
 tavily_search_wrapper = TavilySearchAPIWrapper(
-    tavily_api_key=search_config.api_key
+    tavily_api_key=search_config.api_key,
 )
 
 it_support_tool = TavilySearchResults(
@@ -52,6 +52,7 @@ it_support_tool = TavilySearchResults(
     include_raw_content=True,
     api_wrapper=tavily_search_wrapper,
     include_domains=trusted_tech_domains
+    
 )
 
 @tool("it_support_agent")
@@ -81,10 +82,8 @@ def it_support_agent(question):
         ("human", "{user_question}")
     ])
 
-    # Create a runnable
     chain = prompt | llm
 
-    # Run it
     result = chain.invoke({
         "search_info": search_results,
         "user_question": question

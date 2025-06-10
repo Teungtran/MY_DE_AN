@@ -2,20 +2,16 @@ from pydantic import BaseModel
 from typing import Annotated, Literal, Optional
 from datetime import datetime
 
+
 class CompleteOrEscalate(BaseModel):
     """A tool to return control to the main assistant when:
     1. The current task is completed successfully and no further assistance is needed.
     2. The user's question is completely unrelated to FPT Shop's scope (electronics, IT support, policies).
     3. The agent requires capabilities only available in the main assistant.
-    
-    DO NOT use this tool for:
-    - Questions about FPT Shop policies (use RAG_Agent)
-    - IT support questions (use it_support_agent)
-    - Device maintenance and cleaning (use it_support_agent)
-    - Technical troubleshooting (use it_support_agent)
-    - Product recommendations (use recommend_system)
-    - Order management (use order_purchase, cancel_order, track_order)
-    - Store appointments (use book_appointment)
+    4. The user attempts to confirm an action (e.g., by typing 'y' or 'n') rather than providing substantive input.
+    5. The user tries to modify content or input parameters after a tool call has been initiated or is pending confirmation.
+
+    Use this tool to gracefully hand back the conversation to the assistant in cases of ambiguous, off-topic, or low-signal input that suggests a need for higher-level clarification or handling.
     """
 
     cancel: bool = True
@@ -25,26 +21,27 @@ class CompleteOrEscalate(BaseModel):
         json_schema_extra = {
             "example": {
                 "cancel": True,
-                "reason": "User asked about household appliances which are not handled by FPT Shop. Returning to main assistant.",
+                "reason": "User changed their mind about the current task.",
             },
             "example 2": {
                 "cancel": True,
-                "reason": "User asked about food delivery services which are outside FPT Shop's scope. Returning to main assistant.",
+                "reason": "I have fully completed the task.",
             },
+            
             "example 3": {
-                "cancel": True,
-                "reason": "User asked about clothing and fashion which are not part of FPT Shop's product range. Returning to main assistant.",
+                "cancel": False,
+                "reason": "I need to ask the user again for more information.",
             },
             "example 4": {
                 "cancel": True,
-                "reason": "User asked about banking services which are not provided by FPT Shop. Returning to main assistant.",
+                "reason": "User typed 'y' to confirm, which should be handled by the main assistant.",
             },
             "example 5": {
-                "cancel": False,
-                "reason": "Need advanced capabilities from the main assistant for a complex multi-domain query.",
-            }
+                "cancel": True,
+                "reason": "User is trying to change input content after the tool was called.",
+            },
+            
         }
-
 
 
 
@@ -71,7 +68,7 @@ class Order(BaseModel):
                 "customer_phone": "1234567890",
                 "quantity": 1,
                 "shipping": True,
-                "payment": "cash on delivery"
+                "payment": "cash on delivery",
             }
         }
 
@@ -84,7 +81,7 @@ class CancelOrder(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "order_id": "1527728287278"
+                "order_id": "ORDER-A1B2C3D4-20250610153000"
             }
         }
         
@@ -96,7 +93,7 @@ class TrackOrder(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "order_id": "1527728287278"
+                "order_id": "ORDER-A1B2C3D4-20250610153000"
             }
         }
 class BookAppointment(BaseModel):
@@ -113,7 +110,29 @@ class BookAppointment(BaseModel):
                 "customer_name": "John Doe",
                 "customer_phone": "1234567890",
                 "time": "2025-06-10T15:30:00Z",
-                "note": "Prefer afternoon slot"
+                "note": "Prefer afternoon slot",
+            }
+        }
+class CancelAppointment(BaseModel):
+    """Cancel appointment by its appointment ID."""
+
+    booking_id: Annotated[str, "The unique identifier for the appointment to cancel"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "booking_id": "BOOKING-A1B2C3D4-20250610153000"
+            }
+        }
+class TrackAppointment(BaseModel):
+    """Track appointment by its appointment ID."""
+
+    booking_id: Annotated[str, "The unique identifier for the appointment to track"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "booking_id": "BOOKING-A1B2C3D4-20250610153000"
             }
         }
 class RecommendationConfig:

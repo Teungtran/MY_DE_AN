@@ -219,6 +219,9 @@ async def get_chat_history(conversation_id: str):
     except Exception as e:
         logger.error(f"Error retrieving chat history: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrieving chat history: {str(e)}")
+
+
+
 async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[str, None]:
     """
     Send a message to the FPT Shop Assistant with a given thread_id,
@@ -347,7 +350,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
                 
                 return  
         
-        # Only execute this part if there's no pending tool call
         logger.debug(f"Starting new conversation for {conversation_id}")
         processed_set = set()
         all_messages = []
@@ -455,6 +457,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
             tools=None
         )
         yield f"{error_payload.model_dump_json()}\n\n"
+
 @router.post("/streaming-answer")
 async def stream(user_inputs: UserInputs):
     exception_handler = ExceptionHandler(
