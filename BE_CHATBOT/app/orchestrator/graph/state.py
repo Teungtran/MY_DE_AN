@@ -47,7 +47,7 @@ class AgenticState(InputState):
     """State of the retrieval graph / agent."""
 
     dialog_state: Annotated[
-        list[Literal["primary_assistant", "call_tech_agent", "call_policy_agent"]],
+        list[Literal["primary_assistant", "call_shop_agent", "call_it_agent","call_appointment_agent"]],
         update_dialog_stack,
     ]
     recommended_devices: Annotated[List[str], merge_recommended_devices]

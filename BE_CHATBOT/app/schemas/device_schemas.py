@@ -135,6 +135,44 @@ class TrackAppointment(BaseModel):
                 "booking_id": "BOOKING-A1B2C3D4-20250610153000"
             }
         }
+        
+class SendTicket(BaseModel):
+    content: Annotated[str, "content of the ticket"]
+    description: Optional[Annotated[str, "A short description of the ticket (less than 50 characters)"]] = None
+    customer_name: Optional[Annotated[str, "The name of the customer ordering"]] = None
+    customer_phone: Optional[Annotated[str, "The phone number of the customer ordering"]] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "content": "I need help fixing my laptop screen",
+                "description": "Screen Error",
+                "customer_name": "John Doe",
+                "customer_phone": "1234567890",
+            }
+        }
+class CancelTicket(BaseModel):
+    """Cancel appointment by its appointment ID."""
+
+    ticket_id: Annotated[str, "The unique identifier for the ticket to cancel"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "ticket_id": "TICKET-A1B2C3D4-20250610153000"
+            }
+        }
+class TrackTicket(BaseModel):
+    """Track appointment by its appointment ID."""
+
+    ticket_id: Annotated[str, "The unique identifier for the ticket to track"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "ticket_id": "TICKET-A1B2C3D4-20250610153000"
+            }
+        }
 class RecommendationConfig:
     MAX_RESULTS = 8
     BRAND_MATCH_BOOST = 15

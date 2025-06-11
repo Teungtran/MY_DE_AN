@@ -15,7 +15,7 @@ from .llm import extend_query,translate_language,llm_history
 from .reranking import  most_relevant
 from factories.chat_factory import create_chat_model
 from services.dynamodb import DynamoHistory
-from ..prompts import GENERATE_PROMPT
+from .prompts import GENERATE_PROMPT
 chat_config = APP_CONFIG.chat_model_config
 import os
 if not chat_config:
@@ -153,29 +153,3 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
         print(f"General error in RAG_Agent: {e}")
         return "I apologize, but I encountered an error while searching for information.", []
 
-
-@tool
-def recall_memory(user_id: str, conversation_id: str) -> str:
-    """
-    Retrieve the top 5 most recent messages for a given user and conversation.
-
-    Args:
-        user_id (str): The ID of the user whose conversation history is being retrieved.
-        conversation_id (str): The ID of the conversation to retrieve history for.
-
-    Returns:
-        str: A newline-separated string of the 5 most recent messages.
-    """
-    manager = DynamoHistory(
-        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
-        aws_access_key_id=AWS_SECRET_ACCESS_ID,
-        table_name=TABLE_NAME,
-        region_name=REGION_NAME,
-    )
-
-    top_5_recent = manager.get_conversation_history(conversation_id, user_id, 5)
-
-    messages_only = [msg.get("message", "") for msg in top_5_recent]
-    format = "\n".join(messages_only)
-    answer = llm_history(format)
-    return answer

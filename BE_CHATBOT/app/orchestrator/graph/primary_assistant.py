@@ -1,4 +1,5 @@
 import datetime
+from .state import AgenticState
 from langgraph.graph import END
 from langgraph.prebuilt import tools_condition
 from config.base_config import APP_CONFIG
@@ -7,11 +8,14 @@ from schemas.device_schemas import CompleteOrEscalate
 from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import MAIN_SYSTEM_PROMPT
 from factories.chat_factory import create_chat_model
-from ..tech_graph.tech_agent import create_tech_tool, tech_safe_tools
-from ..tech_graph.state import ToTechAssistant
-from ..rag_graph.state import ToPolicyAssistant
-from .state import AgenticState
-from ..rag_graph.policy_agent import create_policy_tool
+from ..shop_graph.shop_agent import create_shop_tool, shop_safe_tools
+from ..shop_graph.state import ToShopAssistant
+from ..rag_tool.tools.policy_tool import RAG_Agent
+from ..appointment_graph.state import ToAppointmentAssistant
+from ..appointment_graph.appointment_agent  import create_appointment_tool , appointment_safe_tools
+from ..it_graph.state import ToITAssistant
+from ..it_graph.it_agent import create_it_tool, it_safe_tools
+
 chat_config = APP_CONFIG.chat_model_config
 import os
 from ...utils.logging.logger import get_logger
@@ -33,10 +37,11 @@ MAIN_SYSTEM_MESSAGES = [
 primary_assistant_prompt = ChatPromptTemplate.from_messages(MAIN_SYSTEM_MESSAGES).partial(time=datetime.datetime.now)
 
 
+update_shop_runnable = create_shop_tool(llm)
+update_appointment_runnable = create_appointment_tool(llm)
+update_it_runnable = create_it_tool(llm)
 
-update_tech_runnable = create_tech_tool(llm)
-update_policy_runnable = create_policy_tool(llm)
-assistant_runnable = primary_assistant_prompt | llm.bind_tools([ToTechAssistant, ToPolicyAssistant])
+assistant_runnable = primary_assistant_prompt | llm.bind_tools([ToShopAssistant, ToAppointmentAssistant,ToITAssistant, RAG_Agent])
 
 def route_primary_assistant(state: AgenticState):
     route = tools_condition(state)
@@ -50,42 +55,63 @@ def route_primary_assistant(state: AgenticState):
         tool_name = tool_calls[0]["name"]
         logger.info(f"Primary Assistant called tool: {tool_name}")
         
-        if tool_name == ToTechAssistant.__name__:
-            return "enter_tech_node"
-        elif tool_name == ToPolicyAssistant.__name__:
-            return "enter_policy_node"
+        if tool_name == ToShopAssistant.__name__:
+            return "enter_shop_node"
+        elif tool_name == ToAppointmentAssistant.__name__:
+            return "enter_appointment_node"
+        elif tool_name == ToITAssistant.__name__:
+            return "enter_it_node"
+        elif tool_name == "rag_agent":
+            return "rag_agent_node"
         return END
     
     return END
 
-def route_update_tech(state: AgenticState):
+def route_update_shop(state: AgenticState):
     route = tools_condition(state)
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
     for tool_call in tool_calls:
-        logger.info(f"Tech Assistant called tool: {tool_call['name']}")
+        logger.info(f"Shop Assistant called tool: {tool_call['name']}")
     
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"
-    safe_toolnames = [t.name for t in tech_safe_tools]
+    safe_toolnames = [t.name for t in shop_safe_tools]
     if all(tc["name"] in safe_toolnames for tc in tool_calls):
-        return "update_tech_safe_tools"
-    return "update_tech_sensitive_tools"
+        return "update_shop_safe_tools"
+    return "update_shop_sensitive_tools"
 
-def route_policy_agent(state: AgenticState):
+def route_update_appointment(state: AgenticState):
     route = tools_condition(state)
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
     for tool_call in tool_calls:
-        logger.info(f"Policy Assistant called tool: {tool_call['name']}")
+        logger.info(f"Appointment Assistant called tool: {tool_call['name']}")
     
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"
-    return "policy_tool"
+    safe_toolnames = [t.name for t in appointment_safe_tools]
+    if all(tc["name"] in safe_toolnames for tc in tool_calls):
+        return "update_appointment_safe_tools"
+    return "update_appointment_sensitive_tools"
 
 
-
+def route_update_it(state: AgenticState):
+    route = tools_condition(state)
+    if route == END:
+        return END
+    tool_calls = state["messages"][-1].tool_calls
+    for tool_call in tool_calls:
+        logger.info(f"IT Assistant called tool: {tool_call['name']}")
+    
+    did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
+    if did_cancel:
+        return "leave_skill"
+    safe_toolnames = [t.name for t in it_safe_tools]
+    if all(tc["name"] in safe_toolnames for tc in tool_calls):
+        return "update_it_safe_tools"
+    return "update_it_sensitive_tools"

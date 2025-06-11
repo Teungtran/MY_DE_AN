@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
 from typing_extensions import Optional
-class ToTechAssistant(BaseModel):
+class ToShopAssistant(BaseModel):
     """Transfers work to a specialized assistant to handle electronics products recommendations, orders and cancellations."""
 
     request: str = Field(
