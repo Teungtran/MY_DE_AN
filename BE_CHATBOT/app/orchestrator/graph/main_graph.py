@@ -18,7 +18,7 @@ def setup_agentic_graph():
     
     # Add nodes
     builder.add_node("primary_assistant", Assistant(assistant_runnable))
-    
+
     # shop assistant nodes
     builder.add_node("enter_shop_node", create_entry_node("Shop Assistant", "call_shop_agent"))
     builder.add_node("call_shop_agent", Assistant(update_shop_runnable))
@@ -60,15 +60,15 @@ def setup_agentic_graph():
     builder.add_edge("update_appointment_sensitive_tools", "call_appointment_agent")
     builder.add_edge("update_appointment_safe_tools", "call_appointment_agent")
     
+    # RAG agent edges
     builder.add_edge("rag_agent_node", "primary_assistant")
-    
-    # Add conditional edges
+
     builder.add_conditional_edges(
         "primary_assistant",
         route_primary_assistant,
         ["enter_shop_node", "enter_it_node", "enter_appointment_node", "rag_agent_node", END],
     )
-    
+
     builder.add_conditional_edges(
         "call_shop_agent",
         route_update_shop,

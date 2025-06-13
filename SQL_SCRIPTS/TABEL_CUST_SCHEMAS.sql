@@ -1,7 +1,13 @@
-use CUSTOMER_SERVICE
-go
+-- Drop tables in the correct order due to FK dependencies
+DROP TABLE IF EXISTS ticket;
+DROP TABLE IF EXISTS Booking;
+DROP TABLE IF EXISTS [Order];
+DROP TABLE IF EXISTS Item;
+DROP TABLE IF EXISTS Customer_info;
+
+-- Create Customer_info table
 CREATE TABLE Customer_info (
-    user_id INT PRIMARY KEY IDENTITY(1,1),
+    user_id NVARCHAR(50) PRIMARY KEY,
     customer_name NVARCHAR(100) NOT NULL,
     address NVARCHAR(255),
     preferences NVARCHAR(255),
@@ -10,7 +16,7 @@ CREATE TABLE Customer_info (
     password NVARCHAR(255) NOT NULL
 );
 
--- Table 2: Item
+-- Create Item table
 CREATE TABLE Item (
     item_id INT PRIMARY KEY IDENTITY(1,1),
     device_name NVARCHAR(100) UNIQUE NOT NULL,
@@ -19,7 +25,7 @@ CREATE TABLE Item (
     in_store INT
 );
 
--- Table 3: [Order]
+-- Create Order table
 CREATE TABLE [Order] (
     order_id NVARCHAR(20) PRIMARY KEY,
     device_name NVARCHAR(100) NOT NULL,
@@ -32,13 +38,12 @@ CREATE TABLE [Order] (
     customer_phone NVARCHAR(20),
     customer_name NVARCHAR(100),
     status NVARCHAR(20) CHECK (status IN ('Processing', 'Shipped', 'Canceled', 'Returned', 'Received')),
-    user_id INT NULL,
-    FOREIGN KEY (user_id) REFERENCES Customer_info(user_id),
+    user_id NVARCHAR(50),
     FOREIGN KEY (device_name) REFERENCES Item(device_name),
-    FOREIGN KEY (customer_phone) REFERENCES Customer_info(customer_phone)
+    FOREIGN KEY (user_id) REFERENCES Customer_info(user_id)
 );
 
--- Table 4: Booking
+-- Create Booking table
 CREATE TABLE Booking (
     booking_id NVARCHAR(20) PRIMARY KEY,
     customer_name NVARCHAR(100),
@@ -47,10 +52,11 @@ CREATE TABLE Booking (
     time DATETIME NOT NULL,
     note NVARCHAR(255),
     status NVARCHAR(20) CHECK (status IN ('Scheduled', 'Canceled', 'Finished')),
-    FOREIGN KEY (customer_phone) REFERENCES Customer_info(customer_phone)
+    user_id NVARCHAR(50),
+    FOREIGN KEY (user_id) REFERENCES Customer_info(user_id)
 );
 
--- Table 5: Ticket
+-- Create Ticket table
 CREATE TABLE ticket (
     ticket_id NVARCHAR(50) PRIMARY KEY,
     content NVARCHAR(MAX),
@@ -59,5 +65,10 @@ CREATE TABLE ticket (
     customer_phone NVARCHAR(20),
     time DATETIME,
     status NVARCHAR(20) CHECK (status IN ('Pending', 'Resolving', 'Canceled', 'Finished')),
-    FOREIGN KEY (customer_phone) REFERENCES Customer_info(customer_phone)
+    user_id NVARCHAR(50),
+    FOREIGN KEY (user_id) REFERENCES Customer_info(user_id)
 );
+use CUSTOMER_SERVICE
+go
+ALTER TABLE Customer_info
+ALTER COLUMN preferences NVARCHAR(MAX);

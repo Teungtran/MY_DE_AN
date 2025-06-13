@@ -1,6 +1,6 @@
 from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import IT_SYSTEM_PROMPT
-from .tools.message import track_ticket,send_ticket,cancel_ticket
+from .tools.message import track_ticket,send_ticket,cancel_ticket,update_ticket
 from schemas.device_schemas import CompleteOrEscalate
 from .tools.it_support import it_support_agent
 from ...utils.logging.logger import get_logger
@@ -17,8 +17,8 @@ it_assistant_prompt = ChatPromptTemplate.from_messages(IT_SYSTEM_MESSAGES).parti
 
 
 it_safe_tools = [it_support_agent, track_ticket]
-it_sensitive_tools = [send_ticket, cancel_ticket]
-it_tools = it_safe_tools + it_sensitive_tools 
+it_sensitive_tools = [send_ticket, cancel_ticket,update_ticket]
+it_tools = it_safe_tools + it_sensitive_tools  
 
 def create_it_tool(model):
     """Creates a it support tool with the provided language model.

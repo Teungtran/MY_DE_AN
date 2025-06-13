@@ -1,6 +1,6 @@
 from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import APPOINTMENT_SYSTEM_PROMPT
-from .tools.appointment_tool import book_appointment,track_appointment,cancel_appointment
+from .tools.appointment_tool import book_appointment,track_appointment,cancel_appointment,update_appointment
 from schemas.device_schemas import CompleteOrEscalate
 from ...utils.logging.logger import get_logger
 logger = get_logger(__name__)
@@ -14,7 +14,7 @@ import datetime
 appointment_assistant_prompt = ChatPromptTemplate.from_messages(APPOINTMENT_SYSTEM_MESSAGES).partial(time=datetime.datetime.now)
 
 appointment_safe_tools = [track_appointment]
-appointment_sensitive_tools = [book_appointment,cancel_appointment]
+appointment_sensitive_tools = [book_appointment,cancel_appointment,update_appointment]
 appointment_tools = appointment_safe_tools + appointment_sensitive_tools 
 
 def create_appointment_tool(model):

@@ -47,7 +47,6 @@ class CompleteOrEscalate(BaseModel):
 
 
 class Order(BaseModel):
-    """order based on the provided details."""
     device_name: Annotated[str, "The unique identifier for the device"]
     customer_name: Annotated[Optional[str], "The name of the customer ordering"]
     customer_phone: Annotated[Optional[str], "The phone number of the customer ordering"]
@@ -59,6 +58,8 @@ class Order(BaseModel):
         Optional[Literal["pay later", "bank transfer", "cash on delivery"]],
         "Payment method: 'pay later', 'bank transfer', or 'cash on delivery'"
     ]
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -69,9 +70,38 @@ class Order(BaseModel):
                 "quantity": 1,
                 "shipping": True,
                 "payment": "cash on delivery",
+                "user_id": "user333232"
             }
         }
+class UpdateOrder(BaseModel):
+    order_id: Annotated[str, "The unique identifier for the order"]
+    device_name: Optional[Annotated[str, "The updated device_name"]] = None
+    customer_name: Optional[Annotated[str, "The updated name of the customer ordering"]] = None
+    customer_phone: Optional[Annotated[str, "The updated phone number of the customer ordering"]] = None
+    time: Annotated[Optional[datetime], "The updated time customer want the product to be delievered or time for pickup"]
+    address: Optional[Annotated[str, "The updated address of the customer ordering"]] = None
+    quantity: Optional[Annotated[str, "The updated number of purchase"]] = None
+    shipping: Optional[Annotated[str, "update shipping or not shipping"]] = None
+    payment: Annotated[
+        Optional[Literal["pay later", "bank transfer", "cash on delivery"]],
+        "New updated payment method: 'pay later', 'bank transfer', or 'cash on delivery'"
+    ]
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "order_id": "ORDER-A1B2C3D4-20250610153000",
+                "device_name": "iPhone 16 Plus 128GB",
+                "customer_name": "John Doe",
+                "address": "EN Street, NYC, USA",
+                "customer_phone": "1234567890",
+                "quantity": 1,
+                "shipping": True,
+                "payment": "cash on delivery",
+                "user_id": "user333232"
+            }
+        }
 
 class CancelOrder(BaseModel):
     """Cancel order by its Order ID."""
@@ -102,6 +132,7 @@ class BookAppointment(BaseModel):
     customer_phone: Optional[Annotated[str, "The phone number of the customer ordering"]] = None
     time: Annotated[datetime, "Time of the appointment"]
     note: Optional[Annotated[str, "Any note from customer"]] = None
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
 
     class Config:
         json_schema_extra = {
@@ -111,6 +142,30 @@ class BookAppointment(BaseModel):
                 "customer_phone": "1234567890",
                 "time": "2025-06-10T15:30:00Z",
                 "note": "Prefer afternoon slot",
+                "user_id": "user333232"
+
+            }
+        }
+class UpdateAppointment(BaseModel):
+    booking_id: Annotated[str, "The unique identifier for the appointment to update"]
+    reason: Optional[Annotated[str, "new updated reason of the appointment"]] = None
+    customer_name: Optional[Annotated[str, "The name of the new updated customer ordering"]] = None
+    customer_phone: Optional[Annotated[str, "The phone number of the new updated customer ordering"]] = None
+    time: Optional[Annotated[str, "Time of the new updated appointment"]] = None
+    note: Optional[Annotated[str, "Any new updated note from customer"]] = None
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "booking_id": "BOOKING-A1B2C3D4-20250610153000",
+                "reason": "Screen repair",
+                "customer_name": "John Doe",
+                "customer_phone": "1234567890",
+                "time": "2025-06-10T15:30:00Z",
+                "note": "Prefer afternoon slot",
+                "user_id": "user333232"
+
             }
         }
 class CancelAppointment(BaseModel):
@@ -141,6 +196,7 @@ class SendTicket(BaseModel):
     description: Optional[Annotated[str, "A short description of the ticket (less than 50 characters)"]] = None
     customer_name: Optional[Annotated[str, "The name of the customer ordering"]] = None
     customer_phone: Optional[Annotated[str, "The phone number of the customer ordering"]] = None
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
 
     class Config:
         json_schema_extra = {
@@ -149,6 +205,26 @@ class SendTicket(BaseModel):
                 "description": "Screen Error",
                 "customer_name": "John Doe",
                 "customer_phone": "1234567890",
+                "user_id": "user333232"
+            }
+        }
+class UpdateTicket(BaseModel):
+    ticket_id: Annotated[str, "The unique identifier for the ticket to update"]
+    content:   Optional[Annotated[str, "content of the new updated ticket"]] = None
+    description: Optional[Annotated[str, "A short description of the new updated ticket (less than 50 characters)"]] = None
+    customer_name: Optional[Annotated[str, "The name of the new updated customer ordering"]] = None
+    customer_phone: Optional[Annotated[str, "The phone number of new updated the customer ordering"]] = None
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "ticket_id": "TICKET-A1B2C3D4-20250610153000",
+                "content": "I need help fixing my laptop screen",
+                "description": "Screen Error",
+                "customer_name": "John Doe",
+                "customer_phone": "1234567890",
+                "user_id": "user333232"
             }
         }
 class CancelTicket(BaseModel):
@@ -171,6 +247,20 @@ class TrackTicket(BaseModel):
         json_schema_extra = {
             "example": {
                 "ticket_id": "TICKET-A1B2C3D4-20250610153000"
+            }
+        }
+class RecommendSystem(BaseModel):
+    """Recommend products based on user input and preferences."""
+    user_input: Annotated[str, "User query text for recommendations"]
+    types: Optional[Annotated[str, "Type of device to search for"]] = None
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_input": "I need a good smartphone",
+                "types": "phone",
+                "user_id": "user333232"
             }
         }
 class RecommendationConfig:

@@ -2,6 +2,7 @@ from typing import Callable
 
 from langchain_core.messages import ToolMessage,AIMessage
 
+from langchain.sql_database import SQLDatabase
 from langchain_core.runnables import RunnableLambda
 from ..state import AgenticState
 from langgraph.prebuilt import ToolNode
@@ -56,6 +57,7 @@ def format_message(message):
         elif isinstance(content, list) and content and isinstance(content[0], dict):
             return content[0].get("text", "")
     return str(message)
+
 def extract_content_from_response(response):
     """Extract content from various response types."""
     if isinstance(response, AIMessage):
@@ -66,3 +68,15 @@ def extract_content_from_response(response):
         return response
     else:
         return str(response)
+    
+def inject_user_id(state, result):
+    if hasattr(result, "tool_calls") and result.tool_calls:
+        for tool_call in result.tool_calls:
+            if tool_call["name"] in ["ToShopAssistant", "ToITAssistant", "ToAppointmentAssistant"]:
+                tool_call["args"]["user_id"] = state["user_id"]
+    return result
+
+def connect_to_db(server: str, database: str) -> SQLDatabase:
+    """Connect to SQL Server database"""
+    db_uri = f"mssql+pyodbc://{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
+    return SQLDatabase.from_uri(db_uri)

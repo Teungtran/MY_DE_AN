@@ -4,13 +4,14 @@ from langdetect import detect_langs
 import numpy as np
 from functools import lru_cache
 from typing import List, Dict, Optional, Any, Tuple
-from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder
+from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder,RecommendSystem,UpdateOrder
 from .get_score import (
     check_similarity, get_all_points, keyword, convert_to_string,
     batch_fuzzy_scoring, check_similarity_vectorized 
 )
 from config.base_config import APP_CONFIG
 import time
+import json
 from .llm import llm_recommend, llm_device_detail
 from sqlalchemy import text
 from .get_sql import connect_to_db
@@ -76,7 +77,6 @@ def vectorized_scoring(
     main_query_lower: str,
     user_types: List[str],
     brands: List[str],
-    history_device_names: List[str],
     price_min: Optional[float],
     price_max: Optional[float],
     recommendation_config: RecommendationConfig
@@ -138,7 +138,6 @@ def vectorized_scoring(
         ])
         scores += brand_scores * recommendation_config.BRAND_MATCH_BOOST / 100
     
-    # Price filtering (vectorized)
     if price_min is not None or price_max is not None:
         price_scores = np.zeros(len(processed_docs))
         for i, doc in enumerate(processed_docs):
@@ -153,16 +152,6 @@ def vectorized_scoring(
                     price_scores[i] = recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
         scores += price_scores
     
-    # History matching (vectorized)
-    if history_device_names:
-        history_scores = np.array([
-            sum(fuzz.partial_ratio(h, f"{doc['category']} {doc['brand']} {doc['device_name']}") 
-                for h in history_device_names) / len(history_device_names)
-            for doc in processed_docs
-        ])
-        scores += history_scores * recommendation_config.HISTORY_MATCH_BOOST / 100
-    
-    # Create results with early filtering
     results = []
     threshold = 50 if main_query_lower else 0
     
@@ -214,36 +203,33 @@ def build_search_context_optimized(top_matches: List[Tuple[Dict, float]]) -> str
     
     return "\n\n".join(search_context_parts)
 
-@tool("recommendation_system")
+@tool("recommendation_system", args_schema=RecommendSystem)
 def recommend_system(
     user_input: str,
     types: Optional[str] = None,
-    recent_history: Optional[List[Dict]] = None,
-    preference: Optional[Dict[str, Any]] = None,
-    conversation_id: Optional[str] = None  
+    user_id: str = None,
 ) -> Tuple[str, list[str]]: 
     """
     Optimized recommendation system with vectorized operations and intelligent caching.
     """
     recommendation_config = RecommendationConfig()
-    
-    # Pre-process inputs once with early validation
+    query = text("SELECT preferences FROM Customer_info WHERE user_id = :user_id")
+    with db._engine.connect() as conn:
+        query_result = conn.execute(query, {"user_id": user_id}).fetchone()
+    preference = json.loads(query_result[0]) if query_result else None
     main_query = ""
     main_query_lower = ""
     if user_input and user_input.strip():
         main_query = keyword(user_input)
         main_query_lower = main_query.lower()
     
-    # Cached language detection
     language_input = user_input or types or ""
     if not language_input and preference and preference.get("brand"):
         language_input = preference["brand"][0]
     language = detect_language_cached(language_input)
 
-    # Pre-process preference filters with default values
     brands = []
     user_types = []
-    history_device_names = []
     price_min = price_max = None
     
     if preference:
@@ -254,18 +240,13 @@ def recommend_system(
             price_range = preference["price_range"]
             if isinstance(price_range, list):
                 if len(price_range) == 1:
-                    price_max = price_range[0]
+                    price_max = float(price_range[0])
                 elif len(price_range) >= 2:
-                    price_min, price_max = price_range[:2]
+                    price_min = float(price_range[0])
+                    price_max = float(price_range[1])
     
     if types:
         user_types = types.lower().split()
-    
-    if recent_history:
-        history_device_names = [
-            rh["device_name"].lower() for rh in recent_history 
-            if isinstance(rh, dict) and rh.get("device_name")
-        ]
 
     # Get pre-processed data
     all_points = get_all_points()
@@ -275,10 +256,9 @@ def recommend_system(
         return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
 
     # Vectorized scoring
-    scored_results = vectorized_scoring(
-        processed_docs, main_query_lower, user_types, brands,
-        history_device_names, price_min, price_max, recommendation_config
-    )
+    scored_results = vectorized_scoring(processed_docs=processed_docs,main_query_lower=main_query_lower,
+                                        brands=brands,user_types=user_types,
+                                        price_min=price_min,price_max=price_max,recommendation_config=RecommendationConfig)
     
     if not scored_results:
         return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
@@ -306,7 +286,6 @@ def recommend_system(
     # Generate response
     response = llm_recommend(user_input, search_context, language, top_device_names, source, images)
 
-    # Update global cache
     global recommended_devices_cache
     recommended_devices_cache = top_device_names
     
@@ -314,7 +293,7 @@ def recommend_system(
 
 
 @tool("device_details")
-def get_device_details(user_input: str, top_device_names: Optional[List[str]] = None, state: Optional[Dict] = None,conversation_id: Optional[str] = None) -> str:
+def get_device_details(user_input: str, top_device_names: Optional[List[str]] = None, state: Optional[Dict] = None) -> str:
     """
     Retrieve detailed information about a specific device.
     Uses a cache to avoid repeated lookups for the same device.
@@ -389,41 +368,39 @@ def order_purchase(
     payment: str = "cash on delivery",
     shipping: bool = True,
     time: str = None,
-) -> list[dict]:
+    user_id: str = None
+) -> dict:
     """
     Tool to order electronic product
     """
     try:
-        order_id = str(f"ORDER_{generate_short_id()}")
-        
+        order_id = f"ORDER_{generate_short_id()}"
+
         try:
             quantity_int = int(quantity)
         except ValueError:
             quantity_int = 1
 
-        check_stock_query = text("SELECT in_store FROM Item WHERE name = :device_name")
-        result = None
-        
+        check_stock_query = text("SELECT in_store FROM Item WHERE device_name = :device_name")
         with db._engine.connect() as conn:
             result = conn.execute(check_stock_query, {"device_name": device_name}).fetchone()
-            
+
             if not result:
                 return {"error": f"Product '{device_name}' not found in inventory."}
-            
-            if result[0] == 0:
-                return {"error": f"Product '{device_name}' is not available in store."}
-            
+            if result[0] < quantity_int:
+                return {"error": f"Not enough stock for '{device_name}'."}
+
+            # Insert order — price will be handled by trigger
             insert_query = text("""
                 INSERT INTO [Order] (
                     order_id, device_name, address, customer_name, customer_phone,
-                    quantity, payment, shipping, status, time_reservation
+                    quantity, payment, shipping, status, time_reservation, user_id
                 ) VALUES (
                     :order_id, :device_name, :address, :customer_name, :customer_phone,
-                    :quantity, :payment, :shipping, :status, :time_reservation
+                    :quantity, :payment, :shipping, :status, :time_reservation, :user_id
                 )
             """)
-            
-            params = {
+            conn.execute(insert_query, {
                 "order_id": order_id,
                 "device_name": device_name,
                 "address": address,
@@ -433,12 +410,14 @@ def order_purchase(
                 "payment": payment,
                 "shipping": shipping,
                 "status": "Processing",
-                "time_reservation": time
-            }
-            
-            conn.execute(insert_query, params)
+                "time_reservation": time,
+                "user_id": user_id
+            })
             conn.commit()
-        
+
+            get_price_query = text("SELECT price FROM [Order] WHERE order_id = :order_id")
+            order_price = conn.execute(get_price_query, {"order_id": order_id}).fetchone()[0]
+
         return {
             "order_id": order_id,
             "device_name": device_name,
@@ -450,13 +429,106 @@ def order_purchase(
             "shipping": shipping,
             "status": "Processing",
             "time_reservation": time,
-            "message": f"Order {order_id} has been successfully placed for {device_name}."
+            "price": order_price,
+            "message": f"Order {order_id} has been successfully placed for {device_name}.Please pay {order_price} for you order"
         }
 
     except Exception as e:
         print(f"Error in order_purchase: {str(e)}")
         return {"error": f"Error placing order: {str(e)}"}
+    
+@tool("update_order", args_schema=UpdateOrder)
+def update_order(
+    order_id: str,
+    device_name: Optional[str] = None,
+    address:  Optional[str] = None,
+    customer_name:  Optional[str] = None,
+    customer_phone:  Optional[str] = None,
+    quantity:  Optional[str] = None,
+    payment:  Optional[str] = None,
+    shipping: bool = None,
+    time:  Optional[str] = None,
+    user_id:  str = None
+) -> dict:
+    """
+    Tool to update an existing order. Only `order_id` is required.
+    Other fields will be updated if provided; otherwise, existing values are retained.
+    """
+    try:
+        with db._engine.connect() as conn:
+            select_query = text("SELECT * FROM [Order] WHERE order_id = :order_id")
+            existing_order = conn.execute(select_query, {"order_id": order_id}).fetchone()
 
+            if not existing_order:
+                return {"error": f"Order '{order_id}' not found."}
+
+            columns = existing_order._fields
+            order_data = dict(zip(columns, existing_order))
+
+            quantity_int = order_data["quantity"]
+            if quantity:
+                try:
+                    quantity_int = int(quantity)
+                except ValueError:
+                    return {"error": "Quantity must be a valid number."}
+
+                # Check stock if device_name is present or unchanged
+                check_device = device_name or order_data["device_name"]
+                stock_query = text("SELECT in_store FROM Item WHERE device_name = :device_name")
+                stock_result = conn.execute(stock_query, {"device_name": check_device}).fetchone()
+                if not stock_result:
+                    return {"error": f"Device '{check_device}' not found in inventory."}
+                if stock_result[0] < quantity_int:
+                    return {"error": f"Not enough stock for '{check_device}'."}
+
+            updated = {
+                "device_name": device_name or order_data["device_name"],
+                "address": address or order_data["address"],
+                "customer_name": customer_name or order_data["customer_name"],
+                "customer_phone": customer_phone or order_data["customer_phone"],
+                "quantity": quantity_int,
+                "payment": payment or order_data["payment"],
+                "shipping": shipping if shipping is not None else order_data["shipping"],
+                "time_reservation": time or order_data["time_reservation"],
+                "order_id": order_id,
+                "user_id": user_id
+            }
+
+            update_query = text("""
+                UPDATE [Order]
+                SET
+                    device_name = :device_name,
+                    address = :address,
+                    customer_name = :customer_name,
+                    customer_phone = :customer_phone,
+                    quantity = :quantity,
+                    payment = :payment,
+                    shipping = :shipping,
+                    time_reservation = :time_reservation
+                WHERE order_id = :order_id
+            """)
+            conn.execute(update_query, updated)
+            conn.commit()
+            price_query = text("SELECT price FROM [Order] WHERE order_id = :order_id")
+            order_price = conn.execute(price_query, {"order_id": order_id}).fetchone()[0]
+
+        return {
+            "order_id": order_id,
+            "device_name": updated["device_name"],
+            "address": updated["address"],
+            "customer_name": updated["customer_name"],
+            "customer_phone": updated["customer_phone"],
+            "quantity": updated["quantity"],
+            "payment": updated["payment"],
+            "shipping": updated["shipping"],
+            "time_reservation": updated["time_reservation"],
+            "price": order_price,
+            "message": f"Order {order_id} has been successfully updated. Total price: {order_price}."
+        }
+
+    except Exception as e:
+        print(f"Error in update_order: {str(e)}")
+        return {"error": f"Error updating order: {str(e)}"}
 @tool("cancel_order",args_schema=CancelOrder)
 def cancel_order(
     order_id: str,
@@ -506,5 +578,4 @@ def track_order(order_id: str) -> list[dict]:
 
     except Exception as e:
         return f"Error tracking order: {str(e)}"
-
 

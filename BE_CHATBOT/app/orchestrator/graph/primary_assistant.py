@@ -1,4 +1,5 @@
 import datetime
+from langchain_core.runnables import RunnableLambda
 from .state import AgenticState
 from langgraph.graph import END
 from langgraph.prebuilt import tools_condition
@@ -15,7 +16,7 @@ from ..appointment_graph.state import ToAppointmentAssistant
 from ..appointment_graph.appointment_agent  import create_appointment_tool , appointment_safe_tools
 from ..it_graph.state import ToITAssistant
 from ..it_graph.it_agent import create_it_tool, it_safe_tools
-
+from .tools.support_nodes import inject_user_id
 chat_config = APP_CONFIG.chat_model_config
 import os
 from ...utils.logging.logger import get_logger
@@ -30,18 +31,20 @@ if not chat_config:
     )
 else:
     llm = create_chat_model(chat_config)
+    
+def assistant_runnable_with_userid(state):
+    result = (primary_assistant_prompt | llm.bind_tools([ToShopAssistant, ToAppointmentAssistant, ToITAssistant, RAG_Agent])).invoke(state)
+    return inject_user_id(state, result)
+
 MAIN_SYSTEM_MESSAGES = [
     ("system", MAIN_SYSTEM_PROMPT.strip()),
     ("placeholder", "{messages}")
 ]
 primary_assistant_prompt = ChatPromptTemplate.from_messages(MAIN_SYSTEM_MESSAGES).partial(time=datetime.datetime.now)
-
-
 update_shop_runnable = create_shop_tool(llm)
 update_appointment_runnable = create_appointment_tool(llm)
 update_it_runnable = create_it_tool(llm)
-
-assistant_runnable = primary_assistant_prompt | llm.bind_tools([ToShopAssistant, ToAppointmentAssistant,ToITAssistant, RAG_Agent])
+assistant_runnable = RunnableLambda(assistant_runnable_with_userid)
 
 def route_primary_assistant(state: AgenticState):
     route = tools_condition(state)
@@ -53,7 +56,6 @@ def route_primary_assistant(state: AgenticState):
     if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
         tool_calls = last_message.tool_calls
         tool_name = tool_calls[0]["name"]
-        logger.info(f"Primary Assistant called tool: {tool_name}")
         
         if tool_name == ToShopAssistant.__name__:
             return "enter_shop_node"
@@ -72,9 +74,6 @@ def route_update_shop(state: AgenticState):
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
-    for tool_call in tool_calls:
-        logger.info(f"Shop Assistant called tool: {tool_call['name']}")
-    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"
@@ -88,9 +87,6 @@ def route_update_appointment(state: AgenticState):
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
-    for tool_call in tool_calls:
-        logger.info(f"Appointment Assistant called tool: {tool_call['name']}")
-    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"
@@ -105,9 +101,6 @@ def route_update_it(state: AgenticState):
     if route == END:
         return END
     tool_calls = state["messages"][-1].tool_calls
-    for tool_call in tool_calls:
-        logger.info(f"IT Assistant called tool: {tool_call['name']}")
-    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
         return "leave_skill"

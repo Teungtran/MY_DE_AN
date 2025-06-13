@@ -51,7 +51,8 @@ class AgenticState(InputState):
         update_dialog_stack,
     ]
     recommended_devices: Annotated[List[str], merge_recommended_devices]
-    user_id: str
+    conversation_id: Annotated[str, "The unique identifier for the conversation"]
+    user_id: Annotated[str, "The unique identifier for the user"]
 
 class Assistant:
     def __init__(self, runnable: Runnable):

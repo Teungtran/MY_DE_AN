@@ -1,7 +1,8 @@
 import datetime
 import asyncio
 from typing_extensions import AsyncGenerator
-import json 
+import json
+from sqlalchemy import text
 from decimal import Decimal
 from schemas.chunk_message import ChunkMessage
 from typing import Optional, Dict
@@ -9,7 +10,7 @@ from fastapi import APIRouter, HTTPException,Request
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from langdetect import detect
 from orchestrator.graph.main_graph import setup_agentic_graph
-from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
+from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response,connect_to_db
 from sse_starlette.sse import EventSourceResponse
 from utils.logging.logger import get_logger
 from utils.token_counter import tiktoken_counter
@@ -18,7 +19,6 @@ from services.dynamodb import DynamoHistory
 from services.redis_caching import redis_caching
 from schemas.user_inputs import UserInputs
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
-
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -28,9 +28,9 @@ AWS_SECRET_ACCESS_KEY = APP_CONFIG.dynamo_config.aws_secret_access_key
 TABLE_NAME = APP_CONFIG.dynamo_config.table_name
 AWS_SECRET_ACCESS_ID = APP_CONFIG.dynamo_config.aws_access_key_id
 REGION_NAME = APP_CONFIG.dynamo_config.region_name
-
+sql_config = APP_CONFIG.sql_config
 manager: Optional[DynamoHistory] = None
-
+db = connect_to_db(server=sql_config.server, database=sql_config.database)
 def initialize_dynamo():
     global manager
     try:
@@ -54,6 +54,16 @@ def initialize_dynamo():
     except Exception as init_exc:
         logger.error("Error initializing DynamoHistory", exc_info=init_exc)
         manager = None
+        
+def get_user_id(customer_name,password):
+    query = text("SELECT user_id FROM Customer_info WHERE customer_name = :customer_name AND password = :password")
+    with db._engine.connect() as conn:
+        result = conn.execute(query, {"customer_name": customer_name, "password": password}).fetchone()
+        if result:
+            user_id = result[0]
+        else:
+            return None
+    return user_id
 
 initialize_dynamo()
 redis_connect = redis_caching()
@@ -222,7 +232,7 @@ async def get_chat_history(conversation_id: str):
 
 
 
-async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[str, None]:
+async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str) -> AsyncGenerator[str, None]:
     """
     Send a message to the FPT Shop Assistant with a given thread_id,
     return only the final AI response and the final tool call.
@@ -231,7 +241,6 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
     try:
         start_time = datetime.datetime.now(datetime.timezone.utc)
         conversation_id = user_inputs.conversation_id
-        user_id = user_inputs.user_id
         logger.info(f"Starting event_stream: conversation_id={conversation_id}")
 
         # Log initial graph state
@@ -356,8 +365,10 @@ async def stream_event(user_inputs: UserInputs, config: Dict) -> AsyncGenerator[
         all_tool_calls = []
         initial_state = {
             "messages": [HumanMessage(content=user_message)],
-            "conversation_id": conversation_id,  
-            "dialog_state": ["primary_assistant"]
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "dialog_state": ["primary_assistant"],
+            "recommended_devices": []
         }
         logger.debug(f"Initial state for new conversation: {initial_state}")
         
@@ -467,11 +478,13 @@ async def stream(user_inputs: UserInputs):
     )
     try:
         logger.info(f"Received /stream request: conversation_id={user_inputs.conversation_id}")
+        user_id = get_user_id(user_inputs.customer_name, user_inputs.password)
         config = {
             "configurable": {"thread_id": user_inputs.conversation_id},
+            "user_id": user_id,
             "recursion_limit": 50
         }
-        return EventSourceResponse(stream_event(user_inputs, config))
+        return EventSourceResponse(stream_event(user_inputs=user_inputs, config=config, user_id=user_id))
     except Exception as exc:
         logger.error("Error in stream endpoint", exc_info=exc)
         return exception_handler.handle_exception(e=str(exc), extra={"user_inputs": user_inputs.model_dump()})
