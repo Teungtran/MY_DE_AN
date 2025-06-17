@@ -2,22 +2,22 @@ import datetime
 import asyncio
 from typing_extensions import AsyncGenerator
 import json
-from sqlalchemy import text
 from decimal import Decimal
 from schemas.chunk_message import ChunkMessage
-from typing import Optional, Dict
-from fastapi import APIRouter, HTTPException,Request
+from typing import Dict
+from fastapi import APIRouter, HTTPException,Request,Depends
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from langdetect import detect
 from orchestrator.graph.main_graph import setup_agentic_graph
-from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response,connect_to_db
+from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
 from sse_starlette.sse import EventSourceResponse
 from utils.logging.logger import get_logger
 from utils.token_counter import tiktoken_counter
 from config.base_config import APP_CONFIG
 from services.dynamodb import DynamoHistory
 from services.redis_caching import redis_caching
-from schemas.user_inputs import UserInputs
+from schemas.user_inputs import UserInputs,AuthenticatedUserInputs
+from .login_page import get_current_user
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 logger = get_logger(__name__)
 
@@ -28,9 +28,7 @@ AWS_SECRET_ACCESS_KEY = APP_CONFIG.dynamo_config.aws_secret_access_key
 TABLE_NAME = APP_CONFIG.dynamo_config.table_name
 AWS_SECRET_ACCESS_ID = APP_CONFIG.dynamo_config.aws_access_key_id
 REGION_NAME = APP_CONFIG.dynamo_config.region_name
-sql_config = APP_CONFIG.sql_config
-manager: Optional[DynamoHistory] = None
-db = connect_to_db(server=sql_config.server, database=sql_config.database)
+
 def initialize_dynamo():
     global manager
     try:
@@ -55,15 +53,8 @@ def initialize_dynamo():
         logger.error("Error initializing DynamoHistory", exc_info=init_exc)
         manager = None
         
-def get_user_id(customer_name,password):
-    query = text("SELECT user_id FROM Customer_info WHERE customer_name = :customer_name AND password = :password")
-    with db._engine.connect() as conn:
-        result = conn.execute(query, {"customer_name": customer_name, "password": password}).fetchone()
-        if result:
-            user_id = result[0]
-        else:
-            return None
-    return user_id
+
+
 
 initialize_dynamo()
 redis_connect = redis_caching()
@@ -470,21 +461,42 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str) -> As
         yield f"{error_payload.model_dump_json()}\n\n"
 
 @router.post("/streaming-answer")
-async def stream(user_inputs: UserInputs):
+async def stream(
+    user_inputs: UserInputs,
+    current_user: dict = Depends(get_current_user)
+):
+    """Stream AI response with authentication"""
     exception_handler = ExceptionHandler(
         logger=logger,
         service_name=ServiceName.ORCHESTRATOR,
         function_name=FunctionName.WORKFLOWs,
     )
     try:
-        logger.info(f"Received /stream request: conversation_id={user_inputs.conversation_id}")
-        user_id = get_user_id(user_inputs.customer_name, user_inputs.password)
+        logger.info(f"Received /stream request: conversation_id={user_inputs.conversation_id}, user_id={current_user['user_id']}")
+        
+        # Create authenticated user inputs
+        authenticated_inputs = AuthenticatedUserInputs(
+            conversation_id=user_inputs.conversation_id,
+            message=user_inputs.message,
+            user_id=current_user['user_id'],
+        )
+        
         config = {
             "configurable": {"thread_id": user_inputs.conversation_id},
-            "user_id": user_id,
+            "user_id": current_user['user_id'],
             "recursion_limit": 50
         }
-        return EventSourceResponse(stream_event(user_inputs=user_inputs, config=config, user_id=user_id))
+        
+        return EventSourceResponse(
+            stream_event(
+                user_inputs=authenticated_inputs, 
+                config=config, 
+                user_id=current_user['user_id']
+            )
+        )
     except Exception as exc:
         logger.error("Error in stream endpoint", exc_info=exc)
-        return exception_handler.handle_exception(e=str(exc), extra={"user_inputs": user_inputs.model_dump()})
+        return exception_handler.handle_exception(
+            e=str(exc), 
+            extra={"user_inputs": user_inputs.model_dump(), "user_id": current_user['user_id']}
+        )

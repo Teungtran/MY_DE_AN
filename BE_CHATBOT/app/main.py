@@ -9,6 +9,7 @@ from opentelemetry.trace import SpanKind, StatusCode, Tracer
 import structlog
 
 from controllers import api_chat
+from controllers import login_page
 from utils.helpers import LoggingMiddleware
 from utils.logging.logger import get_logger, setup_logging
 from utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
@@ -27,6 +28,8 @@ app = FastAPI(
     openapi_url=r"/api/openapi.json",
     # lifespan=lifespan
 )
+from fastapi import Request
+from starlette.middleware.base import BaseHTTPMiddleware
 
 app.add_middleware(LoggingMiddleware, logger=logger)
 app.add_middleware(CorrelationIdMiddleware)
@@ -181,7 +184,7 @@ async def root():
 
 
 app.include_router(api_chat.router, prefix="/v1/chat", tags=["Chat controller"])
-
+app.include_router(login_page.auth, prefix="/v1/auth", tags=["Login controller"])
 
 # For local development
 if __name__ == "__main__":

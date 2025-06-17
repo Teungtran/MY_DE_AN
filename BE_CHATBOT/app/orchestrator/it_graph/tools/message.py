@@ -9,7 +9,7 @@ from schemas.device_schemas import TrackTicket,CancelTicket,SendTicket,UpdateTic
 
 sql_config = APP_CONFIG.sql_config
 
-db = connect_to_db(server=sql_config.server, database=sql_config.database)
+db = connect_to_db(server="DESKTOP-LU731VP\\SQLEXPRESS", database="CUSTOMER_SERVICE")
 
 @tool("send_ticket",args_schema=SendTicket)
 def send_ticket(

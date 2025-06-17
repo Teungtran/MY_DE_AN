@@ -3,7 +3,7 @@ from .prompts import IT_SYSTEM_PROMPT
 from .tools.message import track_ticket,send_ticket,cancel_ticket,update_ticket
 from schemas.device_schemas import CompleteOrEscalate
 from .tools.it_support import it_support_agent
-from ...utils.logging.logger import get_logger
+from utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 
@@ -30,8 +30,8 @@ def create_it_tool(model):
         A runnable that can be used to handle it support queries
     """
     logger.info("Creating it support tools with the following capabilities:")
-    logger.info(f"Safe tools: {[tool.__name__ for tool in it_safe_tools]}")
-    logger.info(f"Sensitive tools: {[tool.__name__ for tool in it_sensitive_tools]}")
+    logger.info(f"Safe tools: {[tool.__name__ if hasattr(tool, '__name__') else tool.name for tool in it_safe_tools]}")
+    logger.info(f"Sensitive tools: {[tool.__name__ if hasattr(tool, '__name__') else tool.name for tool in it_sensitive_tools]}")
     
     it_tools_runnable = it_assistant_prompt | model.bind_tools(it_tools + [CompleteOrEscalate])
     return it_tools_runnable

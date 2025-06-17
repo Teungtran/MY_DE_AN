@@ -2,7 +2,7 @@ from typing import Callable
 
 from langchain_core.messages import ToolMessage,AIMessage
 
-from langchain.sql_database import SQLDatabase
+from langchain_community.utilities import SQLDatabase
 from langchain_core.runnables import RunnableLambda
 from ..state import AgenticState
 from langgraph.prebuilt import ToolNode

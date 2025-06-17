@@ -16,5 +16,8 @@ class UserInputs(BaseModel):
     """
     message: str = Field(..., description="Message sent from user.")
     conversation_id: str = Field(..., description="Session ID of the user.")
-    customer_name: str = Field(..., description="Name of user.")
-    password: str = Field(..., description="User's password to use the system")
+class AuthenticatedUserInputs(BaseModel):
+    """Internal model with user info after authentication"""
+    conversation_id: str
+    message: str
+    user_id: str

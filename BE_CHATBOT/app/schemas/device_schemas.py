@@ -264,10 +264,10 @@ class RecommendSystem(BaseModel):
             }
         }
 class RecommendationConfig:
-    MAX_RESULTS = 8
+    MAX_RESULTS = 5
     BRAND_MATCH_BOOST = 15
     PRICE_RANGE_MATCH_BOOST = 15
-    TYPE_MATCH_BOOST = 5
+    TYPE_MATCH_BOOST = 10
     HISTORY_MATCH_BOOST = 10
     FUZZY_WEIGHT = 0.6
     COSINE_WEIGHT = 0.4

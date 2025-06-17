@@ -18,7 +18,7 @@ from .get_sql import connect_to_db
 from .get_id import generate_short_id
 sql_config = APP_CONFIG.sql_config
 
-db = connect_to_db(server=sql_config.server, database=sql_config.database)
+db = connect_to_db(server="DESKTOP-LU731VP\\SQLEXPRESS", database="CUSTOMER_SERVICE")
 
 recommended_devices_cache = []
 

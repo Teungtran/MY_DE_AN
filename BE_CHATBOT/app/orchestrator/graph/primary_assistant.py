@@ -19,7 +19,7 @@ from ..it_graph.it_agent import create_it_tool, it_safe_tools
 from .tools.support_nodes import inject_user_id
 chat_config = APP_CONFIG.chat_model_config
 import os
-from ...utils.logging.logger import get_logger
+from utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 if not chat_config:

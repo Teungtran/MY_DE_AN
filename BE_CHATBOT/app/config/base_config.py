@@ -66,11 +66,9 @@ class RecommendConfig(BaseModel):
     collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("STORAGE")())[1])
     
     
-class OauthConfig(BaseModel):
-    token_url: str = Field(
-        default_factory=lambda: (ensure_env_loaded(), from_env("OAUTH_TOKEN_URL")())[1], 
-        description="The URL to obtain the OAuth token."
-    )
+class AuthenConfig(BaseModel):
+    key: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SECRET_KEY")())[1])
+    algorithm: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("ALGORITHM")())[1])
 
 
 class BaseConfiguration(BaseModel):
@@ -110,12 +108,12 @@ class BaseConfiguration(BaseModel):
     _vector_store_config = None
     _recommend_config = None
     _dynamo_config = None
-    _oauth_config = None
     _embedding_config = None
     _redis_config = None
     _mongo_config = None
     _search_config = None
     _sql_config = None
+    _auth_config = None
     @property
     def chat_model_config(self) -> Union[OpenAIConfig]:
         if self._chat_model_config is None:
@@ -171,10 +169,10 @@ class BaseConfiguration(BaseModel):
             self._mongo_config = MongoDBConfig()
         return self._mongo_config   
     @property
-    def oauth_config(self) -> Union[OauthConfig]:
-        if self._oauth_config is None:
-            self._oauth_config = OauthConfig()
-        return self._oauth_config
+    def auth_config(self) -> Union[AuthenConfig]:
+        if self._auth_config is None:
+            self._auth_config = AuthenConfig()
+        return self._auth_config
         
     @property
     def embedding_config(self) -> Union[EmbeddingConfig]:
