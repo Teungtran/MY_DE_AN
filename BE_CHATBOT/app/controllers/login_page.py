@@ -11,9 +11,10 @@ from typing import List, Optional
 import jwt
 from datetime import datetime, timedelta
 import bcrypt
-from .login_schema import RegisterRequest,LoginRequest,AuthResponse
-
-sql_config = APP_CONFIG.sql_config
+from .login_schema import RegisterRequest,LoginRequest,AuthResponse,PasswordChangeRequest
+from utils.email import send_email
+import string
+from random import choices
 db = connect_to_db(server="DESKTOP-LU731VP\\SQLEXPRESS", database="CUSTOMER_SERVICE")
 auth_config = APP_CONFIG.auth_config
 SECRET_KEY = auth_config.key
@@ -82,18 +83,27 @@ def check_phone_exists(phone: str) -> bool:
     with db._engine.connect() as conn:
         result = conn.execute(query, {"phone": phone}).fetchone()
         return result[0] > 0
-
-def login(customer_name: str, password: str):
-    """Login user with password verification"""
-    query = text("SELECT user_id, password FROM Customer_info WHERE customer_name = :customer_name")
+def check_email_exists(email: str) -> bool:
+    """Check if phone number already exists in database"""
+    query = text("SELECT COUNT(*) FROM Customer_info WHERE email = :email")
     with db._engine.connect() as conn:
-        result = conn.execute(query, {"customer_name": customer_name}).fetchone()
+        result = conn.execute(query, {"email": email}).fetchone()
+        return result[0] > 0
+def login(identifier: str, password: str):
+    """Login user with password verification"""
+    query = text("SELECT user_id, password,email FROM Customer_info WHERE customer_name = :identifier OR email = :identifier")
+    with db._engine.connect() as conn:
+        result = conn.execute(query, {"identifier": identifier}).fetchone()
         if result and verify_password(password, result[1]):
-            return result[0]
+            return {
+                "user_id": result[0],
+                "email": result[1]
+            }
     return None
 
 def register_new_user(customer_name: str, address: str, age: int, customer_phone: str, password: str,
-                    preference_brand: List[str] = None, min_price: str = None, max_price: str = None):
+                    preference_brand: List[str] = None, min_price: str = None, max_price: str = None,
+                    email: str = None):
     """Register new user with validation"""
     if not is_valid_password(password):
         raise HTTPException(
@@ -102,6 +112,8 @@ def register_new_user(customer_name: str, address: str, age: int, customer_phone
         )
     if check_phone_exists(customer_phone):
         raise HTTPException(status_code=400, detail="Phone number already registered")
+    if check_email_exists(customer_phone):
+        raise HTTPException(status_code=400, detail="Email already registered")
     if check_password_exists(password):
         raise HTTPException(status_code=400, detail="Password already in use, please choose a different one")
     
@@ -117,8 +129,8 @@ def register_new_user(customer_name: str, address: str, age: int, customer_phone
     hashed_password = hash_password(password)
 
     insert_query = text("""
-        INSERT INTO Customer_info (user_id, customer_name, address, preferences, age, customer_phone, password)
-        VALUES (:user_id, :customer_name, :address, :preferences, :age, :customer_phone, :password)
+        INSERT INTO Customer_info (user_id, customer_name, address, preferences, age, customer_phone, password, email)
+        VALUES (:user_id, :customer_name, :address, :preferences, :age, :customer_phone, :password, :email)
     """)
 
     try:
@@ -130,10 +142,14 @@ def register_new_user(customer_name: str, address: str, age: int, customer_phone
                 "preferences": preferences_json,
                 "age": age,
                 "customer_phone": customer_phone,
-                "password": hashed_password
+                "password": hashed_password,
+                "email": email
             })
             conn.commit()
-        return user_id
+        return {
+                "user_id": user_id,
+                "email": email
+            }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
@@ -169,7 +185,8 @@ async def register(request: RegisterRequest):
             password=request.password,
             preference_brand=request.preference_brand,
             min_price=request.min_price,
-            max_price=request.max_price
+            max_price=request.max_price,
+            email=request.email
         )
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -206,6 +223,61 @@ async def login_user(request: LoginRequest):
         token_type="bearer",
         user_id=user_id
     )
+@auth.post("/forgot-password")
+async def forgot_password(customer_name: str, email: str):
+    temp_password = ''.join(choices(string.ascii_letters + string.digits + "!@#$%^&*", k=12))
+
+
+    query = text("""
+        UPDATE Customer_info
+        SET password = :password
+        WHERE customer_name = :name AND email = :email
+    """)
+
+    with db._engine.connect() as conn:
+        result = conn.execute(query, {"password": temp_password, "name": customer_name, "email": email})
+        conn.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User with given name and email not found")
+
+    send_email(
+        to_email=email,
+        subject="Your New Password",
+        body=f"Hello {customer_name},\n\nYour temp password is: {temp_password}\n\nPlease change by click change password."
+    )
+
+    return {"message": "A new temp password has been sent to your email."}
+@auth.post("/change-password")
+async def change_password(request: PasswordChangeRequest):
+    if not is_valid_password(request.new_password):
+        raise HTTPException(
+            status_code=400,
+            detail="Password must be at least 10 characters long, include 1 uppercase letter, 1 number, and 1 special character"
+        )
+    if check_password_exists(request.new_password):
+        raise HTTPException(status_code=400, detail="Password already in use, please choose a different one")
+    
+    hashed_password = hash_password(request.new_password)
+
+    update_query = text("""
+        UPDATE Customer_info
+        SET password = :password
+        WHERE customer_name = :customer_name AND email = :email
+    """)
+
+    with db._engine.connect() as conn:
+        result = conn.execute(update_query, {
+            "password": hashed_password,
+            "customer_name": request.customer_name,
+            "email": request.email
+        })
+        conn.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="User not found with that name and email")
+
+    return {"message": "Password updated successfully"}
 
 @auth.get("/protected")
 async def protected_route(current_user: str = Depends(verify_token)):

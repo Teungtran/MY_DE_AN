@@ -54,6 +54,10 @@ class SearchConfig(BaseModel):
 class SQLConfig(BaseModel):
     server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_SERVER")())[1])
     database: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_DATABASE")())[1])
+class EmailConfig(BaseModel):
+    server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SMTP_SERVER")())[1])
+    email: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("EMAIL_USER")())[1])
+    password: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("EMAIL_PASSWORD")())[1])
     
 class PolicyConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
@@ -114,6 +118,7 @@ class BaseConfiguration(BaseModel):
     _search_config = None
     _sql_config = None
     _auth_config = None
+    _email_config = None
     @property
     def chat_model_config(self) -> Union[OpenAIConfig]:
         if self._chat_model_config is None:
@@ -124,6 +129,11 @@ class BaseConfiguration(BaseModel):
         if self._sql_config is None:
             self._sql_config = SQLConfig()
         return self._sql_config
+    @property
+    def email_config(self) -> Union[EmailConfig]:
+        if self._email_config is None:
+            self._email_config = EmailConfig()
+        return self._email_config
     @property
     def search_config(self) -> Union[SearchConfig]:
         if self._search_config is None:

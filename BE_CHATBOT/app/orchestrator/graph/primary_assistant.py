@@ -16,7 +16,7 @@ from ..appointment_graph.state import ToAppointmentAssistant
 from ..appointment_graph.appointment_agent  import create_appointment_tool , appointment_safe_tools
 from ..it_graph.state import ToITAssistant
 from ..it_graph.it_agent import create_it_tool, it_safe_tools
-from .tools.support_nodes import inject_user_id
+from .tools.support_nodes import inject_user_info
 chat_config = APP_CONFIG.chat_model_config
 import os
 from utils.logging.logger import get_logger
@@ -32,9 +32,9 @@ if not chat_config:
 else:
     llm = create_chat_model(chat_config)
     
-def assistant_runnable_with_userid(state):
+def assistant_runnable_with_user_info(state):
     result = (primary_assistant_prompt | llm.bind_tools([ToShopAssistant, ToAppointmentAssistant, ToITAssistant, RAG_Agent])).invoke(state)
-    return inject_user_id(state, result)
+    return inject_user_info(state, result)
 
 MAIN_SYSTEM_MESSAGES = [
     ("system", MAIN_SYSTEM_PROMPT.strip()),
@@ -44,7 +44,7 @@ primary_assistant_prompt = ChatPromptTemplate.from_messages(MAIN_SYSTEM_MESSAGES
 update_shop_runnable = create_shop_tool(llm)
 update_appointment_runnable = create_appointment_tool(llm)
 update_it_runnable = create_it_tool(llm)
-assistant_runnable = RunnableLambda(assistant_runnable_with_userid)
+assistant_runnable = RunnableLambda(assistant_runnable_with_user_info)
 
 def route_primary_assistant(state: AgenticState):
     route = tools_condition(state)

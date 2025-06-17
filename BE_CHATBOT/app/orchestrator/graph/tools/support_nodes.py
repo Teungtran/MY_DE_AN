@@ -69,11 +69,12 @@ def extract_content_from_response(response):
     else:
         return str(response)
     
-def inject_user_id(state, result):
+def inject_user_info(state, result):
     if hasattr(result, "tool_calls") and result.tool_calls:
         for tool_call in result.tool_calls:
             if tool_call["name"] in ["ToShopAssistant", "ToITAssistant", "ToAppointmentAssistant"]:
                 tool_call["args"]["user_id"] = state["user_id"]
+                tool_call["args"]["email"] = state["email"]
     return result
 
 def connect_to_db(server: str, database: str) -> SQLDatabase:

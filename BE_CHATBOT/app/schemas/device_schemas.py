@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel,EmailStr
 from typing import Annotated, Literal, Optional
 from datetime import datetime
 
@@ -59,7 +59,7 @@ class Order(BaseModel):
         "Payment method: 'pay later', 'bank transfer', or 'cash on delivery'"
     ]
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
-
+    email: Annotated[EmailStr,"The email of the customer ordering"]
     class Config:
         json_schema_extra = {
             "example": {
@@ -70,7 +70,8 @@ class Order(BaseModel):
                 "quantity": 1,
                 "shipping": True,
                 "payment": "cash on delivery",
-                "user_id": "user333232"
+                "user_id": "user333232",
+                "email": "jdoe@en.com"
             }
         }
 class UpdateOrder(BaseModel):
@@ -87,6 +88,7 @@ class UpdateOrder(BaseModel):
         "New updated payment method: 'pay later', 'bank transfer', or 'cash on delivery'"
     ]
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
@@ -99,7 +101,8 @@ class UpdateOrder(BaseModel):
                 "quantity": 1,
                 "shipping": True,
                 "payment": "cash on delivery",
-                "user_id": "user333232"
+                "user_id": "user333232",
+                "email": "jdoe@en.com"
             }
         }
 
@@ -107,11 +110,13 @@ class CancelOrder(BaseModel):
     """Cancel order by its Order ID."""
 
     order_id: Annotated[str, "The unique identifier for the order to cancel"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
             "example": {
-                "order_id": "ORDER-A1B2C3D4-20250610153000"
+                "order_id": "ORDER-A1B2C3D4-20250610153000",
+                "email": "jdoe@en.com"
             }
         }
         
@@ -133,6 +138,7 @@ class BookAppointment(BaseModel):
     time: Annotated[datetime, "Time of the appointment"]
     note: Optional[Annotated[str, "Any note from customer"]] = None
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
@@ -142,7 +148,8 @@ class BookAppointment(BaseModel):
                 "customer_phone": "1234567890",
                 "time": "2025-06-10T15:30:00Z",
                 "note": "Prefer afternoon slot",
-                "user_id": "user333232"
+                "user_id": "user333232",
+                "email": "jdoe@en.com"
 
             }
         }
@@ -154,6 +161,7 @@ class UpdateAppointment(BaseModel):
     time: Optional[Annotated[str, "Time of the new updated appointment"]] = None
     note: Optional[Annotated[str, "Any new updated note from customer"]] = None
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
@@ -164,7 +172,8 @@ class UpdateAppointment(BaseModel):
                 "customer_phone": "1234567890",
                 "time": "2025-06-10T15:30:00Z",
                 "note": "Prefer afternoon slot",
-                "user_id": "user333232"
+                "user_id": "user333232",
+                "email": "jdoe@en.com"
 
             }
         }
@@ -172,11 +181,13 @@ class CancelAppointment(BaseModel):
     """Cancel appointment by its appointment ID."""
 
     booking_id: Annotated[str, "The unique identifier for the appointment to cancel"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
             "example": {
-                "booking_id": "BOOKING-A1B2C3D4-20250610153000"
+                "booking_id": "BOOKING-A1B2C3D4-20250610153000",
+                "email": "jdoe@en.com"
             }
         }
 class TrackAppointment(BaseModel):
@@ -197,6 +208,7 @@ class SendTicket(BaseModel):
     customer_name: Optional[Annotated[str, "The name of the customer ordering"]] = None
     customer_phone: Optional[Annotated[str, "The phone number of the customer ordering"]] = None
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
@@ -205,7 +217,8 @@ class SendTicket(BaseModel):
                 "description": "Screen Error",
                 "customer_name": "John Doe",
                 "customer_phone": "1234567890",
-                "user_id": "user333232"
+                "user_id": "user333232",
+                "email": "jdoe@en.com"
             }
         }
 class UpdateTicket(BaseModel):
@@ -215,6 +228,7 @@ class UpdateTicket(BaseModel):
     customer_name: Optional[Annotated[str, "The name of the new updated customer ordering"]] = None
     customer_phone: Optional[Annotated[str, "The phone number of new updated the customer ordering"]] = None
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
@@ -224,18 +238,21 @@ class UpdateTicket(BaseModel):
                 "description": "Screen Error",
                 "customer_name": "John Doe",
                 "customer_phone": "1234567890",
-                "user_id": "user333232"
+                "user_id": "user333232",
+                "email": "jdoe@en.com"
             }
         }
 class CancelTicket(BaseModel):
     """Cancel appointment by its appointment ID."""
 
     ticket_id: Annotated[str, "The unique identifier for the ticket to cancel"]
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 
     class Config:
         json_schema_extra = {
             "example": {
-                "ticket_id": "TICKET-A1B2C3D4-20250610153000"
+                "ticket_id": "TICKET-A1B2C3D4-20250610153000",
+                "email": "jdoe@en.com"
             }
         }
 class TrackTicket(BaseModel):

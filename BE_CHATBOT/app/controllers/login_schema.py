@@ -1,8 +1,7 @@
-from orchestrator.graph.tools.support_nodes import connect_to_db
-from config.base_config import APP_CONFIG
+
 import re
-from pydantic import BaseModel, field_validator
-from typing import List, Optional
+from pydantic import BaseModel, field_validator,EmailStr
+from typing import List
 
 
 # Pydantic models
@@ -12,9 +11,10 @@ class RegisterRequest(BaseModel):
     age: int
     customer_phone: str
     password: str
-    preference_brand: Optional[List[str]] = None
-    min_price: Optional[str] = None
-    max_price: Optional[str] = None
+    email: EmailStr 
+    preference_brand: List[str] = []
+    min_price: str = None
+    max_price: str = None
     
     @field_validator('customer_phone')
     def validate_phone_number(cls, v):
@@ -42,4 +42,11 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str
     user_id: str
+    
+    
+class PasswordChangeRequest(BaseModel):
+    customer_name: str
+    email: EmailStr
+    temp_password: str
+    new_password: str
 

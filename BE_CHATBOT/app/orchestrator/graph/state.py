@@ -4,7 +4,7 @@ from langgraph.graph import add_messages
 from typing_extensions import TypedDict, Literal
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.messages import ToolMessage
-
+from pydantic import EmailStr
 
 
 def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[str]]) -> Optional[List[str]]:
@@ -53,7 +53,7 @@ class AgenticState(InputState):
     recommended_devices: Annotated[List[str], merge_recommended_devices]
     conversation_id: Annotated[str, "The unique identifier for the conversation"]
     user_id: Annotated[str, "The unique identifier for the user"]
-
+    email: Annotated[EmailStr,"The email of the customer ordering"]
 class Assistant:
     def __init__(self, runnable: Runnable):
         self.runnable = runnable
