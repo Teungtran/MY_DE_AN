@@ -29,9 +29,6 @@ _tfidf_matrix = None  # Cache TF-IDF matrix
 _document_texts = None  # Cache document texts for TF-IDF
 CACHE_DURATION = 300  # 5 minutes cache duration
 
-# Pre-compile priority fields for faster access
-PRIORITY_FIELDS = frozenset(['device_name', 'brand', 'category', 'discount_percent', 
-                           'sales_perks', 'payment_perks', 'sales_price'])
 
 def get_client():
     """Get cached Qdrant client to avoid repeated connections."""
@@ -66,47 +63,6 @@ def convert_to_string(value) -> str:
         return convert_to_string_cached(value)
     return str(value)
 
-def fuzzy_score_optimized(user_query: str, metadata: Dict) -> float:
-    """Optimized fuzzy matching with early termination and vectorized operations."""
-    if not user_query:
-        return 0.0
-    
-    user_query_lower = user_query.lower()
-    
-    # Pre-filter metadata to only relevant fields
-    relevant_values = [
-        convert_to_string(metadata[field]).lower() 
-        for field in PRIORITY_FIELDS 
-        if field in metadata and metadata[field]
-    ]
-    
-    if not relevant_values:
-        return 0.0
-    
-    # Batch fuzzy matching - more efficient than individual calls
-    scores = [fuzz.partial_ratio(user_query_lower, value) for value in relevant_values]
-    return sum(scores)
-
-def build_tfidf_cache(all_points: List):
-    """Build and cache TF-IDF matrix for all documents."""
-    global _vectorizer, _tfidf_matrix, _document_texts
-    
-    # Extract all text content from points
-    texts = []
-    for point in all_points:
-        metadata = point.payload
-        text_parts = [
-            convert_to_string(metadata.get(field, ""))
-            for field in PRIORITY_FIELDS
-            if field in metadata and metadata[field]
-        ]
-        texts.append(" ".join(text_parts))
-    
-    _document_texts = texts
-    _vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')  # Limit features
-    _tfidf_matrix = _vectorizer.fit_transform(texts)
-    
-    return _tfidf_matrix
 
 def check_similarity_vectorized(text1: str, point_indices: Optional[List[int]] = None) -> np.ndarray:
     """Vectorized similarity calculation using pre-computed TF-IDF matrix."""
@@ -176,9 +132,6 @@ def get_all_points(batch_size: int = 500, force_refresh: bool = False):  # Incre
         
         _cached_all_points = all_points
         _cache_timestamp = current_time
-        
-        # Rebuild TF-IDF cache when points are refreshed
-        build_tfidf_cache(all_points)
         
         return _cached_all_points
         
@@ -261,7 +214,7 @@ def batch_fuzzy_scoring(user_query: str, metadata_list: List[Dict]) -> List[floa
     for metadata in metadata_list:
         relevant_values = [
             convert_to_string(metadata[field]).lower() 
-            for field in PRIORITY_FIELDS 
+            for field in metadata 
             if field in metadata and metadata[field]
         ]
         

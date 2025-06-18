@@ -4,7 +4,7 @@ from langdetect import detect_langs
 from pydantic import EmailStr
 import numpy as np
 from functools import lru_cache
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Optional, Tuple
 from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder,RecommendSystem,UpdateOrder
 from .get_score import (
     check_similarity, get_all_points, keyword, convert_to_string,
@@ -51,12 +51,6 @@ def preprocess_metadata_batch(all_points: List) -> List[Dict]:
         
         # Pre-process commonly used fields
         processed = {
-            'doc': doc,
-            'device_name': convert_to_string(metadata.get("device_name", "")).lower(),
-            'brand': convert_to_string(metadata.get("brand", "")).lower(),
-            'category': convert_to_string(metadata.get("category", "")).lower(),
-            'suitable_for': convert_to_string(metadata.get("suitable_for", "")).lower(),
-            'sale_price': metadata.get("sale_price"),
             'combined_text': " ".join([
                 convert_to_string(metadata.get("device_name", "")),
                 convert_to_string(metadata.get("brand", "")),
@@ -64,9 +58,13 @@ def preprocess_metadata_batch(all_points: List) -> List[Dict]:
                 convert_to_string(metadata.get("sales_perks", "")),
                 convert_to_string(metadata.get("sales_price", "")),
                 convert_to_string(metadata.get("discount_percent", "")),
-                convert_to_string(metadata.get("payment_perks", ""))
-            ]).lower(),
-            'raw_metadata': metadata  # Keep original for final output
+                convert_to_string(metadata.get("payment_perks", "")),
+                convert_to_string(metadata.get("battery", "")),
+                convert_to_string(metadata.get("cpu", "")),
+                convert_to_string(metadata.get("card", "")),
+                convert_to_string(metadata.get("storage", "")),
+                convert_to_string(metadata.get("guarantee_program", "")),
+            ]).lower()
         }
         processed_metadata.append(processed)
     
@@ -77,7 +75,6 @@ def preprocess_metadata_batch(all_points: List) -> List[Dict]:
 def vectorized_scoring(
     processed_docs: List[Dict],
     main_query_lower: str,
-    user_types: List[str],
     brands: List[str],
     price_min: Optional[float],
     price_max: Optional[float],
@@ -110,8 +107,7 @@ def vectorized_scoring(
     # Batch fuzzy scoring
     fuzzy_scores = np.array([0.0] * len(processed_docs))
     if main_query_lower:
-        raw_metadatas = [doc['raw_metadata'] for doc in processed_docs]
-        fuzzy_scores = np.array(batch_fuzzy_scoring(main_query_lower, raw_metadatas))
+        fuzzy_scores = np.array(batch_fuzzy_scoring(main_query_lower, combined_texts))
     
     # Vectorized calculations
     scores = np.zeros(len(processed_docs))
@@ -121,15 +117,6 @@ def vectorized_scoring(
         user_input_scores = (fuzzy_scores * recommendation_config.FUZZY_WEIGHT + 
                            cos_scores * 100 * recommendation_config.COSINE_WEIGHT)
         scores += user_input_scores
-    
-    # Type matching (vectorized)
-    if user_types:
-        type_scores = np.array([
-            sum(fuzz.partial_ratio(t, doc['suitable_for']) for t in user_types) / len(user_types)
-            if doc['suitable_for'] else 0
-            for doc in processed_docs
-        ])
-        scores += type_scores * recommendation_config.TYPE_MATCH_BOOST / 100
     
     # Brand matching (vectorized)
     if brands:
@@ -208,7 +195,6 @@ def build_search_context_optimized(top_matches: List[Tuple[Dict, float]]) -> str
 @tool("recommendation_system", args_schema=RecommendSystem)
 def recommend_system(
     user_input: str,
-    types: Optional[str] = None,
     user_id: str = None,
 ) -> Tuple[str, list[str]]: 
     """
@@ -224,14 +210,10 @@ def recommend_system(
     if user_input and user_input.strip():
         main_query = keyword(user_input)
         main_query_lower = main_query.lower()
-    
-    language_input = user_input or types or ""
-    if not language_input and preference and preference.get("brand"):
-        language_input = preference["brand"][0]
-    language = detect_language_cached(language_input)
+
+    language = detect_language_cached(main_query_lower)
 
     brands = []
-    user_types = []
     price_min = price_max = None
     
     if preference:
@@ -247,8 +229,7 @@ def recommend_system(
                     price_min = float(price_range[0])
                     price_max = float(price_range[1])
     
-    if types:
-        user_types = types.lower().split()
+
 
     # Get pre-processed data
     all_points = get_all_points()
@@ -259,8 +240,7 @@ def recommend_system(
 
     # Vectorized scoring
     scored_results = vectorized_scoring(processed_docs=processed_docs,main_query_lower=main_query_lower,
-                                        brands=brands,user_types=user_types,
-                                        price_min=price_min,price_max=price_max,recommendation_config=RecommendationConfig)
+                                        brands=brands,price_min=price_min,price_max=price_max,recommendation_config=RecommendationConfig)
     
     if not scored_results:
         return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
