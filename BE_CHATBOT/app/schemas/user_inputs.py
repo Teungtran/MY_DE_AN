@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Dict, Optional, Any, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 
 
 class RoleEnum(Enum):
@@ -21,3 +21,4 @@ class AuthenticatedUserInputs(BaseModel):
     conversation_id: str
     message: str
     user_id: str
+    email: EmailStr

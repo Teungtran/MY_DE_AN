@@ -1,14 +1,14 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from rapidfuzz import fuzz
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from qdrant_client import QdrantClient
 import time
 import joblib
 import os
-import numpy as np
 from functools import lru_cache
 from config.base_config import APP_CONFIG
+from pathlib import Path
 
 QDRANT_URL = APP_CONFIG.recommend_config.url
 QDRANT_API_KEY = APP_CONFIG.recommend_config.api_key
@@ -16,8 +16,8 @@ COLLECTION = APP_CONFIG.recommend_config.collection_name
 KEYBERT = APP_CONFIG.key_bert_config.model
 
 # Get the base directory (project root)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-FALLBACK_MODEL_PATH = os.path.join(BASE_DIR, "saved_models", "keybert.pkl")
+PROJECT_ROOT = Path(__file__).resolve().parents[3]  # Use correct level
+FALLBACK_MODEL_PATH = PROJECT_ROOT / "saved_models" / "keybert.pkl"
 
 # Global variables for caching
 _vectorizer = None
@@ -25,9 +25,7 @@ _cached_all_points = None
 _cache_timestamp = 0
 _client_cache = None
 _model_cache = None
-_tfidf_matrix = None  # Cache TF-IDF matrix
-_document_texts = None  # Cache document texts for TF-IDF
-CACHE_DURATION = 300  # 5 minutes cache duration
+_CACHE_TTL = 300  # 5 minutes in seconds
 
 
 def get_client():
@@ -40,71 +38,55 @@ def get_client():
         )
     return _client_cache
 
-@lru_cache(maxsize=1000)
-def convert_to_string_cached(value) -> str:
-    """Convert any value to a string with caching for repeated values."""
-    if isinstance(value, (list, tuple)):
-        return " ".join(str(item) for item in value)
-    return str(value)
 
 def convert_to_string(value) -> str:
     """Convert any value to a string in a standardized way."""
-    # Use cached version for hashable types
-    if isinstance(value, (str, int, float, bool, type(None))):
-        return convert_to_string_cached(value)
-    elif isinstance(value, (list, tuple)):
-        # Convert to tuple for hashing if it's a list
-        if isinstance(value, list):
-            try:
-                return convert_to_string_cached(tuple(value))
-            except TypeError:
-                # Fallback for unhashable items in list
-                return " ".join(str(item) for item in value)
-        return convert_to_string_cached(value)
+    if isinstance(value, list):
+        return " ".join(str(item) for item in value)
     return str(value)
 
-
-def check_similarity_vectorized(text1: str, point_indices: Optional[List[int]] = None) -> np.ndarray:
-    """Vectorized similarity calculation using pre-computed TF-IDF matrix."""
-    global _vectorizer, _tfidf_matrix
+def fuzzy_score(user_query: str, metadata: Dict) -> float:
+    """Calculate enhanced fuzzy matching score using multiple algorithms."""
+    if not user_query:
+        return 0.0
     
-    if not text1 or _tfidf_matrix is None:
-        return np.array([0.0])
-    
-    # Transform query text
-    query_vector = _vectorizer.transform([text1])
-    
-    # Calculate similarities with specified points or all points
-    if point_indices is not None:
-        target_matrix = _tfidf_matrix[point_indices]
-    else:
-        target_matrix = _tfidf_matrix
-    
-    similarities = cosine_similarity(query_vector, target_matrix)[0]
-    return similarities
+    user_query_lower = user_query.lower()
+    priority_fields = ['device_name','brand','category','discount_percent', 'sales_perks',
+                    'payment_perks','sales_price','battery','cpu','card','storage','guarantee_program']
+    fuzzy_sim = 0
+    for field in priority_fields:
+        if field in metadata:
+            value_str = convert_to_string(metadata[field])
+            fuzzy_sim += fuzz.partial_ratio(user_query_lower, value_str.lower())
+    return fuzzy_sim
 
 def check_similarity(text1: str, texts: Optional[List[str]], vectorizer=None) -> float:
-    """Legacy function maintained for backward compatibility."""
+    """Calculate max cosine similarity between text1 and a list of strings. Optionally reuse a vectorizer."""
+    global _vectorizer
+    
     if not text1 or not texts:
         return 0.0
     
     corpus = [text1] + texts
     
+    # Reuse global vectorizer if possible
     if vectorizer is None:
-        vectorizer = TfidfVectorizer(max_features=1000)  # Limit features for speed
-        vectors = vectorizer.fit_transform(corpus)
-    else:
-        vectors = vectorizer.transform(corpus)
+        if _vectorizer is None:
+            _vectorizer = TfidfVectorizer().fit(corpus)
+            vectorizer = _vectorizer
+        else:
+            vectorizer = _vectorizer
     
+    vectors = vectorizer.transform(corpus)
     similarities = cosine_similarity(vectors[0], vectors[1:])[0]
     return max(similarities) if similarities.size > 0 else 0.0
 
-def get_all_points(batch_size: int = 500, force_refresh: bool = False):  # Increased batch size
-    """Retrieve all points from Qdrant with improved caching and larger batches."""
-    global _cached_all_points, _cache_timestamp, _tfidf_matrix
+def get_all_points(batch_size: int = 100, force_refresh: bool = False):
+    """Retrieve all points from Qdrant with improved caching strategy."""
+    global _cached_all_points, _cache_timestamp
     
     current_time = time.time()
-    cache_expired = (current_time - _cache_timestamp) > CACHE_DURATION
+    cache_expired = (current_time - _cache_timestamp) > _CACHE_TTL
     
     # Return cached results if valid and not forcing refresh
     if _cached_all_points is not None and not cache_expired and not force_refresh:
@@ -117,7 +99,7 @@ def get_all_points(batch_size: int = 500, force_refresh: bool = False):  # Incre
         
         while True:
             points, offset = client.scroll(
-                collection_name=COLLECTION,
+                collection_name="FPT_SHOP",
                 scroll_filter=None,
                 with_vectors=False,
                 with_payload=True,
@@ -127,16 +109,15 @@ def get_all_points(batch_size: int = 500, force_refresh: bool = False):  # Incre
             
             all_points.extend(points)
             
+            # If no more results or offset is None, break
             if not points or offset is None:
                 break
         
         _cached_all_points = all_points
         _cache_timestamp = current_time
-        
         return _cached_all_points
         
     except Exception as e:
-        print(f"Error retrieving points: {e}")
         return _cached_all_points if _cached_all_points is not None else []
 
 def get_cached_model():
@@ -202,39 +183,5 @@ def keyword(user_query: str) -> str:
     
     return keyword_cached(user_query.strip())
 
-# Batch processing functions for better performance
-def batch_fuzzy_scoring(user_query: str, metadata_list: List[Dict]) -> List[float]:
-    """Process multiple fuzzy scores in batch for better performance."""
-    if not user_query:
-        return [0.0] * len(metadata_list)
-    
-    user_query_lower = user_query.lower()
-    scores = []
-    
-    for metadata in metadata_list:
-        relevant_values = [
-            convert_to_string(metadata[field]).lower() 
-            for field in metadata 
-            if field in metadata and metadata[field]
-        ]
-        
-        if not relevant_values:
-            scores.append(0.0)
-        else:
-            batch_scores = [fuzz.partial_ratio(user_query_lower, value) for value in relevant_values]
-            scores.append(sum(batch_scores))
-    
-    return scores
 
-def warm_up_cache():
-    """Warm up all caches for better initial performance."""
-    print("[INFO] Warming up caches...")
-    
-    # Load model cache
-    get_cached_model()
-    
-    # Load points cache and build TF-IDF
-    points = get_all_points()
-    
-    print(f"[INFO] Cache warmed up with {len(points)} points")
 

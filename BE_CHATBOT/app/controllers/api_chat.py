@@ -18,6 +18,7 @@ from services.dynamodb import DynamoHistory
 from services.redis_caching import redis_caching
 from schemas.user_inputs import UserInputs,AuthenticatedUserInputs
 from .login_page import get_current_user
+from pydantic import EmailStr
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 logger = get_logger(__name__)
 
@@ -223,7 +224,7 @@ async def get_chat_history(conversation_id: str):
 
 
 
-async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str) -> AsyncGenerator[str, None]:
+async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:EmailStr) -> AsyncGenerator[str, None]:
     """
     Send a message to the FPT Shop Assistant with a given thread_id,
     return only the final AI response and the final tool call.
@@ -358,6 +359,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str) -> As
             "messages": [HumanMessage(content=user_message)],
             "conversation_id": conversation_id,
             "user_id": user_id,
+            "email": email,
             "dialog_state": ["primary_assistant"],
             "recommended_devices": []
         }
@@ -479,11 +481,13 @@ async def stream(
             conversation_id=user_inputs.conversation_id,
             message=user_inputs.message,
             user_id=current_user['user_id'],
+            email=current_user['email']
         )
         
         config = {
             "configurable": {"thread_id": user_inputs.conversation_id},
             "user_id": current_user['user_id'],
+            "email": current_user['email'],
             "recursion_limit": 50
         }
         
@@ -491,7 +495,8 @@ async def stream(
             stream_event(
                 user_inputs=authenticated_inputs, 
                 config=config, 
-                user_id=current_user['user_id']
+                user_id=current_user['user_id'],
+                email=current_user['email']
             )
         )
     except Exception as exc:

@@ -4,16 +4,24 @@ from ...appointment_graph.tools.get_id import generate_short_id
 from sqlalchemy import text
 from datetime import datetime
 from langchain_core.tools import tool
-from typing import  Optional
-from schemas.device_schemas import TrackTicket,CancelTicket,SendTicket,UpdateTicket
+from typing import Optional
+from schemas.device_schemas import TrackTicket, CancelTicket, SendTicket, UpdateTicket
 from utils.email import send_email
 from pydantic import EmailStr
+from sqlalchemy.orm import Session
+from models.database import Ticket, get_db, SessionLocal
 
 sql_config = APP_CONFIG.sql_config
 
-db = connect_to_db(server="DESKTOP-LU731VP\\SQLEXPRESS", database="CUSTOMER_SERVICE")
+# Create a function to get a database session
+def get_ticket_db():
+    db = SessionLocal()
+    try:
+        return db
+    finally:
+        db.close()
 
-@tool("send_ticket",args_schema=SendTicket)
+@tool("send_ticket", args_schema=SendTicket)
 def send_ticket(
     content: str,
     customer_name: Optional[str] = None,
@@ -26,33 +34,34 @@ def send_ticket(
     Tool to send a ticket to report a problem.
     """
     try:
-        # Generate booking_id first
+        # Generate ticket_id
         ticket_id = f"TICKET_{generate_short_id()}"
-        time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        # Prepare parameters
-        params = {
-            "ticket_id": ticket_id,
-            "content": content,
-            "customer_name": customer_name,
-            "customer_phone": customer_phone,
-            "time": time,
-            "description": description,
-            "status": "Pending",
-            "user_id": user_id
-        }
-
-        # Prepare SQL query
-        insert_query = text("""
-            INSERT INTO ticket (
-                ticket_id, content, customer_name, customer_phone, time, description, status, user_id
-            ) VALUES (
-                :ticket_id, :content, :customer_name, :customer_phone, :time, :description, :status, :user_id
-            )
-        """)
-
-        with db._engine.connect() as conn:
-            conn.execute(insert_query, params)
-            conn.commit()
+        time_now = datetime.now()
+        
+        # Create a new Ticket object
+        new_ticket = Ticket(
+            ticket_id=ticket_id,
+            content=content,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            time=time_now,
+            description=description,
+            status="Pending",
+            user_id=user_id
+        )
+        
+        # Get a database session
+        db = get_ticket_db()
+        
+        try:
+            # Add the ticket to the database
+            db.add(new_ticket)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
             
         # Send email confirmation if email is provided
         if email:
@@ -68,7 +77,7 @@ def send_ticket(
             - Ticket ID: {ticket_id}
             - Description: {description or "No description provided"}
             - Content: {content}
-            - Time Submitted: {time}
+            - Time Submitted: {time_now}
             - Status: Pending
 
             Please save your ticket ID for future reference. You can use it to track, update, or cancel your ticket if needed.
@@ -99,7 +108,7 @@ def send_ticket(
             - Mã yêu cầu: {ticket_id}
             - Mô tả: {description or "Không có mô tả"}
             - Nội dung: {content}
-            - Thời gian gửi: {time}
+            - Thời gian gửi: {time_now}
             - Trạng thái: Đang chờ xử lý
 
             Vui lòng lưu mã yêu cầu để tham khảo trong tương lai. Bạn có thể sử dụng mã này để theo dõi, cập nhật hoặc hủy yêu cầu nếu cần.
@@ -130,7 +139,7 @@ def send_ticket(
             "content": content,
             "customer_name": customer_name,
             "customer_phone": customer_phone,
-            "time": time,
+            "time": time_now,
             "description": description,
             "status": "Pending",
             "message": f"Ticket {ticket_id} for {content} has been successfully sent, please wait for IT support. Please check your email for confirmation details."
@@ -138,57 +147,66 @@ def send_ticket(
         
     except Exception as e:
         # Log error for debugging
-        print(f"Error in book_appointment: {str(e)}")
-        return {"error": f"Error booking appointment: {str(e)}"}
+        print(f"Error in send_ticket: {str(e)}")
+        return {"error": f"Error sending ticket: {str(e)}"}
 
 @tool("update_ticket", args_schema=UpdateTicket)
 def update_ticket(
     ticket_id: str,
     content: Optional[str] = None,
-    customer_name:  Optional[str] = None,
-    customer_phone:  Optional[str] = None,
-    description:  Optional[str] = None,
-    time:  Optional[str] = None,
-    user_id:  str = None,
+    customer_name: Optional[str] = None,
+    customer_phone: Optional[str] = None,
+    description: Optional[str] = None,
+    time: Optional[str] = None,
+    user_id: str = None,
     email: EmailStr = None
 ) -> dict:
     """
-    Tool to update an existing ticker. Only `ticket_id` is required.
+    Tool to update an existing ticket. Only `ticket_id` is required.
     Other fields will be updated if provided; otherwise, existing values are retained.
     """
     try:
-        with db._engine.connect() as conn:
-            select_query = text("SELECT * FROM ticket WHERE ticket_id = :ticket_id")
-            existing_ticket = conn.execute(select_query, {"ticket_id": ticket_id}).fetchone()
-
+        # Get a database session
+        db = get_ticket_db()
+        
+        try:
+            # Find the existing ticket
+            existing_ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
+            
             if not existing_ticket:
-                return {"error": f"ticket '{ticket_id}' not found."}
-
-            columns = existing_ticket._fields
-            ticket_data = dict(zip(columns, existing_ticket))
-
+                return {"error": f"Ticket '{ticket_id}' not found."}
+            
+            # Update fields if provided
+            if content:
+                existing_ticket.content = content
+            if customer_name:
+                existing_ticket.customer_name = customer_name
+            if customer_phone:
+                existing_ticket.customer_phone = customer_phone
+            if description:
+                existing_ticket.description = description
+            if time:
+                existing_ticket.time = time
+            if user_id:
+                existing_ticket.user_id = user_id
+                
+            # Commit the changes
+            db.commit()
+            
+            # Get updated values for the response
             updated = {
-                "content": content or ticket_data["content"],
-                "customer_name": customer_name or ticket_data["customer_name"],
-                "customer_phone": customer_phone or ticket_data["customer_phone"],
-                "description": description or ticket_data["description"],
-                "time": time or ticket_data["time"],
-                "ticket_id": ticket_id,
-                "user_id": user_id
+                "content": existing_ticket.content,
+                "customer_name": existing_ticket.customer_name,
+                "customer_phone": existing_ticket.customer_phone,
+                "description": existing_ticket.description,
+                "time": existing_ticket.time,
+                "ticket_id": ticket_id
             }
-
-            update_query = text("""
-                UPDATE ticket
-                SET
-                    content = :content,
-                    customer_name = :customer_name,
-                    customer_phone = :customer_phone,
-                    description = :description,
-                    time = :time
-                WHERE ticket_id = :ticket_id
-            """)
-            conn.execute(update_query, updated)
-            conn.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
         # Send email notification if email is provided
         if email:
@@ -264,29 +282,43 @@ def update_ticket(
     except Exception as e:
         print(f"Error in update_ticket: {str(e)}")
         return {"error": f"Error update_ticket: {str(e)}"}
-@tool("track_ticket",args_schema=TrackTicket)
+
+@tool("track_ticket", args_schema=TrackTicket)
 def track_ticket(ticket_id: str) -> list[dict]:
     """
     Tool to track ticket info and status by ticket_id
     """
     try:
-        track_query = text("""
-            SELECT *
-            FROM ticket
-            WHERE ticket_id = :ticket_id
-        """)
-        with db._engine.connect() as conn:
-            result = conn.execute(track_query, {"ticket_id": ticket_id}).fetchone()
-
-        if not result:
-            return f"Ticket with ID {ticket_id} not found."
-
+        # Get a database session
+        db = get_ticket_db()
+        
+        try:
+            # Find the ticket
+            ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
+            
+            if not ticket:
+                return f"Ticket with ID {ticket_id} not found."
+                
+            # Convert to dictionary for response
+            result = {
+                "ticket_id": ticket.ticket_id,
+                "content": ticket.content,
+                "customer_name": ticket.customer_name,
+                "customer_phone": ticket.customer_phone,
+                "time": ticket.time,
+                "description": ticket.description,
+                "status": ticket.status,
+                "user_id": ticket.user_id
+            }
+        finally:
+            db.close()
 
         return result
 
     except Exception as e:
-        return f"Error tracking order: {str(e)}"
-@tool("cancel_ticket",args_schema=CancelTicket)
+        return f"Error tracking ticket: {str(e)}"
+
+@tool("cancel_ticket", args_schema=CancelTicket)
 def cancel_ticket(
     ticket_id: str,
     email: EmailStr = None
@@ -295,22 +327,29 @@ def cancel_ticket(
     Tool to cancel ticket by ticket_id
     """
     try:
-        check_query = text("SELECT status, customer_name FROM ticket WHERE ticket_id = :ticket_id")
-        with db._engine.connect() as conn:
-            result = conn.execute(check_query, {"ticket_id": ticket_id}).fetchone()
-
-        if not result:
-            return f"Ticket with ID {ticket_id} not found."
-
-        if result[0] in ["Canceled"]:
-            return f"Cannot cancel ticket. Current status: {result[0]}"
-
-        customer_name = result[1]
+        # Get a database session
+        db = get_ticket_db()
         
-        update_query = text("UPDATE ticket SET status = 'Canceled' WHERE ticket_id = :ticket_id")
-        with db._engine.connect() as conn:
-            conn.execute(update_query, {"ticket_id": ticket_id})
-            conn.commit()
+        try:
+            # Find the ticket
+            ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
+            
+            if not ticket:
+                return f"Ticket with ID {ticket_id} not found."
+                
+            if ticket.status in ["Canceled"]:
+                return f"Cannot cancel ticket. Current status: {ticket.status}"
+                
+            customer_name = ticket.customer_name
+            
+            # Update the status
+            ticket.status = "Canceled"
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
             
         # Send email notification if email is provided
         if email:

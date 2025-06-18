@@ -1,17 +1,26 @@
 from langchain_core.tools import tool
-from typing import  Optional
-from schemas.device_schemas import BookAppointment,TrackAppointment,CancelAppointment,UpdateAppointment
+from typing import Optional
+from schemas.device_schemas import BookAppointment, TrackAppointment, CancelAppointment, UpdateAppointment
 from config.base_config import APP_CONFIG
 from sqlalchemy import text
 from .get_sql import connect_to_db
 from .get_id import generate_short_id
 from utils.email import send_email
 from pydantic import EmailStr
+from sqlalchemy.orm import Session
+from models.database import Booking, get_db, SessionLocal
+
 sql_config = APP_CONFIG.sql_config
 
-db = connect_to_db(server="DESKTOP-LU731VP\\SQLEXPRESS", database="CUSTOMER_SERVICE")
+# Create a function to get a database session
+def get_appointment_db():
+    db = SessionLocal()
+    try:
+        return db
+    finally:
+        db.close()
 
-@tool("book_appointment",args_schema=BookAppointment)
+@tool("book_appointment", args_schema=BookAppointment)
 def book_appointment(
     reason: str,
     customer_name: Optional[str] = None,
@@ -25,34 +34,32 @@ def book_appointment(
     Tool to book an appointment for the customer.
     """
     try:
-
         booking_id = f"BOOKING_{generate_short_id()}"
         
-        # Prepare parameters
-        params = {
-            "booking_id": booking_id,
-            "reason": reason,
-            "customer_name": customer_name,
-            "customer_phone": customer_phone,
-            "time": time,
-            "note": note,
-            "status": "Scheduled",
-            "user_id": user_id
-        }
-
-        # Prepare SQL query
-        insert_query = text("""
-            INSERT INTO Booking (
-                booking_id, reason, customer_name, customer_phone, time, note, status, user_id
-            ) VALUES (
-                :booking_id, :reason, :customer_name, :customer_phone, :time, :note, :status,:user_id
-            )
-        """)
-
-        # Execute the query within a proper context manager
-        with db._engine.connect() as conn:
-            conn.execute(insert_query, params)
-            conn.commit()
+        # Create a new Booking object
+        new_booking = Booking(
+            booking_id=booking_id,
+            reason=reason,
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            time=time,
+            note=note,
+            status="Scheduled",
+            user_id=user_id
+        )
+        
+        # Get a database session
+        db = get_appointment_db()
+        
+        try:
+            # Add the booking to the database
+            db.add(new_booking)
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
             
         # Send email confirmation if email is provided
         if email:
@@ -150,11 +157,11 @@ def book_appointment(
 def update_appointment(
     booking_id: str,
     reason: Optional[str] = None,
-    customer_name:  Optional[str] = None,
-    customer_phone:  Optional[str] = None,
-    note:  Optional[str] = None,
-    time:  Optional[str] = None,
-    user_id:  str = None,
+    customer_name: Optional[str] = None,
+    customer_phone: Optional[str] = None,
+    note: Optional[str] = None,
+    time: Optional[str] = None,
+    user_id: str = None,
     email: EmailStr = None
 ) -> dict:
     """
@@ -162,38 +169,47 @@ def update_appointment(
     Other fields will be updated if provided; otherwise, existing values are retained.
     """
     try:
-        with db._engine.connect() as conn:
-            select_query = text("SELECT * FROM Booking WHERE booking_id = :booking_id")
-            existing_appointment = conn.execute(select_query, {"booking_id": booking_id}).fetchone()
-
+        # Get a database session
+        db = get_appointment_db()
+        
+        try:
+            # Find the existing appointment
+            existing_appointment = db.query(Booking).filter(Booking.booking_id == booking_id).first()
+            
             if not existing_appointment:
                 return {"error": f"Appointment '{booking_id}' not found."}
-
-            columns = existing_appointment._fields
-            appointment_data = dict(zip(columns, existing_appointment))
-
+            
+            # Update fields if provided
+            if reason:
+                existing_appointment.reason = reason
+            if customer_name:
+                existing_appointment.customer_name = customer_name
+            if customer_phone:
+                existing_appointment.customer_phone = customer_phone
+            if note:
+                existing_appointment.note = note
+            if time:
+                existing_appointment.time = time
+            if user_id:
+                existing_appointment.user_id = user_id
+                
+            # Commit the changes
+            db.commit()
+            
+            # Get updated values for the response
             updated = {
-                "reason": reason or appointment_data["reason"],
-                "customer_name": customer_name or appointment_data["customer_name"],
-                "customer_phone": customer_phone or appointment_data["customer_phone"],
-                "note": note or appointment_data["note"],
-                "time": time or appointment_data["time"],
-                "booking_id": booking_id,
-                "user_id": user_id
+                "reason": existing_appointment.reason,
+                "customer_name": existing_appointment.customer_name,
+                "customer_phone": existing_appointment.customer_phone,
+                "note": existing_appointment.note,
+                "time": existing_appointment.time,
+                "booking_id": booking_id
             }
-
-            update_query = text("""
-                UPDATE Booking
-                SET
-                    reason = :reason,
-                    customer_name = :customer_name,
-                    customer_phone = :customer_phone,
-                    note = :note,
-                    time = :time
-                WHERE booking_id = :booking_id
-            """)
-            conn.execute(update_query, updated)
-            conn.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
 
         # Send email notification if email is provided
         if email:
@@ -275,29 +291,43 @@ def update_appointment(
     except Exception as e:
         print(f"Error in update_appointment: {str(e)}")
         return {"error": f"Error updating Appointment: {str(e)}"}
-@tool("track_appointment",args_schema=TrackAppointment)
+
+@tool("track_appointment", args_schema=TrackAppointment)
 def track_appointment(booking_id: str) -> list[dict]:
     """
     Tool to track order info and status by order id
     """
     try:
-        track_query = text("""
-            SELECT *
-            FROM Booking
-            WHERE booking_id = :booking_id
-        """)
-        with db._engine.connect() as conn:
-            result = conn.execute(track_query, {"booking_id": booking_id}).fetchone()
-
-        if not result:
-            return f"Appointment with ID {booking_id} not found."
-
+        # Get a database session
+        db = get_appointment_db()
+        
+        try:
+            # Find the appointment
+            appointment = db.query(Booking).filter(Booking.booking_id == booking_id).first()
+            
+            if not appointment:
+                return f"Appointment with ID {booking_id} not found."
+                
+            # Convert to dictionary for response
+            result = {
+                "booking_id": appointment.booking_id,
+                "reason": appointment.reason,
+                "customer_name": appointment.customer_name,
+                "customer_phone": appointment.customer_phone,
+                "time": appointment.time,
+                "note": appointment.note,
+                "status": appointment.status,
+                "user_id": appointment.user_id
+            }
+        finally:
+            db.close()
 
         return result
 
     except Exception as e:
         return f"Error tracking order: {str(e)}"
-@tool("cancel_appointment",args_schema=CancelAppointment)
+
+@tool("cancel_appointment", args_schema=CancelAppointment)
 def cancel_appointment(
     booking_id: str,
     email: EmailStr = None
@@ -306,22 +336,29 @@ def cancel_appointment(
     Tool to cancel order by order id
     """
     try:
-        check_query = text("SELECT status, customer_name FROM Booking WHERE booking_id = :booking_id")
-        with db._engine.connect() as conn:
-            result = conn.execute(check_query, {"booking_id": booking_id}).fetchone()
-
-        if not result:
-            return f"Appointment with ID {booking_id} not found."
-
-        if result[0] in ["Finished", "Canceled",]:
-            return f"Cannot cancel appointment. Current status: {result[0]}"
-
-        customer_name = result[1]
+        # Get a database session
+        db = get_appointment_db()
         
-        update_query = text("UPDATE Booking SET status = 'Canceled' WHERE booking_id = :booking_id")
-        with db._engine.connect() as conn:
-            conn.execute(update_query, {"booking_id": booking_id})
-            conn.commit()
+        try:
+            # Find the appointment
+            appointment = db.query(Booking).filter(Booking.booking_id == booking_id).first()
+            
+            if not appointment:
+                return f"Appointment with ID {booking_id} not found."
+                
+            if appointment.status in ["Finished", "Canceled"]:
+                return f"Cannot cancel appointment. Current status: {appointment.status}"
+                
+            customer_name = appointment.customer_name
+            
+            # Update the status
+            appointment.status = "Canceled"
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            raise e
+        finally:
+            db.close()
             
         # Send email notification if email is provided
         if email:
