@@ -1,30 +1,23 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from rapidfuzz import fuzz
-from typing import List, Dict, Optional
+from typing import List
 from qdrant_client import QdrantClient
 import time
-import joblib
-import os
-from functools import lru_cache
+
 from config.base_config import APP_CONFIG
 from pathlib import Path
 
 QDRANT_URL = APP_CONFIG.recommend_config.url
 QDRANT_API_KEY = APP_CONFIG.recommend_config.api_key
 COLLECTION = APP_CONFIG.recommend_config.collection_name
-KEYBERT = APP_CONFIG.key_bert_config.model
 
-# Get the base directory (project root)
-PROJECT_ROOT = Path(__file__).resolve().parents[3]  # Use correct level
-FALLBACK_MODEL_PATH = PROJECT_ROOT / "saved_models" / "keybert.pkl"
 
 # Global variables for caching
 _vectorizer = None
 _cached_all_points = None
 _cache_timestamp = 0
 _client_cache = None
-_model_cache = None
 _CACHE_TTL = 300  # 5 minutes in seconds
 
 

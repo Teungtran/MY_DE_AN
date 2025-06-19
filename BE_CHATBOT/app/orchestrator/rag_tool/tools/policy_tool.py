@@ -11,10 +11,9 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from config.base_config import APP_CONFIG
 from factories.vector_store_factory import create_policy_store
 from factories.embedding_factory import create_embedding_model
-from .llm import extend_query,translate_language,llm_history
+from .llm import extend_query,translate_language
 from .reranking import  most_relevant
 from factories.chat_factory import create_chat_model
-from services.dynamodb import DynamoHistory
 from .prompts import GENERATE_PROMPT
 chat_config = APP_CONFIG.chat_model_config
 import os
@@ -32,7 +31,6 @@ LLM = None
 QDRANT_URL = APP_CONFIG.vector_store_config.url
 QDRANT_API_KEY = APP_CONFIG.vector_store_config.api_key
 COLLECTION = APP_CONFIG.vector_store_config.collection_name
-KEYBERT = APP_CONFIG.key_bert_config.model
 AWS_SECRET_ACCESS_KEY = APP_CONFIG.dynamo_config.aws_secret_access_key
 TABLE_NAME = APP_CONFIG.dynamo_config.table_name
 AWS_SECRET_ACCESS_ID = APP_CONFIG.dynamo_config.aws_access_key_id
