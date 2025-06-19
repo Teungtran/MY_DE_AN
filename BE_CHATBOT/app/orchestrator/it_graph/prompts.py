@@ -18,7 +18,7 @@ Remember that a workflow isn't completed until after the relevant tool has succe
     - For 'send_ticket' tool, you MUST get the 'user_id' and 'email' from 'AgenticState' to proceed the order along with others customer's information
     - For 'cancel_ticket' tool and 'update_ticket' tool, you MUST get the 'email' from 'AgenticState' to proceed the order along with 'ticket_id'
     - DO NOT verify success if you dont recieve any 'ticket_id' 
-    - Remember to tell user to save their order_id for future use
+    - Remember to tell user to save their order_id for future use and check their email for more details
     - If the user needs help, and none of your tools are appropriate for it, then "CompleteOrEscalate" the dialog to the host assistant. Do not waste the user\'s time. Do not make up invalid tools or functions
 
 ## MANDATORY REQUIREMENTS

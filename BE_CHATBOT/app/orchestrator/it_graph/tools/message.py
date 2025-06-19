@@ -36,7 +36,7 @@ def send_ticket(
     try:
         # Generate ticket_id
         ticket_id = f"TICKET_{generate_short_id()}"
-        time_now = datetime.now()
+        time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         # Create a new Ticket object
         new_ticket = Ticket(
@@ -44,7 +44,7 @@ def send_ticket(
             content=content,
             customer_name=customer_name,
             customer_phone=customer_phone,
-            time=time_now,
+            time=time,
             description=description,
             status="Pending",
             user_id=user_id
@@ -77,7 +77,7 @@ def send_ticket(
             - Ticket ID: {ticket_id}
             - Description: {description or "No description provided"}
             - Content: {content}
-            - Time Submitted: {time_now}
+            - Time Submitted: {time}
             - Status: Pending
 
             Please save your ticket ID for future reference. You can use it to track, update, or cancel your ticket if needed.
@@ -108,7 +108,7 @@ def send_ticket(
             - Mã yêu cầu: {ticket_id}
             - Mô tả: {description or "Không có mô tả"}
             - Nội dung: {content}
-            - Thời gian gửi: {time_now}
+            - Thời gian gửi: {time}
             - Trạng thái: Đang chờ xử lý
 
             Vui lòng lưu mã yêu cầu để tham khảo trong tương lai. Bạn có thể sử dụng mã này để theo dõi, cập nhật hoặc hủy yêu cầu nếu cần.
@@ -139,7 +139,7 @@ def send_ticket(
             "content": content,
             "customer_name": customer_name,
             "customer_phone": customer_phone,
-            "time": time_now,
+            "time": time,
             "description": description,
             "status": "Pending",
             "message": f"Ticket {ticket_id} for {content} has been successfully sent, please wait for IT support. Please check your email for confirmation details."
