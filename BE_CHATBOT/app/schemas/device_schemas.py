@@ -1,4 +1,4 @@
-from pydantic import BaseModel,EmailStr
+from pydantic import BaseModel,EmailStr,field_validator
 from typing import Annotated, Literal, Optional
 from datetime import datetime
 
@@ -266,20 +266,42 @@ class TrackTicket(BaseModel):
                 "ticket_id": "TICKET-A1B2C3D4-20250610153000"
             }
         }
+recommended_devices_cache = []
+
 class RecommendSystem(BaseModel):
     """Recommend products based on user input and preferences."""
+    
     user_input: Annotated[str, "User query text for recommendations"]
-    types: Optional[Annotated[str, "Type of device to search for"]] = None
+    types: Annotated[
+        Literal[
+            "phones", "laptop/pc", "earphones", "mouse",  "keyboard"
+        ],
+        "Category of the electronic device. Follow strictly this rule: "
+        "if user_input is related to phone, smartphone, category == 'phones'; "
+        "if user_input is related to laptop or pc, category == 'laptop/pc'; "
+        "if user_input is related to earphone, tai nghe, category == 'earphone'; "
+        "if user_input is related to mouse, chuột, category == 'mouse'; "
+        "if user_input is related to keyboard, bàn phím, category == 'keyboard'."
+    ] = None
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+    price: Optional[Annotated[str, "price in VND in number format'"]]
+    @field_validator("types", mode="before")
+    def validate_type(cls, v):
+        if v is None:
+            return v
+        allowed_types = {"phones", "laptop/pc", "earphones", "keyboard", "mouse"}
+        return v if v in allowed_types else "electronics"
 
     class Config:
         json_schema_extra = {
             "example": {
                 "user_input": "I need a good smartphone",
-                "types": "phone",
-                "user_id": "user333232"
+                "types": "phones",
+                "user_id": "user333232",
+                "price": "10000000"
             }
         }
+
 class RecommendationConfig:
     MAX_RESULTS = 5
     BRAND_MATCH_BOOST = 15

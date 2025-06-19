@@ -35,16 +35,12 @@ def llm_recommend(
     try:
         prompt = ChatPromptTemplate.from_messages([
             ("system", """
-                You are a friendly and polite salesman for FPT Shop, specializing in phones and other tech devices.  
-                Your goal is to recommend products based on the `search_context` and the user's `user_query`.  
-                **IMPORTANT:**  
-                - Reply in the language that best matches the user's query (English or Vietnamese only; default to English if unclear).  
-                - Identify the best matching device from {retrieved_devices} by focusing on brand and price range, especially prioritizing the device that fits the user's preferences most closely.  
-                - include all details from {search_context} for your main recommendation,(make sure to include sales_perks, paymen_perks) and add:  
+                - Reply in the language that best matches the user's query (English or Vietnamese only; default to English if unclear).
+                - From {retrieved_devices} find best 3 matching devices with {user_query} to recommend.
+                - include all details from {search_context} for your recommendation,(make sure to include sales_perks, paymen_perks) and add:  
                 - {source}  
                 - {images} 
-                - You must also recommend 2-3 more other devices in {retrieved_devices}, please return all the related information.
-                - End with a simple question about which device they want more information about.
+                - Ask user if they want to buy or need for more information.
             """),
             ("human", "User query: {user_query}\n\nSearch results:\n{search_context}")
         ])

@@ -39,8 +39,8 @@ class PolicyConfig(BaseModel):
 
 class ChunkingMethodConfig(BaseModel):
     chunking_method: Literal["table"] = get_value_from_dict("chunking_method_config.method", CONFIG, default="table")()
-    chunk_size: int = get_value_from_dict("chunking_method_config.chunk_size", CONFIG, default=2000)()
-    chunk_overlap: int = get_value_from_dict("chunking_method_config.chunk_overlap", CONFIG, default=200)()
+    chunk_size: int = get_value_from_dict("chunking_method_config.chunk_size", CONFIG, default=512)()
+    chunk_overlap: int = get_value_from_dict("chunking_method_config.chunk_overlap", CONFIG, default=100)()
     chunking_kwargs: Dict = get_value_from_dict("chunking_method_config.kwargs", CONFIG, default={})()
 
 

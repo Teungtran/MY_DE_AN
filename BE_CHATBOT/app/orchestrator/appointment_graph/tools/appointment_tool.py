@@ -2,13 +2,10 @@ from langchain_core.tools import tool
 from typing import Optional
 from schemas.device_schemas import BookAppointment, TrackAppointment, CancelAppointment, UpdateAppointment
 from config.base_config import APP_CONFIG
-from sqlalchemy import text
-from .get_sql import connect_to_db
 from .get_id import generate_short_id
 from utils.email import send_email
 from pydantic import EmailStr
-from sqlalchemy.orm import Session
-from models.database import Booking, get_db, SessionLocal
+from models.database import Booking, SessionLocal
 
 sql_config = APP_CONFIG.sql_config
 
@@ -368,7 +365,7 @@ def cancel_appointment(
 
             Your appointment with booking ID {booking_id} has been successfully canceled.
 
-            If you wish to schedule a new appointment, please ask our AI to help you or contact our customer support:
+            If you wish to schedule a new appointment, please ask SAGE to help you or contact our customer support:
 
             📞 Customer Support (Free Call): 1800.6601 (Call Center 1)
             
@@ -384,7 +381,7 @@ def cancel_appointment(
 
             Lịch hẹn của bạn với mã đặt lịch {booking_id} đã được hủy thành công.
 
-            Nếu bạn muốn đặt lịch hẹn mới, vui lòng sử dụng AI của chúng tôi hoặc liên hệ với bộ phận hỗ trợ khách hàng:
+            Nếu bạn muốn đặt lịch hẹn mới, vui lòng sử dụng SAGE hoặc liên hệ với bộ phận hỗ trợ khách hàng:
 
             📞 Hỗ trợ khách hàng (Miễn phí): 1800.6601 (Tổng đài 1)
             

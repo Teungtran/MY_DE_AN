@@ -7,17 +7,13 @@ from functools import lru_cache
 from typing import List, Dict, Optional, Tuple
 from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder
 from .get_score import (
-    check_similarity, get_all_points, keyword, convert_to_string, fuzzy_score)
+    check_similarity, get_all_points, convert_to_string, fuzzy_score)
 from config.base_config import APP_CONFIG
-import time
 import json
 from .llm import llm_recommend, llm_device_detail
-from sqlalchemy import text
-from .get_sql import connect_to_db
 from .get_id import generate_short_id
 from utils.email import send_email
-from sqlalchemy.orm import Session
-from models.database import CustomerInfo, Order as OrderModel, Item, get_db, SessionLocal
+from models.database import CustomerInfo, Order as OrderModel, Item, SessionLocal
 
 sql_config = APP_CONFIG.sql_config
 
@@ -30,9 +26,6 @@ def get_shop_db():
         db.close()
 
 recommended_devices_cache = []
-
-_metadata_cache = {}
-_metadata_cache_timestamp = 0
 METADATA_CACHE_DURATION = 300  # 5 minutes
 
 @lru_cache(maxsize=100)
@@ -46,45 +39,31 @@ def detect_language_cached(text: str) -> str:
 @tool("recommendation_system", args_schema=RecommendSystem)
 def recommend_system(
     user_input: str,
-    types: Optional[str] = None,
-    user_id: str = None
+    types: str = None,
+    user_id: str = None,
+    price: str = None
 ) -> Tuple[str, list[str]]: 
     """
-    Recommend products based on user input, types, preferences, and history.
-    User input is optional - system can recommend based on other parameters if not provided.
-    
-    Args:
-        state: Current state containing messages and recommended devices
-        types: Type of device to search for
-        recent_history: History of user's previous interactions
-        preference: User preferences for filtering results
-        custom_config: Custom configuration for recommendation engine
-        global_config: Global config that may contain recommended devices for persistence
+    Recommend products based on user input, types, price.    
     """
     recommendation_config = RecommendationConfig()
     
-    # Get a database session
     db = get_shop_db()
     
     try:
-        # Get user preferences using ORM
         user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
         preference = json.loads(user.preferences) if user and user.preferences else None
     finally:
         db.close()
         
-    main_query = ""
     main_query_lower = ""
     if user_input:
-        main_query = keyword(user_input)
-        main_query_lower = main_query.lower()
-    
-    language_input = user_input or types or ""
-    language = detect_language_cached(language_input)
+        main_query_lower = user_input.lower()
+    language = detect_langs(main_query_lower)
 
     all_points = get_all_points()
     matched_docs = []
-    has_brands = has_types = has_price = False
+    has_brands = has_types = has_price = has_price_input =False
     brands = []
     
     if preference and "brand" in preference and preference["brand"]:
@@ -95,7 +74,11 @@ def recommend_system(
     if types:
         user_types = types.lower().split()
         has_types = len(user_types) > 0
-    
+        
+    price_input = []
+    if price:
+        price_input = [price]  # Use a list for consistency
+        has_price_input = True
     price_min = price_max = None
     price_range = preference["price_range"] if preference and "price_range" in preference else []
     if isinstance(price_range, list):
@@ -108,33 +91,30 @@ def recommend_system(
     for doc in all_points:
         metadata = doc.payload.get("metadata", {})
         total_score = 0
-        
+
         if user_input:
-            combined_fields = [
-                convert_to_string(metadata.get("device_name", "")),
-                convert_to_string(metadata.get("brand", "")),
-                convert_to_string(metadata.get("category", "")),
-                convert_to_string(metadata.get("sales_perks", "")),
-                convert_to_string(metadata.get("sales_price", "")),
-                convert_to_string(metadata.get("discount_percent", "")),
-                convert_to_string(metadata.get("payment_perks", ""))
+            text_fields = [
+                "device_name", "brand", "category", "discount_percent", "sales_perks",
+                "payment_perks", "sales_price", "battery", "cpu", "card",
+                "storage", "guarantee_program"
             ]
-            cos_score = check_similarity(main_query_lower, combined_fields)
-            user_input_score = fuzzy_score(main_query_lower, metadata)
-            total_score += user_input_score * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
-        
-        if has_types:
-            doc_category = metadata.get("brand", "").lower()
-            if doc_category:
-                type_score = sum(fuzz.partial_ratio(t, doc_category) for t in user_types)
-                total_score += (type_score / len(user_types)) * recommendation_config.TYPE_MATCH_BOOST / 100
-        
+            combined_texts = [convert_to_string(metadata.get(field, "")) for field in text_fields]
+            combined_texts = [t for t in combined_texts if t]  # Filter out empty
+
+            if combined_texts:
+                full_metadata_text = " ".join(combined_texts)
+                cos_score = check_similarity(main_query_lower, combined_texts)
+                fuzzy_score_val = fuzzy_score(main_query_lower, full_metadata_text)
+
+                total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
+
+
         if has_brands:
             doc_brand = metadata.get("brand", "").lower()
             if doc_brand:
                 brand_score = sum(fuzz.partial_ratio(b, doc_brand) for b in brands)
                 total_score += (brand_score / len(brands)) * recommendation_config.BRAND_MATCH_BOOST / 100
-        
+
         if has_price:
             sale_price = metadata.get("sale_price")
             if isinstance(sale_price, (int, float)):
@@ -144,9 +124,24 @@ def recommend_system(
                     total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
                 elif price_min is not None and sale_price >= price_min:
                     total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-        
+                    
+        if has_price_input:
+            sale_price = metadata.get("sale_price")
+            if sale_price:
+                try:
+                    price_number = float(price_input[0])
+                    if isinstance(sale_price, (int, float)):
+                        price_similarity = fuzz.partial_ratio(str(int(price_number)), str(int(sale_price)))
+                        total_score += (price_similarity / 100) * recommendation_config.PRICE_RANGE_MATCH_BOOST
+                except (ValueError, IndexError):
+                    pass  # Skip if input isn't numeric
 
-        
+                
+        if has_types:
+            doc_category = metadata.get("category", "").lower()
+            if doc_category:
+                type_score = sum(fuzz.partial_ratio(t, doc_category) for t in user_types)
+                total_score += (type_score / len(user_types)) * recommendation_config.TYPE_MATCH_BOOST / 100
         matched_docs.append({
             "doc": doc,
             "score": total_score
@@ -199,6 +194,7 @@ def recommend_system(
     recommended_devices_cache = top_device_names
     
     return response.content if hasattr(response, 'content') else response, top_device_names
+
 
 
 @tool("device_details")
