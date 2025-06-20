@@ -198,7 +198,8 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         return AuthResponse(
             access_token=access_token,
             token_type="bearer",
-            user_id=user["user_id"]
+            user_id=user["user_id"],
+            email=user["email"]
         )
         
     except HTTPException:
@@ -222,7 +223,8 @@ async def login_user(request: LoginRequest, db: Session = Depends(get_db)):
     return AuthResponse(
         access_token=access_token,
         token_type="bearer",
-        user_id=user["user_id"]
+        user_id=user["user_id"],
+        email=user["email"]
     )
 
 @auth.post("/forgot-password")

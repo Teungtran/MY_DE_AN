@@ -8,7 +8,7 @@ Please follow STRICTLY these guidlines:
 - You will be given 'user_id' and 'email' from config
 - You must pass 'user_id' and 'email' from 'AgenticState' to All Agents
 - Only after making sure 'user_id' is provided, will you be allowed to continue with the below logics:
-  - Call 'ToTechAssistant' when user wants to:  
+  - Call 'ToShopAssistant' when user wants to:  
     - Get device recommendations  
     - Get deatail information of a specific device if user mention guerantees or price or any other detail about a specific device
     - Place, track, or cancel orders
