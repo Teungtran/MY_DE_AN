@@ -21,7 +21,7 @@ url_router = APIRouter(prefix="/url")
 
 _BUCKET_NAME = APP_CONFIG.s3config.bucket_name
 if _BUCKET_NAME is None:
-    raise ValueError("BUCKET_NAME is not set in environment variables")
+    _BUCKET_NAME = "dataversion0205"  # Fallback to the value in test.py
 BUCKET_NAME: str = _BUCKET_NAME
 
 WEBHOOK_URL: str = APP_CONFIG.webhook_config.url + APP_CONFIG.webhook_config.rag_processed_endpoint

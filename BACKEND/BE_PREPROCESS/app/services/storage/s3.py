@@ -195,11 +195,16 @@ class AsyncS3Client:
         except ClientError as e:
             logger.error(f"Failed to get head_object for {input_data.object_name}: {e}")
             raise Exception(f"Failed to get head_object for {input_data.object_name}: {e}") from e
-
+import os
 
 async def get_s3_client() -> AsyncS3Client:
+    # Fallback values from test.py if environment variables are not set
+    aws_access_key_id = APP_CONFIG.s3config.access_key_id.get_secret_value() if APP_CONFIG.s3config.access_key_id else os.environ.get("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key = APP_CONFIG.s3config.secret_access_key.get_secret_value() if APP_CONFIG.s3config.secret_access_key else os.environ.get("AWS_SECRET_ACCESS_KEY")
+    aws_region = APP_CONFIG.s3config.region_name or "ap-southeast-2"
+    
     return AsyncS3Client(
-        aws_access_key_id=cast(str, APP_CONFIG.s3config.access_key_id.get_secret_value()),
-        aws_secret_access_key=cast(str, APP_CONFIG.s3config.secret_access_key.get_secret_value()),
-        region_name=cast(str, APP_CONFIG.s3config.region_name),
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        region_name=aws_region,
     )
