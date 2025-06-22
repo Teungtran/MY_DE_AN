@@ -1,9 +1,8 @@
 from langchain_core.tools import tool
 from rapidfuzz import process
-from rapidfuzz.fuzz import partial_ratio
+from rapidfuzz.fuzz import partial_ratio,token_sort_ratio 
 from langdetect import detect_langs
 from pydantic import EmailStr
-from functools import lru_cache
 from typing import List, Dict, Optional, Tuple
 from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder
 from .get_score import (
@@ -52,7 +51,6 @@ def recommend_system(
     db = get_shop_db()
     
     try:
-        # Get user preferences using ORM
         user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
         preference = json.loads(user.preferences) if user and user.preferences else None
     finally:
@@ -75,7 +73,9 @@ def recommend_system(
         price_input = [price]  # Use a list for consistency
         has_price_input = True
     price_min = price_max = None
-    price_range = preference["price_range"] if preference and "price_range" in preference else []
+    price_range = preference.get("price_range", []) if preference else []
+    if price_range:
+        has_price = True
     if isinstance(price_range, list):
         if len(price_range) == 1:
             price_max = float(price_range[0])
@@ -89,27 +89,32 @@ def recommend_system(
         if not meta.get("brand") or meta.get("sale_price") is None:
             continue
 
-        # Early price-based filter
         sale_price = meta.get("sale_price")
         if price_max and isinstance(sale_price, (int, float)) and sale_price > price_max * 1.2:
             continue
 
         total_score = 0
 
-        if user_input:
+        if main_query_lower:
             text_fields = [
                 "device_name", "brand", "discount_percent", "sales_price", "battery", "cpu", "card",
                 "storage", "guarantee_program"
             ]
+            if len(main_query_lower.split()) < 5: 
+                function = token_sort_ratio
+            else:
+                function = partial_ratio
             combined_text = " ".join([convert_to_string(meta.get(field, "")) for field in text_fields])
             meta["combined_text"] = combined_text
-            best_matches = process.extract(
+            matches = process.extract(
                 query=main_query_lower,
                 choices=meta["combined_text"],
-                scorer=partial_ratio,
-                limit=1
+                scorer=function,
+                limit=None
             )
-            fuzzy_score_val = best_matches[0][1] 
+            best_matches = [match for match in matches if match[1] > 60]
+
+            fuzzy_score_val = max(best_matches, key=lambda x: x[1])[1]
             cos_score = check_similarity(main_query_lower, [meta["combined_text"]])
             total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
 
@@ -131,10 +136,10 @@ def recommend_system(
         if has_price_input:
             try:
                 price_number = float(price_input[0])
-                if isinstance(sale_price, (int, float)):
-                    price_similarity = partial_ratio(str(int(price_number)), str(int(sale_price)))
-                    total_score += (price_similarity / 100) * recommendation_config.PRICE_RANGE_MATCH_BOOST
-            except (ValueError, IndexError):
+                price_diff = abs(sale_price - price_number) / price_number
+                price_similarity = max(0, 1 - price_diff)
+                total_score += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
+            except:
                 pass
 
         matched_docs.append({
@@ -178,7 +183,9 @@ def recommend_system(
                     content += f"- {field}: {meta[field]}%\n"
                 else:
                     content += f"- {field}: {meta[field]}\n"
-        search_context += content + "\n\n"
+        lines = []
+        lines.append(content)
+        search_context = "\n\n".join(lines)
 
     global recommended_devices_cache
     recommended_devices_cache = top_device_names
