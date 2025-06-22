@@ -45,6 +45,11 @@ def is_valid_password(password: str) -> bool:
         return False
     return True
 
+def is_valid_email(email: str) -> bool:
+    """Validate email address format"""
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return bool(re.match(pattern, email))
+
 def hash_password(password: str) -> str:
     """Hash password using bcrypt"""
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
@@ -89,7 +94,11 @@ def login(identifier: str, password: str, db: Session):
     user = db.query(CustomerInfo).filter(
         (CustomerInfo.customer_name == identifier) | (CustomerInfo.email == identifier)
     ).first()
-    
+    if not is_valid_email(CustomerInfo.email):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid email"
+        )
     if user and verify_password(password, user.password):
         return {
             "user_id": user.user_id,
@@ -115,7 +124,11 @@ def register_new_user(
             status_code=400,
             detail="Password must be at least 10 characters long, include 1 uppercase letter, 1 number, and 1 special character"
         )
-    
+    if not is_valid_email(email):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid email"
+        )
     if check_phone_exists(customer_phone, db):
         raise HTTPException(status_code=400, detail="Phone number already registered")
     

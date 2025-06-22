@@ -270,14 +270,14 @@ recommended_devices_cache = []
 
 class RecommendSystem(BaseModel):
     """Recommend products based on user input and preferences."""
-    
+
     user_input: Annotated[str, "User query text for recommendations"]
     types: Annotated[
-        Literal[
-            "phones", "laptop/pc", "earphones", "mouse",  "keyboard"
+        Optional[
+            Literal["phone", "laptop/pc", "earphone", "mouse", "keyboard"]
         ],
         "Category of the electronic device. Follow strictly this rule: "
-        "if user_input is related to phone, smartphone, category == 'phones'; "
+        "if user_input is related to phone, smartphone, category == 'phone'; "
         "if user_input is related to laptop or pc, category == 'laptop/pc'; "
         "if user_input is related to earphone, tai nghe, category == 'earphone'; "
         "if user_input is related to mouse, chuột, category == 'mouse'; "
@@ -285,18 +285,19 @@ class RecommendSystem(BaseModel):
     ] = None
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
     price: Optional[Annotated[str, "price in VND in number format'"]]
+
     @field_validator("types", mode="before")
     def validate_type(cls, v):
         if v is None:
             return v
-        allowed_types = {"phones", "laptop/pc", "earphones", "keyboard", "mouse"}
-        return v if v in allowed_types else "electronics"
+        allowed_types = {"phone", "laptop/pc", "earphone", "keyboard", "mouse"}
+        return v if v in allowed_types else None
 
     class Config:
         json_schema_extra = {
             "example": {
                 "user_input": "I need a good smartphone",
-                "types": "phones",
+                "types": "phone",
                 "user_id": "user333232",
                 "price": "10000000"
             }
@@ -304,9 +305,7 @@ class RecommendSystem(BaseModel):
 
 class RecommendationConfig:
     MAX_RESULTS = 5
-    BRAND_MATCH_BOOST = 15
-    PRICE_RANGE_MATCH_BOOST = 15
-    TYPE_MATCH_BOOST = 10
-    HISTORY_MATCH_BOOST = 10
-    FUZZY_WEIGHT = 0.6
-    COSINE_WEIGHT = 0.4
+    BRAND_MATCH_BOOST = 25
+    PRICE_RANGE_MATCH_BOOST = 20
+    FUZZY_WEIGHT = 0.4
+    COSINE_WEIGHT = 0.6

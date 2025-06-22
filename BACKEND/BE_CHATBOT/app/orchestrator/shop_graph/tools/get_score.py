@@ -4,9 +4,11 @@ from rapidfuzz import fuzz
 from typing import List
 from qdrant_client import QdrantClient
 import time
+from qdrant_client.http import models
 
 from config.base_config import APP_CONFIG
-from pathlib import Path
+from utils.logging.logger import get_logger
+logger = get_logger(__name__)
 
 QDRANT_URL = APP_CONFIG.recommend_config.url
 QDRANT_API_KEY = APP_CONFIG.recommend_config.api_key
@@ -38,12 +40,6 @@ def convert_to_string(value) -> str:
         return " ".join(str(item) for item in value)
     return str(value)
 
-def fuzzy_score(user_query: str, combined_text: str) -> float:
-    """Compute fuzzy score against a single combined metadata string."""
-    if not user_query or not combined_text:
-        return 0.0
-    return fuzz.partial_ratio(user_query.lower(), combined_text.lower())
-
 def check_similarity(text1: str, combined_fields: List[str], vectorizer=None) -> float:
     """Calculate max cosine similarity between input and metadata fields."""
     global _vectorizer
@@ -59,41 +55,70 @@ def check_similarity(text1: str, combined_fields: List[str], vectorizer=None) ->
     vectors = vectorizer.transform(corpus)
     similarities = cosine_similarity(vectors[0], vectors[1:])[0]
     return max(similarities) if similarities.size > 0 else 0.0
-def get_all_points(batch_size: int = 100, force_refresh: bool = False):
-    """Retrieve all points from Qdrant with improved caching strategy."""
-    global _cached_all_points, _cache_timestamp
-    
+def get_all_points(batch_size: int = 150, force_refresh: bool = False, type: str = None):
+    """Retrieve all points from Qdrant. If type is invalid or None, scroll without filtering."""
+    global _cache_timestamp
+    type = type.lower() if type else None
+
     current_time = time.time()
     cache_expired = (current_time - _cache_timestamp) > _CACHE_TTL
-    
-    if _cached_all_points is not None and not cache_expired and not force_refresh:
-        return _cached_all_points
-    
+
+    valid_types = {"phone", "laptop/pc", "earphone", "mouse", "keyboard"}
+    is_valid_type = type in valid_types
+    cache_key = type if is_valid_type else "all"
+
+    if (hasattr(get_all_points, '_cache_by_type') and 
+        cache_key in get_all_points._cache_by_type and 
+        not cache_expired and not force_refresh):
+        return get_all_points._cache_by_type[cache_key]
+
     try:
         client = get_client()
         offset = None
         all_points = []
-        
+
+        scroll_filter = None
+        if is_valid_type:
+            scroll_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="metadata.category",
+                        match=models.MatchValue(value=type)
+                    )
+                ]
+            )
+
         while True:
             points, offset = client.scroll(
                 collection_name="FPT_SHOP",
-                scroll_filter=None,
+                scroll_filter=scroll_filter,
                 with_vectors=False,
                 with_payload=True,
                 limit=batch_size,
                 offset=offset
             )
-            
+
             all_points.extend(points)
-            
-            # If no more results or offset is None, break
+
             if not points or offset is None:
                 break
-        
-        _cached_all_points = all_points
-        _cache_timestamp = current_time
-        return _cached_all_points
-        
-    except Exception as e:
-        return _cached_all_points if _cached_all_points is not None else []
 
+        if not hasattr(get_all_points, '_cache_by_type'):
+            get_all_points._cache_by_type = {}
+
+        get_all_points._cache_by_type[cache_key] = all_points
+        _cache_timestamp = current_time
+
+        if is_valid_type:
+            logger.info(f"Found {len(all_points)} points with category '{type}'")
+        else:
+            logger.info(f"Invalid or missing category '{type}', returning all {len(all_points)} points")
+
+        return all_points
+
+    except Exception as e:
+        logger.info(f"Error: {e}")
+        if (hasattr(get_all_points, '_cache_by_type') and 
+            cache_key in get_all_points._cache_by_type):
+            return get_all_points._cache_by_type[cache_key]
+        return []

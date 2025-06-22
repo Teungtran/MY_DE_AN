@@ -1,20 +1,19 @@
 from langchain_core.tools import tool
-from rapidfuzz import fuzz
+from rapidfuzz import process
+from rapidfuzz.fuzz import partial_ratio
 from langdetect import detect_langs
 from pydantic import EmailStr
-import numpy as np
 from functools import lru_cache
 from typing import List, Dict, Optional, Tuple
 from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder
 from .get_score import (
-    check_similarity, get_all_points, convert_to_string, fuzzy_score)
+    check_similarity, get_all_points, convert_to_string)
 from config.base_config import APP_CONFIG
 import json
-from .llm import llm_recommend, llm_device_detail
 from .get_id import generate_short_id
 from utils.email import send_email
 from models.database import CustomerInfo, Order as OrderModel, Item, SessionLocal
-
+import heapq
 sql_config = APP_CONFIG.sql_config
 
 # Create a function to get a database session
@@ -26,54 +25,50 @@ def get_shop_db():
         db.close()
 
 recommended_devices_cache = []
-METADATA_CACHE_DURATION = 300  # 5 minutes
+METADATA_CACHE_DURATION = 300  
 
-@lru_cache(maxsize=100)
-def detect_language_cached(text: str) -> str:
-    """Cached language detection to avoid repeated calls."""
-    try:
-        return detect_langs(text)[0].lang if text else 'en'
-    except:
-        return 'en'
+
 
 @tool("recommendation_system", args_schema=RecommendSystem)
 def recommend_system(
     user_input: str,
-    types: str = None,
+    type :str = None,
     user_id: str = None,
     price: str = None
 ) -> Tuple[str, list[str]]: 
     """
-    Recommend products based on user input, types, price.    
+    Recommend products based on user input, type , preferences, and history.
+    User input is optional - system can recommend based on other parameters if not provided.
+    
+    Args:
+        state: Current state containing messages and recommended devices
+        type : Type of device to search for
+        recent_history: History of user's previous interactions
+        preference: User preferences for filtering results
+        custom_config: Custom configuration for recommendation engine
+        global_config: Global config that may contain recommended devices for persistence
     """
     recommendation_config = RecommendationConfig()
-    
     db = get_shop_db()
     
     try:
+        # Get user preferences using ORM
         user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
         preference = json.loads(user.preferences) if user and user.preferences else None
     finally:
         db.close()
-        
     main_query_lower = ""
     if user_input:
         main_query_lower = user_input.lower()
-    language = detect_langs(main_query_lower)
 
-    all_points = get_all_points()
+    all_points = get_all_points(type=type)
     matched_docs = []
-    has_brands = has_types = has_price = has_price_input =False
+    has_brands =  has_price = has_price_input =False
     brands = []
     
     if preference and "brand" in preference and preference["brand"]:
         brands = [brand.lower() for brand in preference["brand"]]
         has_brands = len(brands) > 0
-    
-    user_types = []
-    if types:
-        user_types = types.lower().split()
-        has_types = len(user_types) > 0
         
     price_input = []
     if price:
@@ -89,34 +84,42 @@ def recommend_system(
             price_max = float(price_range[1])
 
     for doc in all_points:
-        metadata = doc.payload.get("metadata", {})
+        meta = doc.payload.get("metadata", {})
+        
+        if not meta.get("brand") or meta.get("sale_price") is None:
+            continue
+
+        # Early price-based filter
+        sale_price = meta.get("sale_price")
+        if price_max and isinstance(sale_price, (int, float)) and sale_price > price_max * 1.2:
+            continue
+
         total_score = 0
 
         if user_input:
             text_fields = [
-                "device_name", "brand", "category", "discount_percent", "sales_perks",
-                "payment_perks", "sales_price", "battery", "cpu", "card",
+                "device_name", "brand", "discount_percent", "sales_price", "battery", "cpu", "card",
                 "storage", "guarantee_program"
             ]
-            combined_texts = [convert_to_string(metadata.get(field, "")) for field in text_fields]
-            combined_texts = [t for t in combined_texts if t]  # Filter out empty
-
-            if combined_texts:
-                full_metadata_text = " ".join(combined_texts)
-                cos_score = check_similarity(main_query_lower, combined_texts)
-                fuzzy_score_val = fuzzy_score(main_query_lower, full_metadata_text)
-
-                total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
-
+            combined_text = " ".join([convert_to_string(meta.get(field, "")) for field in text_fields])
+            meta["combined_text"] = combined_text
+            best_matches = process.extract(
+                query=main_query_lower,
+                choices=meta["combined_text"],
+                scorer=partial_ratio,
+                limit=1
+            )
+            fuzzy_score_val = best_matches[0][1] 
+            cos_score = check_similarity(main_query_lower, [meta["combined_text"]])
+            total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
 
         if has_brands:
-            doc_brand = metadata.get("brand", "").lower()
+            doc_brand = meta.get("brand", "").lower()
             if doc_brand:
-                brand_score = sum(fuzz.partial_ratio(b, doc_brand) for b in brands)
+                brand_score = sum(partial_ratio(b, doc_brand) for b in brands)
                 total_score += (brand_score / len(brands)) * recommendation_config.BRAND_MATCH_BOOST / 100
 
         if has_price:
-            sale_price = metadata.get("sale_price")
             if isinstance(sale_price, (int, float)):
                 if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
                     total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST
@@ -124,32 +127,24 @@ def recommend_system(
                     total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
                 elif price_min is not None and sale_price >= price_min:
                     total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-                    
-        if has_price_input:
-            sale_price = metadata.get("sale_price")
-            if sale_price:
-                try:
-                    price_number = float(price_input[0])
-                    if isinstance(sale_price, (int, float)):
-                        price_similarity = fuzz.partial_ratio(str(int(price_number)), str(int(sale_price)))
-                        total_score += (price_similarity / 100) * recommendation_config.PRICE_RANGE_MATCH_BOOST
-                except (ValueError, IndexError):
-                    pass  # Skip if input isn't numeric
 
-                
-        if has_types:
-            doc_category = metadata.get("category", "").lower()
-            if doc_category:
-                type_score = sum(fuzz.partial_ratio(t, doc_category) for t in user_types)
-                total_score += (type_score / len(user_types)) * recommendation_config.TYPE_MATCH_BOOST / 100
+        if has_price_input:
+            try:
+                price_number = float(price_input[0])
+                if isinstance(sale_price, (int, float)):
+                    price_similarity = partial_ratio(str(int(price_number)), str(int(sale_price)))
+                    total_score += (price_similarity / 100) * recommendation_config.PRICE_RANGE_MATCH_BOOST
+            except (ValueError, IndexError):
+                pass
+
         matched_docs.append({
             "doc": doc,
             "score": total_score
         })
 
-    matched_docs.sort(key=lambda x: x["score"], reverse=True)
-    top_match_count = min(len(matched_docs), recommendation_config.MAX_RESULTS)
-    top_matches = matched_docs[:top_match_count]
+
+    top_match_count = recommendation_config.MAX_RESULTS
+    top_matches = heapq.nlargest(top_match_count, matched_docs, key=lambda x: x["score"])
     
     top_device_names = []
     for match in top_matches:
@@ -184,16 +179,12 @@ def recommend_system(
                 else:
                     content += f"- {field}: {meta[field]}\n"
         search_context += content + "\n\n"
-    
-    source = top_matches[0]["doc"].payload.get("metadata", {}).get("source") if top_matches else ""
-    images = top_matches[0]["doc"].payload.get("metadata", {}).get("image_link") if top_matches else ""
-
-    response= llm_recommend(user_input, search_context, language, top_device_names, source, images)
 
     global recommended_devices_cache
     recommended_devices_cache = top_device_names
     
-    return response.content if hasattr(response, 'content') else response, top_device_names
+    return search_context, top_device_names
+
 
 
 
@@ -235,7 +226,7 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
             return "No recommended devices available. Please search for devices first."
 
         scored_devices = [
-            (rec_device, fuzz.ratio(user_input.lower(), rec_device.lower()))
+            (rec_device, partial_ratio(user_input.lower(), rec_device.lower()))
             for rec_device in device_names
         ]
 
@@ -254,12 +245,8 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
 
         # Extract detail and metadata
         detail = matching_doc.payload['page_content']
-        metadata = matching_doc.payload.get("metadata", {})
-        device_name = metadata.get("device_name", top_device)
-        source = metadata.get("source", "FPT Shop")
 
-        response = llm_device_detail(language, detail, source, device_name)
-        return response
+        return detail
     except Exception as e:
         return f"An error occurred: {str(e)}"
 
