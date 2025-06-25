@@ -272,7 +272,8 @@ class RecommendSystem(BaseModel):
     """Recommend products based on user input and preferences."""
 
     user_input: Annotated[str, "User query text for recommendations"]
-    types: Annotated[
+
+    type: Annotated[
         Optional[
             Literal["phone", "laptop/pc", "earphone", "mouse", "keyboard"]
         ],
@@ -281,31 +282,34 @@ class RecommendSystem(BaseModel):
         "if user_input is related to laptop or pc, category == 'laptop/pc'; "
         "if user_input is related to earphone, tai nghe, category == 'earphone'; "
         "if user_input is related to mouse, chuột, category == 'mouse'; "
-        "if user_input is related to keyboard, bàn phím, category == 'keyboard'."
+        "if user_input is related to keyboard, bàn phím, category == 'keyboard'. "
+        "if user_input does not mention any types or mentions many types (like both phone and laptop), category == None."
     ] = None
-    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
-    price: Optional[Annotated[str, "price in VND in number format'"]]
 
-    @field_validator("types", mode="before")
+    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
+
+    price: Optional[Annotated[str, "Price in VND in number format"]]
+
+    @field_validator("type", mode="before")
+    @classmethod
     def validate_type(cls, v):
-        if v is None:
-            return v
-        allowed_types = {"phone", "laptop/pc", "earphone", "keyboard", "mouse"}
+        allowed_types = {"phone", "laptop/pc", "earphone", "mouse", "keyboard"}
         return v if v in allowed_types else None
 
     class Config:
         json_schema_extra = {
             "example": {
                 "user_input": "I need a good smartphone",
-                "types": "phone",
+                "type": "phone",
                 "user_id": "user333232",
                 "price": "10000000"
             }
         }
 
+
 class RecommendationConfig:
     MAX_RESULTS = 5
     BRAND_MATCH_BOOST = 25
-    PRICE_RANGE_MATCH_BOOST = 20
+    PRICE_RANGE_MATCH_BOOST = 25
     FUZZY_WEIGHT = 0.4
     COSINE_WEIGHT = 0.6

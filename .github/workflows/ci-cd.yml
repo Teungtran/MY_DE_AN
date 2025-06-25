@@ -3,14 +3,47 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - dev # Or your primary branch
+      - dev
 
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [FE, BE_PREPROCESS, BE_CHATBOT, BE_ADMIN]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup environment for ${{ matrix.service }}
+        run: |
+          if [[ "${{ matrix.service }}" == "FE" ]]; then
+            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+            sudo apt-get install -y nodejs
+          else
+            sudo apt-get update
+            sudo apt-get install -y python3 python3-pip
+          fi
+
+      - name: Install dependencies and run lint for ${{ matrix.service }}
+        working-directory: ./${{ matrix.service }}
+        run: |
+          if [[ "${{ matrix.service }}" == "FE" ]]; then
+            npm install
+            npm run lint
+          else
+            python3 -m pip install --upgrade pip
+            pip install flake8
+            flake8 .
+          fi
+
   build_and_push_images:
+    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # Needed to push images to GitHub Container Registry
+      packages: write
 
     steps:
       - name: Checkout repository
@@ -29,13 +62,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Build and push FE
+        uses: docker/build-push-action@v4
+        with:
+          context: ./FE
+          file: ./FE/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/fe:latest
+            ghcr.io/${{ github.repository_owner }}/fe:${{ github.sha }}
+
       - name: Build and push BE_PREPROCESS
         uses: docker/build-push-action@v4
         with:
           context: ./BE_PREPROCESS
           file: ./BE_PREPROCESS/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/be-preprocess:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/be-preprocess:latest
+            ghcr.io/${{ github.repository_owner }}/be-preprocess:${{ github.sha }}
 
       - name: Build and push BE_CHATBOT
         uses: docker/build-push-action@v4
@@ -43,7 +88,9 @@ jobs:
           context: ./BE_CHATBOT
           file: ./BE_CHATBOT/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/be-chatbot:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/be-chatbot:latest
+            ghcr.io/${{ github.repository_owner }}/be-chatbot:${{ github.sha }}
 
       - name: Build and push BE_ADMIN
         uses: docker/build-push-action@v4
@@ -51,4 +98,22 @@ jobs:
           context: ./BE_ADMIN
           file: ./BE_ADMIN/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/be-admin:latest 
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/be-admin:latest
+            ghcr.io/${{ github.repository_owner }}/be-admin:${{ github.sha }}
+
+  deploy_to_ec2:
+    needs: build_and_push_images
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/SAGE
+            docker compose pull
+            docker compose up -d

@@ -54,6 +54,7 @@ class SearchConfig(BaseModel):
 class SQLConfig(BaseModel):
     server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_SERVER")())[1])
     database: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_DATABASE")())[1])
+    
 class EmailConfig(BaseModel):
     server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SMTP_SERVER")())[1])
     email: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("EMAIL_USER")())[1])

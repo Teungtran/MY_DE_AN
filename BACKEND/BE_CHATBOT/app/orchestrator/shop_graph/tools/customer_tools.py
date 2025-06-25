@@ -1,7 +1,7 @@
 from langchain_core.tools import tool
 from rapidfuzz import process
 from rapidfuzz.fuzz import partial_ratio,token_sort_ratio 
-from langdetect import detect_langs
+from collections import defaultdict
 from pydantic import EmailStr
 from typing import List, Dict, Optional, Tuple
 from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder
@@ -25,7 +25,36 @@ def get_shop_db():
 
 recommended_devices_cache = []
 METADATA_CACHE_DURATION = 300  
+def get_other_preference(user_id):
+    db = get_shop_db()
+    try:
+        user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
+        if not user or user.age is None:
+            return {}
+        
+        similar_users = db.query(CustomerInfo.preferences).filter(
+            CustomerInfo.age.between(user.age - 3, user.age + 3),
+            CustomerInfo.preferences.isnot(None)
+        ).all()
+        
+        merged_preferences = {}
+        all_prefs = [json.loads(row[0]) for row in similar_users if row[0]]
 
+        for pref in all_prefs:
+            for key, val in pref.items():
+                if isinstance(val, list):
+                    merged_preferences.setdefault(key, set()).update(val)
+                else:
+                    merged_preferences[key] = val 
+
+        for key in merged_preferences:
+            if isinstance(merged_preferences[key], set):
+                merged_preferences[key] = list(merged_preferences[key])
+                
+        return merged_preferences
+        
+    finally:
+        db.close()
 
 
 @tool("recommendation_system", args_schema=RecommendSystem)
@@ -61,27 +90,57 @@ def recommend_system(
 
     all_points = get_all_points(type=type)
     matched_docs = []
-    has_brands =  has_price = has_price_input =False
+    has_brands = has_price = has_price_input = False
     brands = []
     
+    merged_pref = defaultdict(set)
+    age_pref = get_other_preference(user_id)
+    for source in [preference, age_pref]:
+        for k, v in source.items():
+            if isinstance(v, list):
+                merged_pref[k].update(map(str.lower, v))
+            else:
+                merged_pref[k].add(str(v).lower())
+
+    preference = {k: list(v) for k, v in merged_pref.items()}
+
+    for k, v in preference.items():
+        if not isinstance(v, list):
+            preference[k] = [v]
+        else:
+            preference[k] = list(set(v))
+    
     if preference and "brand" in preference and preference["brand"]:
-        brands = [brand.lower() for brand in preference["brand"]]
-        has_brands = len(brands) > 0
+        all_brands = []
+        for brand_entry in preference["brand"]:
+            if ',' in str(brand_entry):
+                split_brands = [b.strip().lower() for b in str(brand_entry).split(',')]
+                all_brands.extend(split_brands)
+            else:
+                all_brands.append(str(brand_entry).lower())
         
+        brands = list(set(all_brands))  
+        has_brands = len(brands) > 0
+    
     price_input = []
     if price:
-        price_input = [price]  # Use a list for consistency
+        price_input = [price]
         has_price_input = True
+    
     price_min = price_max = None
     price_range = preference.get("price_range", []) if preference else []
     if price_range:
         has_price = True
-    if isinstance(price_range, list):
-        if len(price_range) == 1:
-            price_max = float(price_range[0])
-        elif len(price_range) >= 2:
-            price_min = float(price_range[0])
-            price_max = float(price_range[1])
+        numeric_prices = []
+        for p in price_range:
+            try:
+                numeric_prices.append(float(p))
+            except (ValueError, TypeError):
+                continue
+        
+        if numeric_prices:
+            price_min = min(numeric_prices)
+            price_max = max(numeric_prices)
 
     for doc in all_points:
         meta = doc.payload.get("metadata", {})
@@ -90,8 +149,10 @@ def recommend_system(
             continue
 
         sale_price = meta.get("sale_price")
-        if price_max and isinstance(sale_price, (int, float)) and sale_price > price_max * 1.2:
-            continue
+        
+        if price_max and isinstance(sale_price, (int, float)):
+            if sale_price > price_max * 1.2:  
+                continue
 
         total_score = 0
 
@@ -100,10 +161,11 @@ def recommend_system(
                 "device_name", "brand", "discount_percent", "sales_price", "battery", "cpu", "card",
                 "storage", "guarantee_program"
             ]
-            if len(main_query_lower.split()) < 5: 
-                function = token_sort_ratio
-            else:
+            if len(main_query_lower.split()) < 5:
                 function = partial_ratio
+            else:
+                function = token_sort_ratio
+                
             combined_text = " ".join([convert_to_string(meta.get(field, "")) for field in text_fields])
             meta["combined_text"] = combined_text
             matches = process.extract(
@@ -114,25 +176,28 @@ def recommend_system(
             )
             best_matches = [match for match in matches if match[1] > 60]
 
-            fuzzy_score_val = max(best_matches, key=lambda x: x[1])[1]
-            cos_score = check_similarity(main_query_lower, [meta["combined_text"]])
+            if best_matches:
+                fuzzy_score_val = max(best_matches, key=lambda x: x[1])[1]
+            else:
+                fuzzy_score_val = 0
+            if fuzzy_score_val < 95:
+                cos_score = check_similarity(main_query_lower, [combined_text])
+            else:
+                cos_score = 0
             total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
 
         if has_brands:
             doc_brand = meta.get("brand", "").lower()
-            if doc_brand:
-                brand_score = sum(partial_ratio(b, doc_brand) for b in brands)
-                total_score += (brand_score / len(brands)) * recommendation_config.BRAND_MATCH_BOOST / 100
+            best_match = process.extractOne(doc_brand, brands, scorer=partial_ratio)
+            best_brand_score = best_match[1] if best_match else 0
 
-        if has_price:
-            if isinstance(sale_price, (int, float)):
-                if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
-                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST
-                elif price_max is not None and sale_price <= price_max:
-                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-                elif price_min is not None and sale_price >= price_min:
-                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-
+            if best_brand_score >= 90:
+                total_score += recommendation_config.BRAND_MATCH_BOOST
+            elif best_brand_score >= 70:
+                total_score += recommendation_config.BRAND_MATCH_BOOST * 0.7
+            elif best_brand_score >= 50:
+                total_score += recommendation_config.BRAND_MATCH_BOOST * 0.4
+                
         if has_price_input:
             try:
                 price_number = float(price_input[0])
@@ -141,12 +206,23 @@ def recommend_system(
                 total_score += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
             except:
                 pass
+            
+        elif has_price:
+            if isinstance(sale_price, (int, float)):
+                if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
+                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST
+                elif price_max is not None and sale_price <= price_max:
+                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
+                elif price_min is not None and sale_price >= price_min:
+                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
+
 
         matched_docs.append({
             "doc": doc,
-            "score": total_score
+            "score": total_score,
+            "brand": meta.get("brand", ""),
+            "price": sale_price
         })
-
 
     top_match_count = recommendation_config.MAX_RESULTS
     top_matches = heapq.nlargest(top_match_count, matched_docs, key=lambda x: x["score"])
@@ -160,20 +236,19 @@ def recommend_system(
     if not top_matches:
         return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
 
-    search_context = ""
-
     meta_fields = [
         "device_name", "cpu", "card", "screen", "storage", "image_link",
-        "sale_price", "discount_percent", "installment_price",
-        "colors", "sales_perks", "guarantee_program", "payment_perks", "source"
+        "sale_price", "discount_percent", "installment_price", "sales_perks", 
+        "guarantee_program", "payment_perks", "source"
     ]
 
+    products_info = []
     for idx, item in enumerate(top_matches, start=1):
         meta = item["doc"].payload.get("metadata", {})
         content = f"Product {idx}:\n"
         for field in meta_fields:
-            if field in meta:
-                if field in ["sale_price","installment_price"]:
+            if field in meta and meta[field]:  
+                if field in ["sale_price", "installment_price"]:
                     value = meta[field]
                     if isinstance(value, (int, float)):
                         content += f"- {field}: {value:,} VND\n"
@@ -183,15 +258,14 @@ def recommend_system(
                     content += f"- {field}: {meta[field]}%\n"
                 else:
                     content += f"- {field}: {meta[field]}\n"
-        lines = []
-        lines.append(content)
-        search_context = "\n\n".join(lines)
+        products_info.append(content)
+    
+    search_context = "\n\n".join(products_info)
 
     global recommended_devices_cache
     recommended_devices_cache = top_device_names
     
     return search_context, top_device_names
-
 
 
 
@@ -207,7 +281,6 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
         state: Current state containing recommended devices (optional)
     """
     try:
-        language = detect_langs(user_input)
         
         # Try to get device names from various sources in order of priority
         device_names = None
@@ -250,10 +323,17 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
         if not matching_doc:
             return f"No detailed information found for '{top_device}'. Please try another product."
 
-        # Extract detail and metadata
-        detail = matching_doc.payload['page_content']
+        detail = matching_doc.payload.get('page_content', '')
+        price = str(matching_doc.payload['metadata'].get('price', 'N/A'))
+        sale_perks = matching_doc.payload['metadata'].get('sales_perks', '')
 
-        return detail
+        if isinstance(sale_perks, list):
+            sale_perks = ", ".join(map(str, sale_perks))
+        else:
+            sale_perks = str(sale_perks)
+
+        content = f"{detail}\n\nSales Perks: {sale_perks}\nPrice: {price} VND"
+        return content
     except Exception as e:
         return f"An error occurred: {str(e)}"
 

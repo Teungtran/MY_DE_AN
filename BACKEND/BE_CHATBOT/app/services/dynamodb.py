@@ -16,7 +16,7 @@ class DynamoHistory:
         region_name: str,
         aws_access_key_id: str,
         aws_secret_access_key: str,
-        table_name: str = "CHAT_HISTORY",
+        table_name: str = "HISTORY_CONVO",
         snowflake_generator: Optional[SnowflakeGenerator] = None
     ):
         self.region_name = region_name

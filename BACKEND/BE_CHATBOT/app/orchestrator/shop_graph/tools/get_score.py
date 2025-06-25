@@ -122,3 +122,4 @@ def get_all_points(batch_size: int = 150, force_refresh: bool = False, type: str
             cache_key in get_all_points._cache_by_type):
             return get_all_points._cache_by_type[cache_key]
         return []
+    
