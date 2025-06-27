@@ -92,7 +92,6 @@ def recommend_system(
     matched_docs = []
     has_brands = has_price = has_price_input = False
     brands = []
-    
     merged_pref = defaultdict(set)
     age_pref = get_other_preference(user_id)
     for source in [preference, age_pref]:
@@ -151,40 +150,39 @@ def recommend_system(
         sale_price = meta.get("sale_price")
         
         if price_max and isinstance(sale_price, (int, float)):
-            if sale_price > price_max * 1.2:  
+            if sale_price > price_max * 1.2:  # Allow 20% over max
                 continue
 
         total_score = 0
 
-        if main_query_lower:
-            text_fields = [
-                "device_name", "brand", "discount_percent", "sales_price", "battery", "cpu", "card",
-                "storage", "guarantee_program"
-            ]
-            if len(main_query_lower.split()) < 5:
-                function = partial_ratio
-            else:
-                function = token_sort_ratio
-                
-            combined_text = " ".join([convert_to_string(meta.get(field, "")) for field in text_fields])
-            meta["combined_text"] = combined_text
-            matches = process.extract(
-                query=main_query_lower,
-                choices=meta["combined_text"],
-                scorer=function,
-                limit=None
-            )
-            best_matches = [match for match in matches if match[1] > 60]
+        text_fields = [
+            "device_name", "brand", "discount_percent", "sales_price", "battery", "cpu", "card",
+            "storage", "guarantee_program","sales_perks", "payment_perks"
+        ]
+        if len(main_query_lower.split()) < 5:
+            function = partial_ratio
+        else:
+            function = token_sort_ratio
+            
+        combined_text = " ".join([convert_to_string(meta.get(field, "")) for field in text_fields])
+        meta["combined_text"] = combined_text
+        matches = process.extract(
+            query=main_query_lower,
+            choices=meta["combined_text"],
+            scorer=function,
+            limit=None
+        )
+        best_matches = [match for match in matches if match[1] > 60]
 
-            if best_matches:
-                fuzzy_score_val = max(best_matches, key=lambda x: x[1])[1]
-            else:
-                fuzzy_score_val = 0
-            if fuzzy_score_val < 95:
-                cos_score = check_similarity(main_query_lower, [combined_text])
-            else:
-                cos_score = 0
-            total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
+        if best_matches:
+            fuzzy_score_val = max(best_matches, key=lambda x: x[1])[1]
+        else:
+            fuzzy_score_val = 0
+        if fuzzy_score_val < 95:
+            cos_score = check_similarity(main_query_lower, [combined_text])
+        else:
+            cos_score = 0
+        total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
 
         if has_brands:
             doc_brand = meta.get("brand", "").lower()
@@ -192,11 +190,13 @@ def recommend_system(
             best_brand_score = best_match[1] if best_match else 0
 
             if best_brand_score >= 90:
-                total_score += recommendation_config.BRAND_MATCH_BOOST
-            elif best_brand_score >= 70:
-                total_score += recommendation_config.BRAND_MATCH_BOOST * 0.7
+                total_score += recommendation_config.BRAND_MATCH_STRONG
+            elif best_brand_score >= 75:
+                total_score += recommendation_config.BRAND_MATCH_MEDIUM
             elif best_brand_score >= 50:
-                total_score += recommendation_config.BRAND_MATCH_BOOST * 0.4
+                total_score += recommendation_config.BRAND_MATCH_WEAK
+            else:
+                total_score += recommendation_config.BRAND_MISMATCH_PENALTY
                 
         if has_price_input:
             try:
@@ -219,12 +219,11 @@ def recommend_system(
 
         matched_docs.append({
             "doc": doc,
-            "score": total_score,
-            "brand": meta.get("brand", ""),
-            "price": sale_price
+            "score": total_score
         })
 
-    top_match_count = recommendation_config.MAX_RESULTS
+
+    top_match_count = recommendation_config.get_max_results(type)
     top_matches = heapq.nlargest(top_match_count, matched_docs, key=lambda x: x["score"])
     
     top_device_names = []
@@ -405,7 +404,7 @@ def order_purchase(
 
         # Send email confirmation
         if email:
-            email_subject = "Your FPT Shop Order Confirmation & Temporary Password"
+            email_subject = "Your FPT Shop Order Confirmation"
             email_body = f"""
                         Kính gửi {customer_name},
 
@@ -421,7 +420,7 @@ def order_purchase(
                         - Địa chỉ giao hàng: {address}
                         - Số điện thoại: {customer_phone}
                         - Trạng thái đơn hàng: Đang xử lý
-                        - Thời gian đặt hàng: {time}
+                        - Thời gian nhận hàng: {time}
 
                         💳 Số tiền cần thanh toán: {order_price}
 
@@ -458,7 +457,7 @@ def order_purchase(
                         - Shipping Address: {address}
                         - Phone Number: {customer_phone}
                         - Order Status: Processing
-                        - Reservation Time: {time}
+                        - Shipping Time: {time}
 
                         💳 Amount Due: {order_price}
 

@@ -28,7 +28,7 @@ class RegisterRequest(BaseModel):
     
 
 class LoginRequest(BaseModel):
-    customer_name: str
+    customer_name_or_email: str
     password: str
 
 class AuthResponse(BaseModel):

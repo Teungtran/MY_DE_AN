@@ -308,8 +308,23 @@ class RecommendSystem(BaseModel):
 
 
 class RecommendationConfig:
-    MAX_RESULTS = 5
-    BRAND_MATCH_BOOST = 25
+    DEFAULT_RESULTS = 4  
+    MAX_RESULTS_BY_TYPE = {
+        "phone": 5,
+        "laptop/pc": 5,
+        "earphone": 4,
+        "mouse": 3,
+        "keyboard": 4,
+    } 
+    BRAND_MATCH_STRONG = 35
+    BRAND_MATCH_MEDIUM = 25
+    BRAND_MATCH_WEAK = 15
+    BRAND_MISMATCH_PENALTY = -10
     PRICE_RANGE_MATCH_BOOST = 25
     FUZZY_WEIGHT = 0.4
     COSINE_WEIGHT = 0.6
+    @classmethod
+    def get_max_results(cls, type_):
+        if not type_:
+            return cls.DEFAULT_RESULTS
+        return cls.MAX_RESULTS_BY_TYPE.get(type_.lower(), cls.DEFAULT_RESULTS)

@@ -9,7 +9,7 @@ import re
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import List, Optional
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import bcrypt
 from .login_schema import RegisterRequest, LoginRequest, AuthResponse, PasswordChangeRequest
 from utils.email import send_email
@@ -47,6 +47,8 @@ def is_valid_password(password: str) -> bool:
 
 def is_valid_email(email: str) -> bool:
     """Validate email address format"""
+    if not email:
+        return False
     pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
     return bool(re.match(pattern, email))
 
@@ -62,9 +64,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.now() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now() + timedelta(minutes=15)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
@@ -72,14 +74,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """Verify JWT token"""
     try:
+        # Debug logging
+        print(f"Received token: {credentials.credentials[:50]}...")
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        print(f"Decoded payload: {payload}")
         user_id: str = payload.get("sub")
         if user_id is None:
+            print("No user_id found in token payload")
             raise HTTPException(status_code=401, detail="Invalid token")
+        print(f"Extracted user_id: {user_id}")
         return user_id
-    except jwt.PyJWTError:
+    except jwt.ExpiredSignatureError:
+        print("Token has expired")
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.PyJWTError as e:
+        print(f"JWT Error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
-
 
 def check_phone_exists(phone: str, db: Session) -> bool:
     """Check if phone number already exists in database"""
@@ -91,19 +101,25 @@ def check_email_exists(email: str, db: Session) -> bool:
 
 def login(identifier: str, password: str, db: Session):
     """Login user with password verification"""
-    user = db.query(CustomerInfo).filter(
-        (CustomerInfo.customer_name == identifier) | (CustomerInfo.email == identifier)
-    ).first()
-    if not is_valid_email(CustomerInfo.email):
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid email"
-        )
+
+    if '@' in identifier:
+        # Treat identifier as email and validate
+        if not is_valid_email(identifier):
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid email format"
+            )
+        user = db.query(CustomerInfo).filter(CustomerInfo.email == identifier).first()
+    else:
+        # Treat identifier as username
+        user = db.query(CustomerInfo).filter(CustomerInfo.customer_name == identifier).first()
+
     if user and verify_password(password, user.password):
         return {
             "user_id": user.user_id,
             "email": user.email
         }
+
     return None
 
 def register_new_user(
@@ -124,7 +140,7 @@ def register_new_user(
             status_code=400,
             detail="Password must be at least 10 characters long, include 1 uppercase letter, 1 number, and 1 special character"
         )
-    if not is_valid_email(email):
+    if email and not is_valid_email(email):
         raise HTTPException(
             status_code=400,
             detail="Invalid email"
@@ -169,22 +185,23 @@ def register_new_user(
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-
 def get_current_user(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
     """Get current authenticated user details"""
+    print(f"Getting current user for user_id: {user_id}")
     user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
     
     if not user:
+        print(f"User not found in database for user_id: {user_id}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found"
         )
     
+    print(f"User found: {user.user_id}")
     return {
         "user_id": user.user_id,
         "email": user.email
     }
-
 
 @auth.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest, db: Session = Depends(get_db)):
@@ -223,7 +240,14 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
 @auth.post("/login", response_model=AuthResponse)
 async def login_user(request: LoginRequest, db: Session = Depends(get_db)):
     """Login user"""
-    user = login(request.customer_name, request.password, db)
+    print(f"Login request received: {request}")
+    
+    identifier = getattr(request, 'customer_name_or_email', None) or getattr(request, 'customer_name', None)
+    
+    if not identifier:
+        raise HTTPException(status_code=400, detail="Username or email is required")
+    
+    user = login(identifier, request.password, db)
     
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -232,6 +256,8 @@ async def login_user(request: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user["user_id"]}, expires_delta=access_token_expires
     )
+    
+    print(f"Login successful for user: {user['user_id']}")
     
     return AuthResponse(
         access_token=access_token,
@@ -292,3 +318,14 @@ async def protected_route(current_user: dict = Depends(get_current_user)):
     """Example protected route"""
     return {"message": f"Hello user {current_user['user_id']}!", "user_id": current_user["user_id"]}
 
+# Debug endpoint to test tokens
+@auth.get("/debug-token")
+async def debug_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    """Debug token endpoint"""
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return {"status": "valid", "payload": payload}
+    except jwt.ExpiredSignatureError:
+        return {"status": "expired"}
+    except jwt.PyJWTError as e:
+        return {"status": "invalid", "error": str(e)}
