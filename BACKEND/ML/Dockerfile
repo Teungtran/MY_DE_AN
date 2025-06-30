@@ -1,25 +1,40 @@
-FROM python:3.11-slim
+FROM python:3.11.9
 
+# Set the working directory
 WORKDIR /app
 
-# Copy the entire project
-COPY . .
+# Create necessary directories
+RUN mkdir -p /app/artifacts/data_ingestion \
+    /app/artifacts/data_version \
+    /app/artifacts/model_version \
+    /app/artifacts/evaluation \
+    /app/plots \
+    /app/logs
 
-# Install dependencies from requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Install uv
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    ln -s /root/.cargo/bin/uv /usr/local/bin/uv
 
-# Create necessary directory structure
-RUN mkdir -p artifacts/data_ingestion \
-    artifacts/data_version \
-    artifacts/model_version \
-    artifacts/evaluation \ 
-    plots
+# Copy app code
+COPY ./src /app/src
+COPY ./controller /app/controller
+COPY ./config /app/config
+COPY ./main.py /app/main.py
+COPY ./run_pipeline.py /app/run_pipeline.py
+COPY ./requirements.txt /app/requirements.txt
 
-# Set Python path
-ENV PYTHONPATH=/app:${PYTHONPATH}
+# Copy .env.docker if it exists, otherwise copy .env
+COPY ./.env.docker* ./.env* /app/
 
-# Expose the port the app runs on
+# Install dependencies
+RUN uv pip install --no-cache -r /app/requirements.txt --system
+
+# Expose FastAPI default port
 EXPOSE 8888
 
-# Default command to run the FastAPI app
+# Set environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Run FastAPI using uvicorn
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8888"] 

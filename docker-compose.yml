@@ -1,41 +1,105 @@
 version: '3.8'
 
 services:
-  be_preprocess:
+  auth:
     build:
-      context: ./BE_PREPROCESS
+      context: ./BACKEND/AUTH
       dockerfile: Dockerfile
-    ports:
-      - "8002:8002"
-    volumes:
-      - ./BE_PREPROCESS/app:/code/app
-      - ./BE_PREPROCESS/config:/code/config
-      - ./BE_PREPROCESS/logs:/code/logs
-    environment:
-      - PYTHONUNBUFFERED=1 # For seeing print statements in logs immediately
-
-  be_chatbot:
-    build:
-      context: ./BE_CHATBOT
-      dockerfile: Dockerfile
-    ports:
-      - "8090:8090"
-    volumes:
-      - ./BE_CHATBOT/app:/code/app
-      - ./BE_CHATBOT/config:/code/config
-      - ./BE_CHATBOT/logs:/code/logs
-    environment:
-      - PYTHONUNBUFFERED=1
-
-  be_admin:
-    build:
-      context: ./BE_ADMIN
-      dockerfile: Dockerfile
+    container_name: de_an_auth
     ports:
       - "8888:8888"
     volumes:
-      - ./BE_ADMIN/app:/code/app
-      - ./BE_ADMIN/config:/code/config
-      - ./BE_ADMIN/logs:/code/logs
+      - ./BACKEND/AUTH/app:/code/app
+      - ./BACKEND/AUTH/config:/code/config
+      - ./BACKEND/AUTH/logs:/code/logs
     environment:
-      - PYTHONUNBUFFERED=1 
+      - PYTHONPATH=/code
+      - PYTHONUNBUFFERED=1
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
+  be_admin:
+    build:
+      context: ./BACKEND/BE_ADMIN
+      dockerfile: Dockerfile
+    container_name: de_an_admin
+    ports:
+      - "8091:8888"
+    volumes:
+      - ./BACKEND/BE_ADMIN/app:/code/app
+      - ./BACKEND/BE_ADMIN/config:/code/config
+      - ./BACKEND/BE_ADMIN/logs:/code/logs
+    environment:
+      - PYTHONPATH=/code
+      - PYTHONUNBUFFERED=1
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
+  be_chatbot:
+    build:
+      context: ./BACKEND/BE_CHATBOT
+      dockerfile: Dockerfile
+    container_name: de_an_chatbot
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./BACKEND/BE_CHATBOT/app:/code/app
+      - ./BACKEND/BE_CHATBOT/config:/code/config
+      - ./BACKEND/BE_CHATBOT/logs:/code/logs
+    environment:
+      - PYTHONPATH=/code
+      - PYTHONUNBUFFERED=1
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
+  be_preprocess:
+    build:
+      context: ./BACKEND/BE_PREPROCESS
+      dockerfile: Dockerfile
+    container_name: de_an_preprocess
+    ports:
+      - "8092:8002"
+    volumes:
+      - ./BACKEND/BE_PREPROCESS/app:/code/app
+      - ./BACKEND/BE_PREPROCESS/config:/code/config
+      - ./BACKEND/BE_PREPROCESS/logs:/code/logs
+    environment:
+      - PYTHONPATH=/code
+      - PYTHONUNBUFFERED=1
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
+  ml:
+    build:
+      context: ./BACKEND/ML
+      dockerfile: Dockerfile
+    container_name: de_an_ml
+    ports:
+      - "8093:8888"
+    volumes:
+      - ./BACKEND/ML/artifacts:/app/artifacts
+      - ./BACKEND/ML/logs:/app/logs
+      - ./BACKEND/ML/plots:/app/plots
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
+networks:
+  de_an_network:
+    driver: bridge
+
+volumes:
+  auth_logs:
+  admin_logs:
+  chatbot_logs:
+  preprocess_logs:
+  ml_artifacts:
+  ml_logs:
+  ml_plots: 

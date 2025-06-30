@@ -3,8 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import mlflow
 from dotenv import load_dotenv
-from controller.prediction import router as prediction_router
-from controller.retraining import router as retraining_router
+from BACKEND.ML.controller.churn.prediction import router as prediction_router
+from BACKEND.ML.controller.churn.retraining import router as retraining_router
 
 # Load environment variables
 load_dotenv()
