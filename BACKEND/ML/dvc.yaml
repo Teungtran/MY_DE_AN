@@ -1,0 +1,26 @@
+stages:
+  training_pipeline:
+    cmd: python main.py
+    deps:
+      - main.py
+      - src/Churn/pipeline/main_pipeline.py
+      - src/Churn/pipeline/prepare_data.py
+      - src/Churn/pipeline/prepare_model.py
+      - src/Churn/pipeline/train_evaluation.py
+      - src/Churn/pipeline/cleanup.py
+      - src/Churn/components/
+      - config/config.yaml
+      - artifacts/data_ingestion/input_raw.csv
+    outs:
+      - artifacts/data_version/
+      - artifacts/model_version/
+      - artifacts/evaluation/
+  cloud_storage_push:
+    cmd: python -m src.Churn.pipeline.cloud_storage_push
+    deps:
+      - src/Churn/pipeline/cloud_storage_push.py
+      - src/Churn/components/cloud_storage_push.py
+      - src/Churn/utils/cloud_storage.py
+      - config/config.yaml
+      - artifacts/data_version/
+      - artifacts/evaluation/
