@@ -6,6 +6,7 @@ from ..shop_graph.shop_agent import shop_sensitive_tools,shop_safe_tools
 from ..it_graph.it_agent import it_sensitive_tools,it_safe_tools
 from ..appointment_graph.appointment_agent import appointment_sensitive_tools,appointment_safe_tools
 from ..rag_tool.tools.policy_tool import RAG_Agent
+from ..web_crawler.tool import url_extraction, url_followup
 
 from services.mongo_checkpoint import create_checkpointer
 from utils.logging.logger import get_logger
@@ -40,6 +41,9 @@ def setup_agentic_graph():
     
     # RAG agent node
     builder.add_node("rag_agent_node", create_tool_node_with_fallback([RAG_Agent]))
+    # URL handle nodes
+    builder.add_node("url_agent_node", create_tool_node_with_fallback([url_extraction]))
+    builder.add_node("url_followup_node", create_tool_node_with_fallback([url_followup]))
     
     # Add edges
     builder.add_edge(START, "primary_assistant")
@@ -60,13 +64,14 @@ def setup_agentic_graph():
     builder.add_edge("update_appointment_sensitive_tools", "call_appointment_agent")
     builder.add_edge("update_appointment_safe_tools", "call_appointment_agent")
     
-    # RAG agent edges
     builder.add_edge("rag_agent_node", "primary_assistant")
+    builder.add_edge("url_agent_node", "primary_assistant")
+    builder.add_edge("url_followup_node", "primary_assistant")
 
     builder.add_conditional_edges(
         "primary_assistant",
         route_primary_assistant,
-        ["enter_shop_node", "enter_it_node", "enter_appointment_node", "rag_agent_node", END],
+        ["enter_shop_node", "enter_it_node", "enter_appointment_node", "rag_agent_node", "url_agent_node", "url_followup_node", END],
     )
 
     builder.add_conditional_edges(

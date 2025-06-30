@@ -8,8 +8,8 @@ from typing import Optional, Dict
 from fastapi import APIRouter, HTTPException,Request
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from langdetect import detect
-from orchestrator.graph.main_graph import setup_agentic_graph
-from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
+from orchestrator.main_agent.main_graph import setup_agentic_graph
+from orchestrator.main_agent.tools.support_nodes import format_message,extract_content_from_response
 from sse_starlette.sse import EventSourceResponse
 
 from utils.logging.logger import get_logger

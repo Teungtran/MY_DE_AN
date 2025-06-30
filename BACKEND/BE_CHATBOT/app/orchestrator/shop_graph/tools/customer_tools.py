@@ -386,7 +386,7 @@ def order_purchase(
                 status="Processing",
                 time_reservation=time,
                 user_id=user_id,
-                price=item.price * quantity_int  # Calculate price based on item price and quantity
+                price=item.price * quantity_int 
             )
             
             # Add the order to the database
@@ -415,7 +415,7 @@ def order_purchase(
                         🛒 Thông tin đơn hàng
                         - Tên thiết bị: {device_name}
                         - Số lượng: {quantity_int}
-                        - Phương thức vận chuyển: {shipping}
+                        - Ship tận nơi : {shipping}
                         - Phương thức thanh toán: {payment}
                         - Địa chỉ giao hàng: {address}
                         - Số điện thoại: {customer_phone}

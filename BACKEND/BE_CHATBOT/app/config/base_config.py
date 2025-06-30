@@ -23,7 +23,10 @@ def ensure_env_loaded():
     if not _env_loaded:
         load_dotenv(override=True)
         _env_loaded = True
-
+class URLCrawlConfig(BaseModel):
+    docintel_endpoint: str = Field(default_factory=from_env("DOCINTEL_ENDPOINT"))
+    base_url: str = Field(default_factory=from_env("BASE_URL"))
+    
 class EmbeddingConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
     model: Optional[str] = Field(default="text-embedding-3-small")
@@ -120,6 +123,7 @@ class BaseConfiguration(BaseModel):
     _sql_config = None
     _auth_config = None
     _email_config = None
+    _url_config = None
     @property
     def chat_model_config(self) -> Union[OpenAIConfig]:
         if self._chat_model_config is None:
@@ -130,6 +134,11 @@ class BaseConfiguration(BaseModel):
         if self._sql_config is None:
             self._sql_config = SQLConfig()
         return self._sql_config
+    @property
+    def url_config(self) -> Union[URLCrawlConfig]:
+        if self._url_config is None:
+            self._url_config = URLCrawlConfig()
+        return self._url_config
     @property
     def email_config(self) -> Union[EmailConfig]:
         if self._email_config is None:

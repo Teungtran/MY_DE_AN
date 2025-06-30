@@ -6,6 +6,9 @@ from langchain_community.utilities import SQLDatabase
 from langchain_core.runnables import RunnableLambda
 from ..state import AgenticState
 from langgraph.prebuilt import ToolNode
+from typing import Callable
+
+
 def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable:
     def entry_node(state: AgenticState) -> dict:
         tool_call_id = state["messages"][-1].tool_calls[0]["id"]
@@ -15,7 +18,7 @@ def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable:
                     content=f"The assistant is now the {assistant_name}. Reflect on the above conversation between the host assistant and the user."
                     f" The user's intent is unsatisfied. Use the provided tools to assist the user. Remember, you are {assistant_name},"
                     " Please keep going until the user's query is completely resolve, before ending your turn"
-                    " and the booking, searching, other actions is not complete until after you have successfully invoked the appropriate tool."
+                    " and the ordering, searching, other actions is not complete until after you have successfully invoked the appropriate tool."
                     " If the user changes their mind or needs help for other tasks, call the CompleteOrEscalate function to let the primary host assistant take control."
                     " Do not mention who you are - just act as the proxy for the assistant.",
                     tool_call_id=tool_call_id,

@@ -12,6 +12,8 @@ from factories.chat_factory import create_chat_model
 from ..shop_graph.shop_agent import create_shop_tool, shop_safe_tools
 from ..shop_graph.state import ToShopAssistant
 from ..rag_tool.tools.policy_tool import RAG_Agent
+from ..web_crawler.tool import url_extraction, url_followup
+
 from ..appointment_graph.state import ToAppointmentAssistant
 from ..appointment_graph.appointment_agent  import create_appointment_tool , appointment_safe_tools
 from ..it_graph.state import ToITAssistant
@@ -33,7 +35,7 @@ else:
     llm = create_chat_model(chat_config)
     
 def assistant_runnable_with_user_info(state):
-    result = (primary_assistant_prompt | llm.bind_tools([ToShopAssistant, ToAppointmentAssistant, ToITAssistant, RAG_Agent])).invoke(state)
+    result = (primary_assistant_prompt | llm.bind_tools([ToShopAssistant, ToAppointmentAssistant, ToITAssistant, RAG_Agent, url_extraction, url_followup])).invoke(state)
     return inject_user_info(state, result)
 
 MAIN_SYSTEM_MESSAGES = [
@@ -65,6 +67,10 @@ def route_primary_assistant(state: AgenticState):
             return "enter_it_node"
         elif tool_name == "rag_agent":
             return "rag_agent_node"
+        elif tool_name == "url_extraction":
+            return "url_agent_node"
+        elif tool_name == "url_followup":
+            return "url_followup_node"
         return END
     
     return END

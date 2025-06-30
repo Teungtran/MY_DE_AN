@@ -1,5 +1,5 @@
 from pydantic import BaseModel,EmailStr,field_validator
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal, Optional, List
 from datetime import datetime
 
 
@@ -266,8 +266,23 @@ class TrackTicket(BaseModel):
                 "ticket_id": "TICKET-A1B2C3D4-20250610153000"
             }
         }
-recommended_devices_cache = []
+class UrlExtraction(BaseModel):
+    """extract information from url based on user input"""
 
+    user_input: Annotated[str, "User questions for url extraction"]
+    urls: Annotated[List[str], "list of urls to extract information from"]
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_input": "What is the product of FPT Shop?",
+                "urls": "https://fptshop.com.vn"
+            },
+            "example2": {
+                "user_input": "Compare these two products",
+                "urls": ["https://fptshop.com.vn/product1", "https://fptshop.com.vn/product2"]
+            }
+        }
 class RecommendSystem(BaseModel):
     """Recommend products based on user input and preferences."""
 
@@ -314,7 +329,7 @@ class RecommendationConfig:
         "laptop/pc": 5,
         "earphone": 4,
         "mouse": 3,
-        "keyboard": 4,
+        "keyboard": 3,
     } 
     BRAND_MATCH_STRONG = 35
     BRAND_MATCH_MEDIUM = 25
