@@ -9,8 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class CloudStoragePush:
-    def __init__(self, config: CloudStoragePushConfig):
+    def __init__(self, config: CloudStoragePushConfig, model_name="churn"):
         self.config = config
+        self.model_name = model_name
         self.s3_client = boto3.client(
             's3',
             aws_access_key_id=config.aws_key_id,
@@ -61,7 +62,7 @@ class CloudStoragePush:
     def push_to_cloud_storage(self):
         """Push all artifacts to S3 cloud storage."""
         try:
-            logger.info("Starting cloud storage push process...")
+            logger.info(f"Starting cloud storage push process for {self.model_name} model...")
 
             if not self.validate_bucket_exists():
                 raise Exception(
@@ -73,16 +74,16 @@ class CloudStoragePush:
 
             files_to_upload = self.get_files_to_upload()
             if not files_to_upload:
-                logger.warning("No files found to upload to cloud storage.")
+                logger.warning(f"No files found to upload to cloud storage for {self.model_name} model.")
                 return
 
-            logger.info(f"Found {len(files_to_upload)} files to upload to cloud storage.")
+            logger.info(f"Found {len(files_to_upload)} files to upload to cloud storage for {self.model_name} model.")
 
             with ThreadPoolExecutor(max_workers=8) as executor:
                 futures = {}
                 for file_path in files_to_upload:
                     rel_path = os.path.relpath(file_path, self.config.root_dir)
-                    object_key = f"churn_data_store/{rel_path.replace(os.sep, '/')}"
+                    object_key = f"{self.model_name}_data_store/{rel_path.replace(os.sep, '/')}"
                     futures[executor.submit(self.upload_file_to_s3, file_path, object_key)] = file_path
 
                 for future in as_completed(futures):
@@ -91,10 +92,10 @@ class CloudStoragePush:
                     if error:
                         logger.error(f"Failed to upload {uploaded_file}: {error}")
                     else:
-                        logger.info(f"Uploaded {uploaded_file} to bucket {self.config.bucket_name}.")
+                        logger.info(f"Uploaded {uploaded_file} to bucket {self.config.bucket_name} in {self.model_name}_data_store/")
 
-            logger.info(f"Successfully uploaded {len(files_to_upload)} files to S3 bucket: {self.config.bucket_name}")
+            logger.info(f"Successfully uploaded {len(files_to_upload)} files for {self.model_name} model to S3 bucket: {self.config.bucket_name}")
 
         except Exception as e:
-            logger.error(f"Failed to push to cloud storage: {e}")
+            logger.error(f"Failed to push {self.model_name} model data to cloud storage: {e}")
             raise e

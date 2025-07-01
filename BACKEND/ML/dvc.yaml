@@ -1,6 +1,7 @@
 stages:
-  training_pipeline:
-    cmd: python main.py
+  # Churn model pipeline
+  churn_training_pipeline:
+    cmd: python main.py --model churn
     deps:
       - main.py
       - src/Churn/pipeline/main_pipeline.py
@@ -10,17 +11,84 @@ stages:
       - src/Churn/pipeline/cleanup.py
       - src/Churn/components/
       - config/config.yaml
-      - artifacts/data_ingestion/input_raw.csv
+      - artifacts/churn/data_ingestion/input_raw.csv
     outs:
-      - artifacts/data_version/
-      - artifacts/model_version/
-      - artifacts/evaluation/
-  cloud_storage_push:
-    cmd: python -m src.Churn.pipeline.cloud_storage_push
+      - artifacts/churn/data_version/
+      - artifacts/churn/model_version/
+      - artifacts/churn/evaluation/
+  
+  churn_cloud_storage_push:
+    cmd: python -m src.Churn.pipeline.cloud_storage_push --model churn
     deps:
       - src/Churn/pipeline/cloud_storage_push.py
       - src/Churn/components/cloud_storage_push.py
       - src/Churn/utils/cloud_storage.py
       - config/config.yaml
-      - artifacts/data_version/
-      - artifacts/evaluation/
+      - artifacts/churn/data_version/
+      - artifacts/churn/evaluation/
+
+  # Sentiment model pipeline
+  sentiment_training_pipeline:
+    cmd: python main.py --model sentiment
+    deps:
+      - main.py
+      - src/Sentiment/pipeline/
+      - src/Sentiment/components/
+      - config/config.yaml
+      - artifacts/sentiment/data_ingestion/input_raw.csv
+    outs:
+      - artifacts/sentiment/data_version/
+      - artifacts/sentiment/model_version/
+      - artifacts/sentiment/evaluation/
+  
+  sentiment_cloud_storage_push:
+    cmd: python -m src.Sentiment.pipeline.cloud_storage_push --model sentiment
+    deps:
+      - src/Sentiment/pipeline/cloud_storage_push.py
+      - config/config.yaml
+      - artifacts/sentiment/data_version/
+      - artifacts/sentiment/evaluation/
+
+  # Segmentation model pipeline
+  segmentation_training_pipeline:
+    cmd: python main.py --model segmentation
+    deps:
+      - main.py
+      - src/segmentation/pipeline/
+      - src/segmentation/components/
+      - config/config.yaml
+      - artifacts/segmentation/data_ingestion/input_raw.csv
+    outs:
+      - artifacts/segmentation/data_version/
+      - artifacts/segmentation/model_version/
+      - artifacts/segmentation/evaluation/
+  
+  segmentation_cloud_storage_push:
+    cmd: python -m src.segmentation.pipeline.cloud_storage_push --model segmentation
+    deps:
+      - src/segmentation/pipeline/cloud_storage_push.py
+      - config/config.yaml
+      - artifacts/segmentation/data_version/
+      - artifacts/segmentation/evaluation/
+
+  # TimeSeries model pipeline
+  timeseries_training_pipeline:
+    cmd: python main.py --model timeseries
+    deps:
+      - main.py
+      - src/TimeSeries/pipeline/
+      - src/TimeSeries/components/
+      - config/config.yaml
+      - artifacts/timeseries/data_ingestion/input_raw.csv
+    outs:
+      - artifacts/timeseries/data_version/
+      - artifacts/timeseries/model_version/
+      - artifacts/timeseries/evaluation/
+  
+  timeseries_cloud_storage_push:
+    cmd: python -m src.TimeSeries.pipeline.cloud_storage_push --model timeseries
+    deps:
+      - src/TimeSeries/pipeline/cloud_storage_push.py
+      - config/config.yaml
+      - artifacts/timeseries/data_version/
+      - artifacts/timeseries/evaluation/

@@ -1,30 +1,17 @@
-# Churn MLOps Configuration
-# 
-# Cloud storage functionality is REQUIRED:
-# 1. Create an AWS S3 bucket in your AWS account
-# 2. Set up AWS credentials in your environment (.env file)
-#    - AWS_ACCESS_KEY_ID
-#    - AWS_SECRET_ACCESS_KEY
-#    - AWS_REGION
-# 3. Update the bucket_name below with your actual bucket name
-# 4. Ensure the user has 's3:PutObject' permission on the bucket
-# 
-# Cloud storage will upload ONLY data_version and evaluation artifacts.
-# Model files and training artifacts remain local for security and storage efficiency.
-# If cloud storage push fails, the entire workflow will fail.
-
 artifacts_root: artifacts
-data_ingestion:
-  root_dir: artifacts/data_ingestion
-  data_version_dir: artifacts/data_version
-  local_data_file: artifacts/data_ingestion/input_raw.csv
+
+# Churn model configuration
+churn_data_ingestion:
+  root_dir: artifacts/churn/data_ingestion
+  data_version_dir: artifacts/churn/data_version
+  local_data_file: artifacts/churn/data_ingestion/input_raw.csv
   test_size: 0.2
   random_state: 42
-  bucket_name: churndataversion
+  bucket_name: ml-dataversion
 
-prepare_base_model:
-  model_version_dir: artifacts/model_version
-  data_version_dir: artifacts/data_version
+churn_prepare_base_model:
+  model_version_dir: artifacts/churn/model_version
+  data_version_dir: artifacts/churn/data_version
   criterion: entropy
   max_depth: 30 
   max_features: log2
@@ -32,23 +19,128 @@ prepare_base_model:
   n_estimators: 500
   random_state: 42
 
-training:
-  model_version_dir: artifacts/model_version
-  data_version_dir: artifacts/data_version
+churn_training:
+  model_version_dir: artifacts/churn/model_version
+  data_version_dir: artifacts/churn/data_version
 
-evaluation:
-  model_version_dir: artifacts/model_version
-  data_version_dir: artifacts/data_version
-  evaluation_dir: artifacts/evaluation
+churn_evaluation:
+  model_version_dir: artifacts/churn/model_version
+  data_version_dir: artifacts/churn/data_version
+  evaluation_dir: artifacts/churn/evaluation
 
-cloud_storage_push:
+churn_cloud_storage_push:
   root_dir: artifacts
-  bucket_name: churndataversion
-  data_version_dir: artifacts/data_version  
-  evaluation_dir: artifacts/evaluation 
+  bucket_name: ml-dataversion
+  data_version_dir: artifacts/churn/data_version  
+  evaluation_dir: artifacts/churn/evaluation 
 
-mlflow_config:
+churn_mlflow_config:
   dagshub_username: Teungtran
   dagshub_repo_name: churn_mlops
   tracking_uri: https://dagshub.com/Teungtran/churn_mlops.mlflow
-  experiment_name: Churn_model_cycle
+  experiment_name: Churn_model_training_cycle
+
+# Sentiment model configuration
+sentiment_data_ingestion:
+  root_dir: artifacts/sentiment/data_ingestion
+  data_version_dir: artifacts/sentiment/data_version
+  local_data_file: artifacts/sentiment/data_ingestion/input_raw.csv
+  test_size: 0.2
+  random_state: 42
+  bucket_name: ml-dataversion
+
+sentiment_prepare_base_model:
+  model_version_dir: artifacts/sentiment/model_version
+  data_version_dir: artifacts/sentiment/data_version
+  random_state: 42
+
+sentiment_training:
+  model_version_dir: artifacts/sentiment/model_version
+  data_version_dir: artifacts/sentiment/data_version
+
+sentiment_evaluation:
+  model_version_dir: artifacts/sentiment/model_version
+  data_version_dir: artifacts/sentiment/data_version
+  evaluation_dir: artifacts/sentiment/evaluation
+
+sentiment_cloud_storage_push:
+  root_dir: artifacts
+  bucket_name: sentimentdataversion
+  data_version_dir: artifacts/sentiment/data_version  
+  evaluation_dir: artifacts/sentiment/evaluation 
+
+sentiment_mlflow_config:
+  dagshub_username: Teungtran
+  dagshub_repo_name: sentiment_mlops
+  tracking_uri: https://dagshub.com/Teungtran/sentiment_mlops.mlflow
+  experiment_name: Sentiment_model_training_cycle
+
+# Segmentation model configuration
+segmentation_data_ingestion:
+  root_dir: artifacts/segmentation/data_ingestion
+  data_version_dir: artifacts/segmentation/data_version
+  local_data_file: artifacts/segmentation/data_ingestion/input_raw.csv
+  test_size: 0.2
+  random_state: 42
+  bucket_name: ml-dataversion
+
+segmentation_prepare_base_model:
+  model_version_dir: artifacts/segmentation/model_version
+  data_version_dir: artifacts/segmentation/data_version
+  random_state: 42
+
+segmentation_training:
+  model_version_dir: artifacts/segmentation/model_version
+  data_version_dir: artifacts/segmentation/data_version
+
+segmentation_evaluation:
+  model_version_dir: artifacts/segmentation/model_version
+  data_version_dir: artifacts/segmentation/data_version
+  evaluation_dir: artifacts/segmentation/evaluation
+
+segmentation_cloud_storage_push:
+  root_dir: artifacts
+  bucket_name: segmentationdataversion
+  data_version_dir: artifacts/segmentation/data_version  
+  evaluation_dir: artifacts/segmentation/evaluation 
+
+segmentation_mlflow_config:
+  dagshub_username: Teungtran
+  dagshub_repo_name: segmentation_mlops
+  tracking_uri: https://dagshub.com/Teungtran/segmentation_mlops.mlflow
+  experiment_name: Segmentation_model_training_cycle
+
+# TimeSeries model configuration
+timeseries_data_ingestion:
+  root_dir: artifacts/timeseries/data_ingestion
+  data_version_dir: artifacts/timeseries/data_version
+  local_data_file: artifacts/timeseries/data_ingestion/input_raw.csv
+  test_size: 0.2
+  random_state: 42
+  bucket_name: ml-dataversion
+
+timeseries_prepare_base_model:
+  model_version_dir: artifacts/timeseries/model_version
+  data_version_dir: artifacts/timeseries/data_version
+  random_state: 42
+
+timeseries_training:
+  model_version_dir: artifacts/timeseries/model_version
+  data_version_dir: artifacts/timeseries/data_version
+
+timeseries_evaluation:
+  model_version_dir: artifacts/timeseries/model_version
+  data_version_dir: artifacts/timeseries/data_version
+  evaluation_dir: artifacts/timeseries/evaluation
+
+timeseries_cloud_storage_push:
+  root_dir: artifacts
+  bucket_name: ml-dataversion
+  data_version_dir: artifacts/timeseries/data_version  
+  evaluation_dir: artifacts/timeseries/evaluation 
+
+timeseries_mlflow_config:
+  dagshub_username: Teungtran
+  dagshub_repo_name: timeseries_mlops
+  tracking_uri: https://dagshub.com/Teungtran/timeseries_mlops.mlflow
+  experiment_name: TimeSeries_model_training_cycle
