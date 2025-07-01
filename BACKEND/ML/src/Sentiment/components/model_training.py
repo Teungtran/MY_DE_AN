@@ -32,6 +32,7 @@ class TrainAndEvaluateModel:
         logger.info(f"Logging model to MLflow as {model_name}")
         try:
             # Log the model to the current run
+            mlflow.sklearn.log_model(model, model_name)
             run_id = mlflow.active_run().info.run_id
             artifact_uri = f"runs:/{run_id}/{model_name}"
             

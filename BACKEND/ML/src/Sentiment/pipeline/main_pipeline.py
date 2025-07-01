@@ -14,7 +14,7 @@ from datetime import datetime
 
 class WorkflowRunner:
     def __init__(self):
-        self.config_manager = ConfigurationManager(model_name="churn")
+        self.config_manager = ConfigurationManager()
         self.uploaded_file = None
 
     def check_data_file_exists(self):
@@ -38,17 +38,15 @@ class WorkflowRunner:
         self.uploaded_file = uploaded_file
         
         try:
-            experiment_name = "Churn_model_training_cycle"
-            logger.info(f"MLflow configured with experiment: {experiment_name}")
-            
             mlflow_config = self.config_manager.get_mlflow_config()
+            logger.info(f"MLflow configured with experiment: {mlflow_config.experiment_name}")
             dagshub.init(
                 repo_owner=mlflow_config.dagshub_username,
                 repo_name=mlflow_config.dagshub_repo_name,
                 mlflow=True
             )
             mlflow.set_tracking_uri(mlflow_config.tracking_uri)
-            mlflow.set_experiment(experiment_name)
+            mlflow.set_experiment(mlflow_config.experiment_name)
         except Exception as e:
             logger.warning(f"MLflow configuration failed: {e}. Continuing without MLflow tracking.")
             mlflow_config = None
@@ -86,6 +84,8 @@ class WorkflowRunner:
             logger.info("STAGE 2: Model Preparation")
             logger.info("=" * 50)
             
+            # Pass mlflow_config even though we're using hardcoded experiment name
+            mlflow_config = self.config_manager.get_mlflow_config()
             model_prep = ModelPreparationPipeline(mlflow_config=mlflow_config)
             model, base_model_path, scaler_path, X_train_scaled, X_test_scaled = model_prep.main(
                 X_train=X_train,

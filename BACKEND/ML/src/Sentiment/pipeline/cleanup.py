@@ -8,18 +8,11 @@ def cleanup_temp_files():
     logger.info("=" * 50)
     logger.info("CLEANUP: Removing temporary versioned files")
     logger.info("=" * 50)
-    
-    config_manager = ConfigurationManager(model_name="churn")
-    
+    config_manager = ConfigurationManager()
+    data_version_dir = config_manager.config.data_ingestion.data_version_dir
+    evaluation_dir = config_manager.config.evaluation.evaluation_dir
+    data_ingestion_dir = config_manager.config.data_ingestion.root_dir
     try:
-        # Get configurations using the proper methods
-        data_ingestion_config = config_manager.get_data_ingestion_config()
-        evaluation_config = config_manager.get_evaluation_config()
-        
-        data_version_dir = data_ingestion_config.data_version_dir
-        evaluation_dir = evaluation_config.evaluation_dir
-        data_ingestion_dir = data_ingestion_config.root_dir
-        
         data_version_files = glob.glob(os.path.join(data_version_dir, "*_version_????????T??????.csv"))
         logger.info(f"Found {len(data_version_files)} timestamp-versioned data files to clean")
         

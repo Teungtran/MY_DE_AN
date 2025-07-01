@@ -3,7 +3,8 @@ from src.Churn.utils.logging import logger
 from pydantic import BaseModel, Field
 from langchain_core.utils import from_env
 from dotenv import load_dotenv
-
+from datetime import datetime
+import uuid
 
 from src.Churn.entity.config_entity import (
     DataIngestionConfig,
@@ -32,17 +33,13 @@ class CloudConfig(BaseModel):
 class ConfigurationManager:
     def __init__(
         self,
-        config_filepath=Path("config/config.yaml"),
-        model_name="churn"
+        config_filepath=Path("config/config.yaml")
     ):
         self.config = read_yaml(config_filepath)
-        self.model_name = model_name
         create_directories([self.config.artifacts_root])
         
     def get_mlflow_config(self) -> MLFlowConfig:
-        config_key = "churn_mlflow_config"
-            
-        config = getattr(self.config, config_key)
+        config = self.config.mlflow_config
         base_experiment_name = config.experiment_name
 
         mlflow_config = MLFlowConfig(
@@ -52,13 +49,11 @@ class ConfigurationManager:
             experiment_name=base_experiment_name
         )
 
-        logger.info(f"MLFlow configuration for {self.model_name}: {mlflow_config}")
+        logger.info(f"MLFlow configuration: {mlflow_config}")
         return mlflow_config
 
     def get_data_ingestion_config(self) -> DataIngestionConfig:
-        config_key = "churn_data_ingestion"
-            
-        config = getattr(self.config, config_key)
+        config = self.config.data_ingestion
         
         create_directories([config.root_dir, config.data_version_dir])
 
@@ -71,18 +66,14 @@ class ConfigurationManager:
             bucket_name=config.bucket_name
             )
 
-        logger.info(f"Data Ingestion config for {self.model_name}: {config}")
+        logger.info(f"Data Ingestion config: {config}")
         return data_ingestion_config
         
     def get_prepare_base_model_config(self) -> PrepareBaseModelConfig:
-        config_key = "churn_prepare_base_model"
-            
-        config = getattr(self.config, config_key)
+        config = self.config.prepare_base_model
         
         create_directories([config.model_version_dir, config.data_version_dir])
 
-
-        
         prepare_base_model_config = PrepareBaseModelConfig(
             model_version_dir=Path(config.model_version_dir),
             data_version_dir=Path(config.data_version_dir),
@@ -93,15 +84,13 @@ class ConfigurationManager:
             max_features=config.max_features,
             min_samples_leaf=config.min_samples_leaf
         )
-            
-    
 
-        logger.info(f"Prepare base model config for {self.model_name}: {config}")
+        logger.info(f"Prepare base model config: {config}")
         return prepare_base_model_config
 
+
     def get_training_config(self) -> TrainingConfig:
-        config_key = "churn_training" 
-        config = getattr(self.config, config_key)
+        config = self.config.training
         
         create_directories([config.model_version_dir, config.data_version_dir])
 
@@ -110,16 +99,11 @@ class ConfigurationManager:
             data_version_dir=Path(config.data_version_dir),
         )
 
-        logger.info(f"Training config for {self.model_name}: {config}")
+        logger.info(f"Training config: {config}")
         return training_config
 
     def get_evaluation_config(self) -> EvaluationConfig:
-        config_key = f"{self.model_name}_evaluation"
-        if not hasattr(self.config, config_key):
-            logger.warning(f"No specific evaluation config found for model {self.model_name}, using churn config")
-            config_key = "churn_evaluation"
-            
-        config = getattr(self.config, config_key)
+        config = self.config.evaluation
         
         create_directories([config.evaluation_dir, config.model_version_dir, config.data_version_dir])
 
@@ -129,13 +113,11 @@ class ConfigurationManager:
             evaluation_dir=Path(config.evaluation_dir),
         )
 
-        logger.info(f"Evaluation config for {self.model_name}: {config}")
+        logger.info(f"Evaluation config: {config}")
         return evaluation_config
 
     def get_cloud_storage_push_config(self) -> CloudStoragePushConfig:
-        config_key = "churn_cloud_storage_push"
-            
-        config = getattr(self.config, config_key)
+        config = self.config.cloud_storage_push
         
         cloud_storage_push_config = CloudStoragePushConfig(
             root_dir=Path(config.root_dir),
@@ -147,6 +129,6 @@ class ConfigurationManager:
             region_name= CloudConfig().region_name
         )
 
-        logger.info(f"Cloud Storage Push config for {self.model_name}: {config}")
+        logger.info(f"Cloud Storage Push config: {config}")
         return cloud_storage_push_config
     

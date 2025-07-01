@@ -20,7 +20,7 @@ def upload_file_to_s3(s3_client, bucket_name, file_path, object_key):
         return (file_path, e)
 
 def upload_many_files_to_s3(
-    bucket_name, filenames, source_directory="", workers=8, aws_access_key_id=None, aws_secret_access_key=None, region_name=None
+    bucket_name, filenames, source_directory="", model_name="churn", workers=8, aws_access_key_id=None, aws_secret_access_key=None, region_name=None
 ):
     """Upload multiple files to Amazon S3 with proper error handling."""
     try:
@@ -44,7 +44,7 @@ def upload_many_files_to_s3(
             if not os.path.exists(file_path):
                 logger.warning(f"File does not exist for upload: {file_path}")
                 continue
-            object_key = f"churn_data_store/{filename}"
+            object_key = f"{model_name}_data_store/{filename}"
             valid_files.append((file_path, object_key))
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
@@ -60,7 +60,7 @@ def upload_many_files_to_s3(
                     if error:
                         logger.error(f"Failed to upload {uploaded_file}: {error}")
                     else:
-                        logger.info(f"Uploaded {uploaded_file} to bucket {bucket_name}.")
+                        logger.info(f"Uploaded {uploaded_file} to bucket {bucket_name} in {model_name}_data_store/")
                 except Exception as e:
                     logger.error(f"Unexpected error uploading {file_path}: {e}")
 

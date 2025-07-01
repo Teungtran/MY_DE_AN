@@ -1,5 +1,4 @@
 artifacts_root: artifacts
-
 # Churn model configuration
 churn_data_ingestion:
   root_dir: artifacts/churn/data_ingestion
@@ -37,9 +36,8 @@ churn_cloud_storage_push:
 churn_mlflow_config:
   dagshub_username: Teungtran
   dagshub_repo_name: churn_mlops
-  tracking_uri: https://dagshub.com/Teungtran/churn_mlops.mlflow
+  tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Churn_model_training_cycle
-
 # Sentiment model configuration
 sentiment_data_ingestion:
   root_dir: artifacts/sentiment/data_ingestion
@@ -52,7 +50,14 @@ sentiment_data_ingestion:
 sentiment_prepare_base_model:
   model_version_dir: artifacts/sentiment/model_version
   data_version_dir: artifacts/sentiment/data_version
-  random_state: 42
+  maxlen: 200
+  num_words: 5000
+  embedding_dim: 128
+  batch_size: 64
+  epochs: 5
+  filters: 128
+  kernel_size: 5
+  dropout_rate: 0.2
 
 sentiment_training:
   model_version_dir: artifacts/sentiment/model_version
@@ -60,7 +65,7 @@ sentiment_training:
 
 sentiment_evaluation:
   model_version_dir: artifacts/sentiment/model_version
-  data_version_dir: artifacts/sentiment/data_version
+  data_ve rsion_dir: artifacts/sentiment/data_version
   evaluation_dir: artifacts/sentiment/evaluation
 
 sentiment_cloud_storage_push:
@@ -72,7 +77,7 @@ sentiment_cloud_storage_push:
 sentiment_mlflow_config:
   dagshub_username: Teungtran
   dagshub_repo_name: sentiment_mlops
-  tracking_uri: https://dagshub.com/Teungtran/sentiment_mlops.mlflow
+  tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Sentiment_model_training_cycle
 
 # Segmentation model configuration
@@ -107,7 +112,7 @@ segmentation_cloud_storage_push:
 segmentation_mlflow_config:
   dagshub_username: Teungtran
   dagshub_repo_name: segmentation_mlops
-  tracking_uri: https://dagshub.com/Teungtran/segmentation_mlops.mlflow
+  tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Segmentation_model_training_cycle
 
 # TimeSeries model configuration
@@ -142,5 +147,5 @@ timeseries_cloud_storage_push:
 timeseries_mlflow_config:
   dagshub_username: Teungtran
   dagshub_repo_name: timeseries_mlops
-  tracking_uri: https://dagshub.com/Teungtran/timeseries_mlops.mlflow
+  tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: TimeSeries_model_training_cycle

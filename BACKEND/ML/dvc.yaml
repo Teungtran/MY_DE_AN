@@ -1,9 +1,9 @@
 stages:
   # Churn model pipeline
   churn_training_pipeline:
-    cmd: python main.py --model churn
+    cmd: python run_pipeline.py --model churn
     deps:
-      - main.py
+      - run_pipeline.py
       - src/Churn/pipeline/main_pipeline.py
       - src/Churn/pipeline/prepare_data.py
       - src/Churn/pipeline/prepare_model.py
@@ -29,9 +29,9 @@ stages:
 
   # Sentiment model pipeline
   sentiment_training_pipeline:
-    cmd: python main.py --model sentiment
+    cmd: python run_pipeline.py --model sentiment
     deps:
-      - main.py
+      - run_pipeline.py
       - src/Sentiment/pipeline/
       - src/Sentiment/components/
       - config/config.yaml
@@ -51,9 +51,9 @@ stages:
 
   # Segmentation model pipeline
   segmentation_training_pipeline:
-    cmd: python main.py --model segmentation
+    cmd: python run_pipeline.py --model segmentation
     deps:
-      - main.py
+      - run_pipeline.py
       - src/segmentation/pipeline/
       - src/segmentation/components/
       - config/config.yaml
@@ -73,9 +73,9 @@ stages:
 
   # TimeSeries model pipeline
   timeseries_training_pipeline:
-    cmd: python main.py --model timeseries
+    cmd: python run_pipeline.py --model timeseries
     deps:
-      - main.py
+      - run_pipeline.py
       - src/TimeSeries/pipeline/
       - src/TimeSeries/components/
       - config/config.yaml
