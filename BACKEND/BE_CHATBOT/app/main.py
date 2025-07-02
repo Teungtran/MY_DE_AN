@@ -198,4 +198,4 @@ if __name__ == "__main__":
 
     
     # Start the server
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8090, reload=False, log_level="debug")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8888, reload=False, log_level="debug")

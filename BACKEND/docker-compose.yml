@@ -1,13 +1,32 @@
 version: '3.8'
 
 services:
+  # Nginx reverse proxy
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: de_an_nginx
+    ports:
+      - "8090:8090"
+    depends_on:
+      - auth
+      - be_admin
+      - be_chatbot
+      - be_preprocess
+      - ml
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
   auth:
     build:
       context: ./AUTH
       dockerfile: Dockerfile
     container_name: de_an_auth
-    ports:
-      - "8888:8888"
+    # No public port mapping - only accessible through nginx
+    expose:
+      - "8888"
     volumes:
       - ./AUTH/logs:/code/logs
     environment:
@@ -22,8 +41,9 @@ services:
       context: ./BE_ADMIN
       dockerfile: Dockerfile
     container_name: de_an_admin
-    ports:
-      - "8091:8888"
+    # No public port mapping - only accessible through nginx
+    expose:
+      - "8888"
     volumes:
       - ./BE_ADMIN/logs:/code/logs
     environment:
@@ -38,8 +58,9 @@ services:
       context: ./BE_CHATBOT
       dockerfile: Dockerfile
     container_name: de_an_chatbot
-    ports:
-      - "8090:8090"
+    # No public port mapping - only accessible through nginx
+    expose:
+      - "8888"
     volumes:
       - ./BE_CHATBOT/logs:/code/logs
     environment:
@@ -54,8 +75,9 @@ services:
       context: ./BE_PREPROCESS
       dockerfile: Dockerfile
     container_name: de_an_preprocess
-    ports:
-      - "8092:8002"
+    # No public port mapping - only accessible through nginx
+    expose:
+      - "8888"
     volumes:
       - ./BE_PREPROCESS/logs:/code/logs
     environment:
@@ -70,8 +92,9 @@ services:
       context: ./ML
       dockerfile: Dockerfile
     container_name: de_an_ml
-    ports:
-      - "8093:8888"
+    # No public port mapping - only accessible through nginx
+    expose:
+      - "8888"
     volumes:
       - ./ML/artifacts:/app/artifacts
       - ./ML/logs:/app/logs

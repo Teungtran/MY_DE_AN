@@ -1,13 +1,32 @@
 version: '3.8'
 
 services:
+  # API Gateway
+  nginx:
+    build:
+      context: ./BACKEND/nginx
+      dockerfile: Dockerfile
+    container_name: de_an_nginx
+    ports:
+      - "8090:8090"  # Single entry point for all backend services
+    depends_on:
+      - auth
+      - be_admin
+      - be_chatbot
+      - be_preprocess
+      - ml
+    networks:
+      - de_an_network
+    restart: unless-stopped
+
+  # Backend Services
   auth:
     build:
       context: ./BACKEND/AUTH
       dockerfile: Dockerfile
     container_name: de_an_auth
-    ports:
-      - "8888:8888"
+    expose:
+      - "8888"  # Only exposed to internal network
     volumes:
       - ./BACKEND/AUTH/app:/code/app
       - ./BACKEND/AUTH/config:/code/config
@@ -24,8 +43,8 @@ services:
       context: ./BACKEND/BE_ADMIN
       dockerfile: Dockerfile
     container_name: de_an_admin
-    ports:
-      - "8091:8888"
+    expose:
+      - "8888"  # Only exposed to internal network
     volumes:
       - ./BACKEND/BE_ADMIN/app:/code/app
       - ./BACKEND/BE_ADMIN/config:/code/config
@@ -42,8 +61,8 @@ services:
       context: ./BACKEND/BE_CHATBOT
       dockerfile: Dockerfile
     container_name: de_an_chatbot
-    ports:
-      - "8090:8090"
+    expose:
+      - "8888"  # Only exposed to internal network
     volumes:
       - ./BACKEND/BE_CHATBOT/app:/code/app
       - ./BACKEND/BE_CHATBOT/config:/code/config
@@ -60,8 +79,8 @@ services:
       context: ./BACKEND/BE_PREPROCESS
       dockerfile: Dockerfile
     container_name: de_an_preprocess
-    ports:
-      - "8092:8002"
+    expose:
+      - "8888"  # Only exposed to internal network
     volumes:
       - ./BACKEND/BE_PREPROCESS/app:/code/app
       - ./BACKEND/BE_PREPROCESS/config:/code/config
@@ -78,8 +97,8 @@ services:
       context: ./BACKEND/ML
       dockerfile: Dockerfile
     container_name: de_an_ml
-    ports:
-      - "8093:8888"
+    expose:
+      - "8888"  # Only exposed to internal network
     volumes:
       - ./BACKEND/ML/artifacts:/app/artifacts
       - ./BACKEND/ML/logs:/app/logs
@@ -90,6 +109,24 @@ services:
     networks:
       - de_an_network
     restart: unless-stopped
+    
+  # Frontend placeholder - uncomment and configure when ready
+  # frontend:
+  #   build:
+  #     context: ./FRONTEND
+  #     dockerfile: Dockerfile
+  #   container_name: de_an_frontend
+  #   ports:
+  #     - "3000:3000"  # Typical React/Next.js port
+  #   volumes:
+  #     - ./FRONTEND:/app
+  #     - /app/node_modules
+  #   environment:
+  #     - NODE_ENV=development
+  #     - REACT_APP_API_URL=http://localhost:8090  # Points to the API gateway
+  #   networks:
+  #     - de_an_network
+  #   restart: unless-stopped
 
 networks:
   de_an_network:
