@@ -29,17 +29,22 @@ class TrainAndEvaluateModel:
         self.model_name = f"model_churn_{self.datetime_suffix}"
         self.fine_tuned_model_name = f"finetuned_churn_{self.datetime_suffix}"
         
-    def log_model_to_mlflow(self, model_name: str):
-        logger.info(f"Logging model to MLflow as {model_name}")
+    def log_model_to_mlflow(self, model, model_name: str):
+        logger.info(f"Logging model to MLflow with artifact path: {model_name}")
         try:
+            mlflow.sklearn.log_model(model, artifact_path=model_name)
+
             run_id = mlflow.active_run().info.run_id
+
             artifact_uri = f"runs:/{run_id}/{model_name}"
+
             registered_model_name = "RandomForestClassifier"
             mlflow.register_model(model_uri=artifact_uri, name=registered_model_name)
 
-            logger.info(f"Successfully registered model: {registered_model_name}")
+            logger.info(f"✅ Successfully registered model as '{registered_model_name}' from: {artifact_uri}")
+
         except Exception as e:
-            logger.warning(f"Failed to log or register model to MLflow: {e}")
+            logger.warning(f"⚠️ Failed to log or register model to MLflow: {e}")
             logger.warning("Continuing without MLflow model registration")
         
     def train(self, X_train_scaled, y_train, model):
@@ -265,13 +270,12 @@ class TrainAndEvaluateModel:
                 accuracy = fine_tuned_model.score(X_test_scaled, y_test)
                 logger.info(f"Model accuracy on test data after fine-tuned: {accuracy}")
                 mlflow.log_metric("accuracy after fine-tuning", accuracy)
-                self.log_model_to_mlflow(str(self.fine_tuned_model_name))
+                self.log_model_to_mlflow(fine_tuned_model,str(self.fine_tuned_model_name))
                 mlflow.log_artifact(str(trained_model_path),"Model before tunning")    
                 return fine_tuned_model, metrics, fine_tuned_model_path
-            
             else:
                 logger.info("Model accuracy is 85% or above, not needed finetuned, log trained model to mlflow")
-                self.log_model_to_mlflow(str(self.model_name))
+                self.log_model_to_mlflow(model,str(self.model_name))
                 metrics, y_pred, y_pred_prob = self.perform_detailed_evaluation(model, X_test_scaled, y_test)
                 
                 self.plot_confusion_matrix(y_test, y_pred)
@@ -281,4 +285,3 @@ class TrainAndEvaluateModel:
         except Exception as e:
             logger.error(f"Error in model training and evaluation: {e}")
             raise e
-                
