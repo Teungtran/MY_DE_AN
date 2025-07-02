@@ -1,9 +1,13 @@
 
 import re
-from pydantic import BaseModel, field_validator,EmailStr
+from pydantic import BaseModel, field_validator,EmailStr,Field
 from typing import List
+from enum import Enum
 
-
+class RoleEnum(str, Enum):
+    admin = "admin"
+    user = "user"
+    staff = "staff"
 class RegisterRequest(BaseModel):
     customer_name: str
     address: str
@@ -14,7 +18,8 @@ class RegisterRequest(BaseModel):
     preference_brand: List[str] = []
     min_price: str = None
     max_price: str = None
-    
+    role: RoleEnum = Field(default=RoleEnum.user, description="User role")
+
     @field_validator('customer_phone')
     def validate_phone_number(cls, v):
         """Validate Vietnamese phone number format"""
@@ -36,6 +41,7 @@ class AuthResponse(BaseModel):
     token_type: str
     user_id: str
     email: EmailStr
+    role: str
 
     
 class PasswordChangeRequest(BaseModel):

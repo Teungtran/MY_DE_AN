@@ -131,7 +131,8 @@ def register_new_user(
     preference_brand: List[str] = None, 
     min_price: str = None, 
     max_price: str = None,
-    email: str = None
+    email: str = None,
+    role: str = "user"
 ):
     """Register new user with validation"""
     if not is_valid_password(password):
@@ -149,6 +150,13 @@ def register_new_user(
     
     if email and check_email_exists(email, db):
         raise HTTPException(status_code=400, detail="Email already registered")
+    if role == "admin":
+        id = f"ADMIN_{generate_short_id()}"
+    elif role == "user":
+        id = f"USER_{generate_short_id()}"
+    elif role == "viewer":
+        id = f"VIEWER_{generate_short_id()}"
+    hashed_password = hash_password(password)
     
     if preference_brand is None:
         preference_brand = []
@@ -163,7 +171,7 @@ def register_new_user(
 
     try:
         new_user = CustomerInfo(
-            user_id=user_id,
+            user_id=id,
             customer_name=customer_name,
             address=address,
             preferences=preferences_json,
@@ -177,30 +185,45 @@ def register_new_user(
         db.commit()
         
         return {
-            "user_id": user_id,
-            "email": email
+            "user_id": id,
+            "email": email,
+            "role": role
         }
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-def get_current_user(user_id: str = Depends(verify_token), db: Session = Depends(get_db)):
-    """Get current authenticated user details"""
-    print(f"Getting current user for user_id: {user_id}")
-    user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
-    
-    if not user:
-        print(f"User not found in database for user_id: {user_id}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
-    
-    print(f"User found: {user.user_id}")
-    return {
-        "user_id": user.user_id,
-        "email": user.email
-    }
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Get current authenticated user details with token"""
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        exp = payload.get("exp")
+
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = db.query(CustomerInfo).filter(CustomerInfo.user_id == user_id).first()
+
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return {
+            "user_id": user.user_id,
+            "email": user.email,
+            "role": user.role,
+            "token": token,
+            "token_exp": exp
+        }
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except jwt.PyJWTError as e:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 @auth.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest, db: Session = Depends(get_db)):
@@ -216,19 +239,23 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             preference_brand=request.preference_brand,
             min_price=request.min_price,
             max_price=request.max_price,
-            email=request.email
+            email=request.email,
+            role=request.role  
+
         )
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user["user_id"]}, expires_delta=access_token_expires
-        )
+            data={"sub": user["user_id"], "role": user["role"]},
+            expires_delta=access_token_expires
+)
         
         return AuthResponse(
             access_token=access_token,
             token_type="bearer",
             user_id=user["user_id"],
-            email=user["email"]
+            email=user["email"],
+            role=user["role"]  
         )
         
     except HTTPException:
@@ -262,7 +289,8 @@ async def login_user(request: LoginRequest, db: Session = Depends(get_db)):
         access_token=access_token,
         token_type="bearer",
         user_id=user["user_id"],
-        email=user["email"]
+        email=user["email"], 
+        role=user["role"]
     )
 
 @auth.post("/forgot-password")
@@ -328,3 +356,30 @@ async def debug_token(credentials: HTTPAuthorizationCredentials = Depends(securi
         return {"status": "expired"}
     except jwt.PyJWTError as e:
         return {"status": "invalid", "error": str(e)}
+
+def require_role(required_role: str):
+    def role_checker(current_user: dict = Depends(get_current_user)):
+        if current_user["role"] != required_role:
+            raise HTTPException(status_code=403, detail="Forbidden: Insufficient permissions")
+        return current_user
+    return role_checker
+@auth.get("/admin-only")
+async def admin_only_route(current_user: dict = Depends(require_role("admin"))):
+    return {"message": f"Hello {current_user['user_id']}"}
+@auth.get("/user-profile")
+async def user_profile(current_user: dict = Depends(require_role("user"))):
+    return {"message": f"Hello {current_user['user_id']}"}
+@auth.get("/viewer-profile")
+async def viewer_profile(current_user: dict = Depends(require_role("viewer"))):
+    return {"message": f"Hello {current_user['user_id']}"}
+
+@auth.get("/me")
+async def get_me(current_user: dict = Depends(get_current_user)):
+    """Return current authenticated user's info including role and token"""
+    return {
+        "user_id": current_user["user_id"],
+        "email": current_user["email"],
+        "role": current_user["role"],
+        "access_token": current_user["token"],
+        "token_exp": current_user["token_exp"]
+    }
