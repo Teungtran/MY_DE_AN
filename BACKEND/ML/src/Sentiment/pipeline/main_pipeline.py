@@ -1,11 +1,11 @@
-from src.Churn.config.configuration import ConfigurationManager
+from src.Sentiment.config.configuration import ConfigurationManager
 from .prepare_data import DataPreparationPipeline
 from .prepare_model import ModelPreparationPipeline
 from .train_evaluation import TrainEvaluationPipeline
 from .cloud_storage_push import CloudStoragePushPipeline
-from src.Churn.utils.logging import logger
+from src.Sentiment.utils.logging import logger
 from .cleanup import cleanup_temp_files
-from src.Churn.components.support import import_data
+from src.Sentiment.components.support import import_data
 from pathlib import Path
 from fastapi import UploadFile
 import mlflow
@@ -72,12 +72,12 @@ class WorkflowRunner:
         logger.info("=" * 50)
         
         data_prep = DataPreparationPipeline()
-        X_train, X_test, y_train, y_test, _, _ = data_prep.main()
+        _, _, _, train_data, test_data = data_prep.main()
         
         logger.info("Data preparation completed successfully")
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_name = f"Churn_model_training_cycle_{timestamp}"
+        run_name = f"Sentiment_model_training_cycle_{timestamp}"
         
         with mlflow.start_run(run_name=run_name):
             logger.info("=" * 50)
@@ -87,26 +87,21 @@ class WorkflowRunner:
             # Pass mlflow_config even though we're using hardcoded experiment name
             mlflow_config = self.config_manager.get_mlflow_config()
             model_prep = ModelPreparationPipeline(mlflow_config=mlflow_config)
-            model, base_model_path, scaler_path, X_train_scaled, X_test_scaled = model_prep.main(
-                X_train=X_train,
-                X_test=X_test
-            )
+            model, base_model_path, tokenizer_path , _ = model_prep.main(train_data)
             
             logger.info("Model preparation completed successfully")
             logger.info(f"Base model: {base_model_path}")
-            logger.info(f"Scaler: {scaler_path}")
+            logger.info(f"Tokenizer: {tokenizer_path}")
 
             logger.info("=" * 50)
             logger.info("STAGE 3: Train and Evaluate")
             logger.info("=" * 50)
             
             train_eval = TrainEvaluationPipeline(mlflow_config=mlflow_config)
-            model, metrics, final_model_path = train_eval.main(
+            model, metrics = train_eval.main(
                 base_model=model,
-                X_train_scaled=X_train_scaled,
-                X_test_scaled=X_test_scaled,
-                y_train=y_train,
-                y_test=y_test
+                test_data=test_data,
+                train_data=train_data
             )
             
             logger.info("Training and evaluation completed successfully")
@@ -129,4 +124,4 @@ class WorkflowRunner:
         logger.info(f"WORKFLOW COMPLETED SUCCESSFULLY")
         logger.info("=" * 50)
 
-        return final_model_path
+        return "WORKFLOW COMPLETED SUCCESSFULLY"

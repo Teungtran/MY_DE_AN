@@ -3,7 +3,7 @@ import time
 import matplotlib.pyplot as plt
 import pandas as pd
 
-def visualize_customer_churn(df: pd.DataFrame, output_dir: str = "plots"):
+def visualize_customer_churn(df: pd.DataFrame, output_dir: str = "plots\churn"):
     os.makedirs(output_dir, exist_ok=True)
     plt.switch_backend('Agg')  # Non-GUI backend for server use
 

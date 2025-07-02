@@ -2,7 +2,6 @@ import os
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import RobustScaler
 import joblib as jb
-import pandas as pd
 from datetime import datetime
 from src.Churn.utils.logging import logger
 from src.Churn.entity.config_entity import PrepareBaseModelConfig

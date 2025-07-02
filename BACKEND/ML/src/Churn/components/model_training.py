@@ -14,9 +14,6 @@ from sklearn.metrics import (
 )
 from pathlib import Path
 import mlflow
-from mlflow import register_model
-import uuid
-
 from src.Churn.utils.logging import logger
 from src.Churn.entity.config_entity import TrainingConfig, EvaluationConfig
 from src.Churn.utils.common import save_json
@@ -28,7 +25,6 @@ class TrainAndEvaluateModel:
         self.datetime_suffix = datetime.now().strftime('%Y%m%dT%H%M%S')
         self.model_name = f"model_churn_{self.datetime_suffix}"
         self.fine_tuned_model_name = f"finetuned_churn_{self.datetime_suffix}"
-        
     def log_model_to_mlflow(self, model, model_name: str):
         logger.info(f"Logging model to MLflow with artifact path: {model_name}")
         try:
@@ -285,3 +281,4 @@ class TrainAndEvaluateModel:
         except Exception as e:
             logger.error(f"Error in model training and evaluation: {e}")
             raise e
+                    

@@ -1,15 +1,14 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from pydantic import BaseModel
 from typing import  Optional
-from src.Churn.pipeline.main_pipeline import WorkflowRunner
-from src.Churn.utils.logging import logger
+from src.Sentiment.pipeline.main_pipeline import WorkflowRunner
+from src.Sentiment.utils.logging import logger
 
 router = APIRouter()
 
 class WorkflowResponse(BaseModel):
     status: str
     message: str
-    final_model_path: Optional[str] = None
 
 
 
@@ -24,12 +23,11 @@ async def train_model(
     """
     try:
         workflow_runner = WorkflowRunner()
-        final_model_path = await workflow_runner.run(uploaded_file=file)
+        await workflow_runner.run(uploaded_file=file)
         
         return WorkflowResponse(
             status="success",
             message="Model training workflow completed successfully",
-            final_model_path=final_model_path,
         )
     
     except HTTPException:

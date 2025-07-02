@@ -6,7 +6,6 @@ churn_data_ingestion:
   local_data_file: artifacts/churn/data_ingestion/input_raw.csv
   test_size: 0.2
   random_state: 42
-  bucket_name: ml-dataversion
 
 churn_prepare_base_model:
   model_version_dir: artifacts/churn/model_version
@@ -35,9 +34,11 @@ churn_cloud_storage_push:
 
 churn_mlflow_config:
   dagshub_username: Teungtran
-  dagshub_repo_name: churn_mlops
+  dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Churn_model_training_cycle
+
+
 # Sentiment model configuration
 sentiment_data_ingestion:
   root_dir: artifacts/sentiment/data_ingestion
@@ -45,7 +46,6 @@ sentiment_data_ingestion:
   local_data_file: artifacts/sentiment/data_ingestion/input_raw.csv
   test_size: 0.2
   random_state: 42
-  bucket_name: ml-dataversion
 
 sentiment_prepare_base_model:
   model_version_dir: artifacts/sentiment/model_version
@@ -62,6 +62,10 @@ sentiment_prepare_base_model:
 sentiment_training:
   model_version_dir: artifacts/sentiment/model_version
   data_version_dir: artifacts/sentiment/data_version
+  maxlen: 200
+  batch_size: 64
+  epochs: 5
+  validation_split: 0.2
 
 sentiment_evaluation:
   model_version_dir: artifacts/sentiment/model_version
@@ -70,15 +74,15 @@ sentiment_evaluation:
 
 sentiment_cloud_storage_push:
   root_dir: artifacts
-  bucket_name: sentimentdataversion
+  bucket_name: ml-dataversion
   data_version_dir: artifacts/sentiment/data_version  
   evaluation_dir: artifacts/sentiment/evaluation 
 
 sentiment_mlflow_config:
   dagshub_username: Teungtran
-  dagshub_repo_name: sentiment_mlops
+  dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
-  experiment_name: Sentiment_model_training_cycle
+  experiment_name: Sentiment_training_cycle
 
 # Segmentation model configuration
 segmentation_data_ingestion:
@@ -87,7 +91,6 @@ segmentation_data_ingestion:
   local_data_file: artifacts/segmentation/data_ingestion/input_raw.csv
   test_size: 0.2
   random_state: 42
-  bucket_name: ml-dataversion
 
 segmentation_prepare_base_model:
   model_version_dir: artifacts/segmentation/model_version
@@ -105,13 +108,13 @@ segmentation_evaluation:
 
 segmentation_cloud_storage_push:
   root_dir: artifacts
-  bucket_name: segmentationdataversion
+  bucket_name: ml-dataversion
   data_version_dir: artifacts/segmentation/data_version  
   evaluation_dir: artifacts/segmentation/evaluation 
 
 segmentation_mlflow_config:
   dagshub_username: Teungtran
-  dagshub_repo_name: segmentation_mlops
+  dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Segmentation_model_training_cycle
 
@@ -122,7 +125,6 @@ timeseries_data_ingestion:
   local_data_file: artifacts/timeseries/data_ingestion/input_raw.csv
   test_size: 0.2
   random_state: 42
-  bucket_name: ml-dataversion
 
 timeseries_prepare_base_model:
   model_version_dir: artifacts/timeseries/model_version
@@ -146,6 +148,6 @@ timeseries_cloud_storage_push:
 
 timeseries_mlflow_config:
   dagshub_username: Teungtran
-  dagshub_repo_name: timeseries_mlops
+  dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
-  experiment_name: TimeSeries_model_training_cycle
+  experiment_name: Time_Series_training_cycle

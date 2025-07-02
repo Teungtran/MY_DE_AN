@@ -5,11 +5,12 @@ import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 from src.Churn.components.data_ingestion import DataIngestion
-from src.Churn.config.configuration import ConfigurationManager
+from src.Churn.config.configuration import ConfigurationManager,WebhookConfig
 import joblib 
 import mlflow
 from src.Churn.utils.logging import logger
 from src.Churn.utils.visualize_ouput import visualize_customer_churn
+from src.Churn.utils.notify_webhook import post_to_webhook
 
 from datetime import datetime
 import time
@@ -17,10 +18,28 @@ import os
 import dagshub
 import tempfile
 import os
+web_hook_url = WebhookConfig().url
+
+async def send_webhook_payload(
+    message: str,
+    avg_confidence: Optional[float] = None,
+):
+    try:
+        logger.info("Preparing webhook notification")
+
+        payload = {
+            "message": message,
+            "avg_confidence": avg_confidence,
+        }
+
+        await post_to_webhook(web_hook_url, payload)
+
+    except Exception as e:
+        logger.error(f"Webhook notification failed with unexpected error: {str(e)}")
 
 class PredictionPipeline:
     def __init__(self, model_uri: str, scaler_uri: str):
-        mlflow.set_tracking_uri("https://dagshub.com/Teungtran/churn_mlops.mlflow")
+        mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
 
         try:
             self.model = mlflow.pyfunc.load_model(model_uri)
@@ -76,7 +95,7 @@ class PredictionPipeline:
             repo_name="churn_mlops",
             mlflow=True
         )
-            mlflow.set_tracking_uri("https://dagshub.com/Teungtran/churn_mlops.mlflow")
+            mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
             mlflow.set_experiment("Churn_model_prediction_cycle")  
             with mlflow.start_run(run_name=f"prediction_run_{time_str}"):
                 data_ingestion = DataIngestion(config=data_ingestion_config)
@@ -206,7 +225,7 @@ class ChurnController:
                 run_id=run_id
             )
             
-            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/churn_mlops.mlflow "
+            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/MY_DE_AN.mlflow "
             
             return {
                 "message": message

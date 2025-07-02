@@ -1,6 +1,6 @@
-from src.Churn.config.configuration import ConfigurationManager
-from src.Churn.components.data_ingestion import DataIngestion
-from src.Churn.utils.logging import logger
+from src.Sentiment.config.configuration import ConfigurationManager
+from src.Sentiment.components.data_ingestion import DataIngestion
+from src.Sentiment.utils.logging import logger
 
 
 STAGE_NAME = "Data Ingestion stage"
@@ -12,8 +12,8 @@ class DataPreparationPipeline:
         data_ingestion_config = config.get_data_ingestion_config()
         data_ingestion = DataIngestion(config=data_ingestion_config)
         
-        X_train, X_test, y_train, y_test,_,_ = data_ingestion.data_ingestion_pipeline()
+        df_processed, train_path, test_path,train_data,test_data = data_ingestion.data_ingestion_pipeline()
         
         logger.info(f">>> Stage {STAGE_NAME} completed <<<")
-        return X_train, X_test, y_train, y_test,_,_ 
+        return df_processed, train_path, test_path, train_data, test_data
 

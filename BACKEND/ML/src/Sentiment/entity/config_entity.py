@@ -9,7 +9,6 @@ class DataIngestionConfig:
     local_data_file: Path
     test_size: float
     random_state: int
-    bucket_name: str
 
 
 
@@ -25,13 +24,15 @@ class PrepareBaseModelConfig:
     filters: int
     kernel_size: int
     dropout_rate: float
-    params_maxlen: int
-    params_num_words: int
-    params_embedding_dim: int
+    
 @dataclass(frozen=True)
 class TrainingConfig:
     model_version_dir: Path
     data_version_dir: Path
+    maxlen: int
+    batch_size: int
+    epochs: int
+    validation_split: float
 
 
 @dataclass(frozen=True)

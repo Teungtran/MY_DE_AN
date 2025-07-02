@@ -1,15 +1,15 @@
 from fastapi import UploadFile, HTTPException,Form,BackgroundTasks
-from src.Churn.components.support import import_data,most_common,get_dummies
+from src.Sentiment.components.support import import_data,most_common,get_dummies
 
 import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
-from src.Churn.components.data_ingestion import DataIngestion
-from src.Churn.config.configuration import ConfigurationManager
+from src.Sentiment.components.data_ingestion import DataIngestion
+from src.Sentiment.config.configuration import ConfigurationManager
 import joblib 
 import mlflow
-from src.Churn.utils.logging import logger
-from src.Churn.utils.visualize_ouput import visualize_customer_churn
+from src.Sentiment.utils.logging import logger
+from src.Sentiment.utils.visualize_ouput import rating_distribution
 
 from datetime import datetime
 import time
@@ -20,7 +20,7 @@ import os
 
 class PredictionPipeline:
     def __init__(self, model_uri: str, scaler_uri: str):
-        mlflow.set_tracking_uri("https://dagshub.com/Teungtran/churn_mlops.mlflow")
+        mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
 
         try:
             self.model = mlflow.pyfunc.load_model(model_uri)
@@ -76,7 +76,7 @@ class PredictionPipeline:
             repo_name="churn_mlops",
             mlflow=True
         )
-            mlflow.set_tracking_uri("https://dagshub.com/Teungtran/churn_mlops.mlflow")
+            mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
             mlflow.set_experiment("Churn_model_prediction_cycle")  
             with mlflow.start_run(run_name=f"prediction_run_{time_str}"):
                 data_ingestion = DataIngestion(config=data_ingestion_config)
@@ -118,7 +118,7 @@ class PredictionPipeline:
                 logger.info(f"Prediction processing time: {processing_time:.2f} seconds")
                 logger.info(f"Started at: {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
                 logger.info(f"Completed at: {end_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
-                plot_path = visualize_customer_churn(df_features)
+                plot_path = rating_distribution(df_features)
                 mlflow.log_artifact(plot_path, "visualization")
                 os.remove(plot_path)
                 mlflow.log_metric("processing_time_seconds", processing_time)
@@ -209,7 +209,7 @@ class ChurnController:
                 model_name=model_name  
             )
             
-            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/churn_mlops.mlflow "
+            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/MY_DE_AN.mlflow "
             
             return {
                 "message": message

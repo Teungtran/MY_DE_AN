@@ -3,13 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import mlflow
 from dotenv import load_dotenv
-from BACKEND.ML.controller.churn.prediction import router as prediction_router
-from BACKEND.ML.controller.churn.retraining import router as retraining_router
+from controller.churn import prediction, retraining
 
 # Load environment variables
 load_dotenv()
 
-mlflow.set_tracking_uri("https://dagshub.com/Teungtran/churn_mlops.mlflow")
+mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
 
 # Create FastAPI app
 app = FastAPI(
@@ -28,12 +27,12 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(prediction_router)
-app.include_router(retraining_router)
+app.include_router(prediction.router, prefix="/churn_prediction", tags=["MLOps controller"])
+app.include_router(retraining.router, prefix="/churn_training", tags=["MLOps controller"])
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to the Churn Prediction API. Use /docs to view the API documentation."}
+    return {"message": "Welcome to the MLOps API. Use /docs to view the API documentation."}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8888, reload=True)

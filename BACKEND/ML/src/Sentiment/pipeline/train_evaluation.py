@@ -1,8 +1,7 @@
-from src.Churn.config.configuration import ConfigurationManager
-from src.Churn.components.model_training import TrainAndEvaluateModel
-from src.Churn.utils.logging import logger
-import mlflow
-import dagshub
+from src.Sentiment.config.configuration import ConfigurationManager
+from src.Sentiment.components.model_training import TrainAndEvaluateModel
+from src.Sentiment.utils.logging import logger
+
 
 STAGE_NAME = "TRAIN_AND_EVALUATE_MODEL"
 
@@ -10,7 +9,8 @@ STAGE_NAME = "TRAIN_AND_EVALUATE_MODEL"
 class TrainEvaluationPipeline:
     def __init__(self, mlflow_config):
         self.mlflow_config = mlflow_config
-    def main(self, base_model, X_train_scaled, X_test_scaled, y_train, y_test):
+    def main(self, base_model, train_data, test_data):
+        
         logger.info(f">>> Stage {STAGE_NAME} started <<<")
         training_config = ConfigurationManager().get_training_config()
         evaluation_config = ConfigurationManager().get_evaluation_config()
@@ -21,13 +21,11 @@ class TrainEvaluationPipeline:
             config_eval=evaluation_config
         )
         
-        model, metrics, final_model_path = model_processor.train_and_evaluate(
+        model, metrics = model_processor.train_and_evaluate(
             base_model=base_model,
-            X_train_scaled=X_train_scaled,
-            X_test_scaled=X_test_scaled,
-            y_train=y_train,
-            y_test=y_test
+            test_data=test_data,
+            train_data=train_data
         )
         logger.info(f">>> Stage {STAGE_NAME} completed <<<")
-        return model, metrics, final_model_path
+        return model, metrics
 

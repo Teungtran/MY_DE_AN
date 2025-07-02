@@ -28,7 +28,8 @@ class CloudConfig(BaseModel):
     aws_access_key_id: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_ACCESS_KEY_ID")())[1])
     aws_secret_access_key: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_SECRET_ACCESS_KEY")())[1])
     region_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_REGION")())[1])
-    
+class WebhookConfig(BaseModel):
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("WEB_HOOK")())[1])
 class ConfigurationManager:
     def __init__(
         self,
@@ -67,8 +68,7 @@ class ConfigurationManager:
             local_data_file=Path(config.local_data_file),
             test_size=config.test_size,
             random_state=config.random_state,
-            data_version_dir=Path(config.data_version_dir),
-            bucket_name=config.bucket_name
+            data_version_dir=Path(config.data_version_dir)
             )
 
         logger.info(f"Data Ingestion config for {self.model_name}: {config}")
