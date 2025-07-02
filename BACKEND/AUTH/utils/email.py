@@ -4,7 +4,7 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 
 load_dotenv()
-from config.base_config import EmailConfig
+from app.config.base_config import EmailConfig
 email_config = EmailConfig()
 EMAIL_USER = email_config.email
 SMTP_SERVER = email_config.server

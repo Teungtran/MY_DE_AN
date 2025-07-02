@@ -116,7 +116,9 @@ def login(identifier: str, password: str, db: Session):
     if user and verify_password(password, user.password):
         return {
             "user_id": user.user_id,
-            "email": user.email
+            "email": user.email,
+            "role": user.role
+            
         }
 
     return None
@@ -166,7 +168,6 @@ def register_new_user(
         "price_range": [min_price, max_price] if min_price is not None and max_price is not None else []
     }
     preferences_json = json.dumps(prefs)
-    user_id = f"USER_{generate_short_id()}"
     hashed_password = hash_password(password)
 
     try:
@@ -363,6 +364,7 @@ def require_role(required_role: str):
             raise HTTPException(status_code=403, detail="Forbidden: Insufficient permissions")
         return current_user
     return role_checker
+
 @auth.get("/admin-only")
 async def admin_only_route(current_user: dict = Depends(require_role("admin"))):
     return {"message": f"Hello {current_user['user_id']}"}

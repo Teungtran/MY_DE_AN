@@ -37,8 +37,7 @@ class CustomerInfo(Base):
     customer_phone = Column(String(20), unique=True)
     password = Column(String(255), nullable=False)
     email = Column(String(100))
-    
-    # Relationships
+    role = Column(String(50))
     orders = relationship("Order", back_populates="customer")
     bookings = relationship("Booking", back_populates="customer")
     tickets = relationship("Ticket", back_populates="customer")
