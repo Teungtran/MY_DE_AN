@@ -48,7 +48,6 @@ class PrepareBaseModel:
         model.summary(print_fn=lambda x: summary_lines.append(x))
         summary_text = "\n".join(summary_lines)
 
-        # Log to your logger (optional)
         logger.info("Base model summary:\n%s", summary_text)
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as temp_file:

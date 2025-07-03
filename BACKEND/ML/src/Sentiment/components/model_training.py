@@ -75,7 +75,7 @@ class TrainAndEvaluateModel:
             )
         ]
 
-    def prepare_data_for_training(self, train_data, test_data,tokenizer):
+    def split_tokienize(self, train_data, test_data,tokenizer):
         train_data = train_data.dropna(subset=["review"])
         train_data["review"] = train_data["review"].astype(str)
         test_data = test_data.dropna(subset=["review"])
@@ -258,7 +258,7 @@ class TrainAndEvaluateModel:
         """Main method to train and evaluate the model using temporary directories."""
         logger.info("Initiating model training and evaluation with temporary directory management")
 
-        X_train, X_test, y_train, y_test = self.prepare_data_for_training(train_data, test_data,tokenizer)
+        X_train, X_test, y_train, y_test = self.split_tokienize(train_data, test_data,tokenizer)
         try:
             try:
                 logger.info(f"Loaded y_train shape: {y_train.shape}")

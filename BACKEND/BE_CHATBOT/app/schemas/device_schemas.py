@@ -293,12 +293,12 @@ class RecommendSystem(BaseModel):
             Literal["phone", "laptop/pc", "earphone", "mouse", "keyboard"]
         ],
         "Category of the electronic device. Follow strictly this rule: "
-        "if user_input is related to phone, smartphone, category == 'phone'; "
-        "if user_input is related to laptop or pc, category == 'laptop/pc'; "
-        "if user_input is related to earphone, tai nghe, category == 'earphone'; "
-        "if user_input is related to mouse, chuột, category == 'mouse'; "
-        "if user_input is related to keyboard, bàn phím, category == 'keyboard'. "
-        "if user_input does not mention any types or mentions many types (like both phone and laptop), category == None."
+        "if user_input is related to phone, smartphone, type == 'phone'; "
+        "if user_input is related to laptop or pc, type == 'laptop/pc'; "
+        "if user_input is related to earphone, tai nghe, type == 'earphone'; "
+        "if user_input is related to mouse, chuột, type == 'mouse'; "
+        "if user_input is related to keyboard, bàn phím, type == 'keyboard'. "
+        "if user_input does not mention any types or mentions many types (like both phone and laptop), type == None."
     ] = None
 
     user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
@@ -321,16 +321,15 @@ class RecommendSystem(BaseModel):
             }
         }
 
-
 class RecommendationConfig:
     DEFAULT_RESULTS = 4  
     MAX_RESULTS_BY_TYPE = {
-        "phone": 5,
-        "laptop/pc": 5,
-        "earphone": 4,
-        "mouse": 3,
-        "keyboard": 3,
-    } 
+        "phone": 8,        # Large pool, justify showing more
+        "laptop/pc": 8,    # Large pool
+        "earphone": 4,     # Smaller pool, 4 is a good ceiling
+        "mouse": 3,        # Likely small pool, keep as-is
+        "keyboard": 3,     # Same as mouse
+    }
     BRAND_MATCH_STRONG = 35
     BRAND_MATCH_MEDIUM = 25
     BRAND_MATCH_WEAK = 15

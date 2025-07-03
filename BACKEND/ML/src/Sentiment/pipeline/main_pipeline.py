@@ -116,10 +116,10 @@ class WorkflowRunner:
         cloud_push.main()
         logger.info("Cloud storage push completed successfully")
 
-        cleanup_temp_files()
         logger.info("=" * 50)
         logger.info("STAGE 5: Cleanup file")
         logger.info("=" * 50)
+        cleanup_temp_files()
         logger.info("=" * 50)
         logger.info(f"WORKFLOW COMPLETED SUCCESSFULLY")
         logger.info("=" * 50)

@@ -6,7 +6,7 @@ from pydantic import EmailStr
 from typing import List, Dict, Optional, Tuple
 from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder
 from .get_score import (
-    check_similarity, get_all_points, convert_to_string)
+    calculate_similarities_batch, get_all_points, convert_to_string,determine_field_relevance)
 from config.base_config import APP_CONFIG
 import json
 from .get_id import generate_short_id
@@ -57,7 +57,7 @@ def get_other_preference(user_id):
         db.close()
 
 
-@tool("recommendation_system", args_schema=RecommendSystem)
+@tool("recommend_system", args_schema=RecommendSystem)
 def recommend_system(
     user_input: str,
     type :str = None,
@@ -84,14 +84,11 @@ def recommend_system(
         preference = json.loads(user.preferences) if user and user.preferences else None
     finally:
         db.close()
-    main_query_lower = ""
-    if user_input:
-        main_query_lower = user_input.lower()
+    main_query_lower = user_input.lower() if user_input else ""
 
-    all_points = get_all_points(type=type)
-    matched_docs = []
-    has_brands = has_price = has_price_input = False
-    brands = []
+    all_points_dict = get_all_points(type=type)
+
+    # Merge preferences
     merged_pref = defaultdict(set)
     age_pref = get_other_preference(user_id)
     for source in [preference, age_pref]:
@@ -100,15 +97,11 @@ def recommend_system(
                 merged_pref[k].update(map(str.lower, v))
             else:
                 merged_pref[k].add(str(v).lower())
-
     preference = {k: list(v) for k, v in merged_pref.items()}
 
-    for k, v in preference.items():
-        if not isinstance(v, list):
-            preference[k] = [v]
-        else:
-            preference[k] = list(set(v))
-    
+    # Brand handling
+    has_brands = False
+    brands = []
     if preference and "brand" in preference and preference["brand"]:
         all_brands = []
         for brand_entry in preference["brand"]:
@@ -117,155 +110,261 @@ def recommend_system(
                 all_brands.extend(split_brands)
             else:
                 all_brands.append(str(brand_entry).lower())
-        
         brands = list(set(all_brands))  
         has_brands = len(brands) > 0
-    
-    price_input = []
-    if price:
-        price_input = [price]
-        has_price_input = True
-    
+
+    # Price handling
+    price_input = [price] if price else []
+    has_price_input = bool(price_input)
+
     price_min = price_max = None
     price_range = preference.get("price_range", []) if preference else []
-    if price_range:
-        has_price = True
+    has_price = bool(price_range)
+    if has_price:
         numeric_prices = []
         for p in price_range:
             try:
                 numeric_prices.append(float(p))
             except (ValueError, TypeError):
                 continue
-        
         if numeric_prices:
             price_min = min(numeric_prices)
             price_max = max(numeric_prices)
 
-    for doc in all_points:
-        meta = doc.payload.get("metadata", {})
-        
-        if not meta.get("brand") or meta.get("sale_price") is None:
-            continue
-
-        sale_price = meta.get("sale_price")
-        
-        if price_max and isinstance(sale_price, (int, float)):
-            if sale_price > price_max * 1.2:  # Allow 20% over max
-                continue
-
-        total_score = 0
-
-        text_fields = [
-            "device_name", "brand", "discount_percent", "sales_price", "battery", "cpu", "card",
-            "storage", "guarantee_program","sales_perks", "payment_perks"
-        ]
-        if len(main_query_lower.split()) < 5:
-            function = partial_ratio
-        else:
-            function = token_sort_ratio
-            
-        combined_text = " ".join([convert_to_string(meta.get(field, "")) for field in text_fields])
-        meta["combined_text"] = combined_text
-        matches = process.extract(
-            query=main_query_lower,
-            choices=meta["combined_text"],
-            scorer=function,
-            limit=None
-        )
-        best_matches = [match for match in matches if match[1] > 60]
-
-        if best_matches:
-            fuzzy_score_val = max(best_matches, key=lambda x: x[1])[1]
-        else:
-            fuzzy_score_val = 0
-        if fuzzy_score_val < 95:
-            cos_score = check_similarity(main_query_lower, [combined_text])
-        else:
-            cos_score = 0
-        total_score += fuzzy_score_val * recommendation_config.FUZZY_WEIGHT + cos_score * 100 * recommendation_config.COSINE_WEIGHT
-
-        if has_brands:
-            doc_brand = meta.get("brand", "").lower()
-            best_match = process.extractOne(doc_brand, brands, scorer=partial_ratio)
-            best_brand_score = best_match[1] if best_match else 0
-
-            if best_brand_score >= 90:
-                total_score += recommendation_config.BRAND_MATCH_STRONG
-            elif best_brand_score >= 75:
-                total_score += recommendation_config.BRAND_MATCH_MEDIUM
-            elif best_brand_score >= 50:
-                total_score += recommendation_config.BRAND_MATCH_WEAK
-            else:
-                total_score += recommendation_config.BRAND_MISMATCH_PENALTY
-                
-        if has_price_input:
-            try:
-                price_number = float(price_input[0])
-                price_diff = abs(sale_price - price_number) / price_number
-                price_similarity = max(0, 1 - price_diff)
-                total_score += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
-            except:
-                pass
-            
-        elif has_price:
-            if isinstance(sale_price, (int, float)):
-                if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
-                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST
-                elif price_max is not None and sale_price <= price_max:
-                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-                elif price_min is not None and sale_price >= price_min:
-                    total_score += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-
-
-        matched_docs.append({
-            "doc": doc,
-            "score": total_score
-        })
-
-
-    top_match_count = recommendation_config.get_max_results(type)
-    top_matches = heapq.nlargest(top_match_count, matched_docs, key=lambda x: x["score"])
-    
-    top_device_names = []
-    for match in top_matches:
-        device_name = match["doc"].payload.get("metadata", {}).get("device_name")
-        if device_name:
-            top_device_names.append(device_name)
-
-    if not top_matches:
-        return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
-
-    meta_fields = [
-        "device_name", "cpu", "card", "screen", "storage", "image_link",
-        "sale_price", "discount_percent", "installment_price", "sales_perks", 
-        "guarantee_program", "payment_perks", "source"
+    text_fields = [
+        "device_name", "cpu", "card", "brand", "battery", 
+        "storage", "discount_percent", "sales_price", "guarantee_program"
     ]
 
-    products_info = []
-    for idx, item in enumerate(top_matches, start=1):
-        meta = item["doc"].payload.get("metadata", {})
-        content = f"Product {idx}:\n"
-        for field in meta_fields:
-            if field in meta and meta[field]:  
-                if field in ["sale_price", "installment_price"]:
-                    value = meta[field]
-                    if isinstance(value, (int, float)):
-                        content += f"- {field}: {value:,} VND\n"
+    final_results = {}  
+    final_text_blocks = []
+
+    if type == "get_all":
+        for type_key, points_list in all_points_dict.items():
+            print(f"\n>>> Processing get_all recommendations for type: {type_key} ({len(points_list)} points)")
+            candidates = [{"doc": doc, "score": 0} for doc in points_list]
+
+            if price_max:
+                candidates = [
+                    candidate for candidate in candidates
+                    if isinstance(candidate["doc"].payload.get("metadata", {}).get("sale_price"), (int, float))
+                    and candidate["doc"].payload.get("metadata", {}).get("sale_price") <= price_max * 1.2
+                ]
+
+            for candidate in candidates:
+                meta = candidate["doc"].payload.get("metadata", {})
+                sale_price = meta.get("sale_price")
+
+                if has_brands:
+                    doc_brand = meta.get("brand", "").lower()
+                    best_match = process.extractOne(doc_brand, brands, scorer=partial_ratio)
+                    best_brand_score = best_match[1] if best_match else 0
+
+                    if best_brand_score >= 90:
+                        candidate["score"] += recommendation_config.BRAND_MATCH_STRONG
+                    elif best_brand_score >= 75:
+                        candidate["score"] += recommendation_config.BRAND_MATCH_MEDIUM
+                    elif best_brand_score >= 50:
+                        candidate["score"] += recommendation_config.BRAND_MATCH_WEAK
                     else:
-                        content += f"- {field}: {value} VND\n"
-                elif field == "discount_percent":
-                    content += f"- {field}: {meta[field]}%\n"
-                else:
-                    content += f"- {field}: {meta[field]}\n"
-        products_info.append(content)
-    
-    search_context = "\n\n".join(products_info)
+                        candidate["score"] += recommendation_config.BRAND_MISMATCH_PENALTY
 
-    global recommended_devices_cache
-    recommended_devices_cache = top_device_names
-    
-    return search_context, top_device_names
+                if has_price_input:
+                    try:
+                        price_number = float(price_input[0])
+                        price_diff = abs(sale_price - price_number) / price_number
+                        price_similarity = max(0, 1 - price_diff)
+                        candidate["score"] += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
+                    except:
+                        pass
+                elif has_price:
+                    if isinstance(sale_price, (int, float)):
+                        if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
+                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST
+                        elif price_max is not None and sale_price <= price_max:
+                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
+                        elif price_min is not None and sale_price >= price_min:
+                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
 
+            top_match_count = min(recommendation_config.get_max_results(type_key), len(candidates))
+            top_matches = heapq.nlargest(top_match_count, candidates, key=lambda x: x["score"])
+
+            top_device_names = []
+            for match in top_matches:
+                device_name = match["doc"].payload.get("metadata", {}).get("device_name")
+                if device_name:
+                    top_device_names.append(device_name)
+
+            final_results[type_key] = top_device_names
+
+            if top_matches:
+                meta_fields = [
+                    "device_name", "cpu", "card", "screen", "storage", "image_link",
+                    "sale_price", "discount_percent", "installment_price", "sales_perks", 
+                    "guarantee_program", "payment_perks", "source"
+                ]
+                products_info = []
+                for idx, item in enumerate(top_matches, start=1):
+                    meta = item["doc"].payload.get("metadata", {})
+                    content = f"Product {idx} (Score: {item['score']:.2f}) [{type_key}]:\n"
+                    for field in meta_fields:
+                        if field in meta and meta[field]:
+                            if field in ["sale_price", "installment_price"]:
+                                value = meta[field]
+                                if isinstance(value, (int, float)):
+                                    content += f"- {field}: {value:,} VND\n"
+                                else:
+                                    content += f"- {field}: {value} VND\n"
+                            elif field == "discount_percent":
+                                content += f"- {field}: {meta[field]}%\n"
+                            else:
+                                content += f"- {field}: {meta[field]}\n"
+                    products_info.append(content)
+                final_text_blocks.append("\n".join(products_info))
+
+        if not any(final_results.values()):
+            return "I couldn't find any products matching your preferences.", []
+        recommended_devices_cache = [d for devices in final_results.values() for d in devices]
+        search_context = "\n\n".join(final_text_blocks)
+        return search_context, recommended_devices_cache
+    
+    else:
+        for type_key, points_list in all_points_dict.items():
+            print(f"\n>>> Processing recommendations for type: {type_key} ({len(points_list)} points)")
+
+            field_relevance = determine_field_relevance(main_query_lower, points_list, text_fields)
+            print(f"Field relevance ranking: {field_relevance}")
+
+            candidates = [{"doc": doc, "score": 0} for doc in points_list]
+
+            if price_max:
+                candidates = [
+                    candidate for candidate in candidates
+                    if isinstance(candidate["doc"].payload.get("metadata", {}).get("sale_price"), (int, float))
+                    and candidate["doc"].payload.get("metadata", {}).get("sale_price") <= price_max * 1.2
+                ]
+
+            print(f"Starting with {len(candidates)} candidates after basic filtering")
+
+            for stage_idx, (field, relevance_score) in enumerate(field_relevance):
+                if len(candidates) <= 5:
+                    break
+
+                print(f"Stage {stage_idx + 1}: Filtering by '{field}' (relevance: {relevance_score:.2f})")
+                
+                similarities = calculate_similarities_batch(main_query_lower, candidates, field)
+                
+                field_scores = []
+                for i, candidate in enumerate(candidates):
+                    meta = candidate["doc"].payload.get("metadata", {})
+                    field_value = convert_to_string(meta.get(field, ""))
+                    
+                    if not field_value:
+                        fuzzy_score = 0
+                        cosine_score = 0
+                    else:
+                        function = partial_ratio if len(main_query_lower.split()) < 5 else token_sort_ratio
+                        fuzzy_score = function(main_query_lower, field_value.lower())
+                        cosine_score = similarities.get(i, 0)
+                    
+                    combined_score = (
+                        fuzzy_score * recommendation_config.FUZZY_WEIGHT + 
+                        cosine_score * 100 * recommendation_config.COSINE_WEIGHT
+                    )
+                    field_scores.append((candidate, combined_score))
+
+                field_scores.sort(key=lambda x: x[1], reverse=True)
+
+                keep_ratio = [0.80, 0.65, 0.50, 0.35]
+                keep_count = max(5, int(len(field_scores) * keep_ratio[min(stage_idx, 3)]))
+
+                candidates = []
+                for i, (candidate, field_score) in enumerate(field_scores[:keep_count]):
+                    candidate["score"] += field_score * relevance_score * (1.0 / (stage_idx + 1))
+                    candidates.append(candidate)
+
+                print(f"After stage {stage_idx + 1}: {len(candidates)} candidates remaining")
+
+            for candidate in candidates:
+                meta = candidate["doc"].payload.get("metadata", {})
+                sale_price = meta.get("sale_price")
+
+                if has_brands:
+                    doc_brand = meta.get("brand", "").lower()
+                    best_match = process.extractOne(doc_brand, brands, scorer=partial_ratio)
+                    best_brand_score = best_match[1] if best_match else 0
+
+                    if best_brand_score >= 90:
+                        candidate["score"] += recommendation_config.BRAND_MATCH_STRONG
+                    elif best_brand_score >= 75:
+                        candidate["score"] += recommendation_config.BRAND_MATCH_MEDIUM
+                    elif best_brand_score >= 50:
+                        candidate["score"] += recommendation_config.BRAND_MATCH_WEAK
+                    else:
+                        candidate["score"] += recommendation_config.BRAND_MISMATCH_PENALTY
+
+                if has_price_input:
+                    try:
+                        price_number = float(price_input[0])
+                        price_diff = abs(sale_price - price_number) / price_number
+                        price_similarity = max(0, 1 - price_diff)
+                        candidate["score"] += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
+                    except:
+                        pass
+                elif has_price:
+                    if isinstance(sale_price, (int, float)):
+                        if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
+                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST
+                        elif price_max is not None and sale_price <= price_max:
+                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
+                        elif price_min is not None and sale_price >= price_min:
+                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
+
+            top_match_count = min(recommendation_config.get_max_results(type_key), len(candidates))
+            top_matches = heapq.nlargest(top_match_count, candidates, key=lambda x: x["score"])
+
+            top_device_names = []
+            for match in top_matches:
+                device_name = match["doc"].payload.get("metadata", {}).get("device_name")
+                if device_name:
+                    top_device_names.append(device_name)
+
+            final_results[type_key] = top_device_names
+
+            if top_matches:
+                meta_fields = [
+                    "device_name", "cpu", "card", "screen", "storage", "image_link",
+                    "sale_price", "discount_percent", "installment_price", "sales_perks", 
+                    "guarantee_program", "payment_perks", "source"
+                ]
+
+                products_info = []
+                for idx, item in enumerate(top_matches, start=1):
+                    meta = item["doc"].payload.get("metadata", {})
+                    content = f"Product {idx} (Score: {item['score']:.2f}) [{type_key}]:\n"
+                    for field in meta_fields:
+                        if field in meta and meta[field]:
+                            if field in ["sale_price", "installment_price"]:
+                                value = meta[field]
+                                if isinstance(value, (int, float)):
+                                    content += f"- {field}: {value:,} VND\n"
+                                else:
+                                    content += f"- {field}: {value} VND\n"
+                            elif field == "discount_percent":
+                                content += f"- {field}: {meta[field]}%\n"
+                            else:
+                                content += f"- {field}: {meta[field]}\n"
+                    products_info.append(content)
+                final_text_blocks.append("\n".join(products_info))
+
+        if not any(final_results.values()):
+            return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
+
+        search_context = "\n\n".join(final_text_blocks)
+        recommended_devices_cache = [d for devices in final_results.values() for d in devices]
+
+        print(f"Recommendation completed. Found {len(recommended_devices_cache)} products across {len(final_results)} type(s).")
+        return search_context, recommended_devices_cache
 
 
 @tool("device_details")
