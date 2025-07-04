@@ -37,6 +37,7 @@ churn_mlflow_config:
   dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Churn_model_training_cycle
+  prediction_experiment_name: Churn_model_prediction_cycle
 
 
 # Sentiment model configuration
@@ -83,6 +84,7 @@ sentiment_mlflow_config:
   dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Sentiment_training_cycle
+  prediction_experiment_name: Sentiment_prediction_cycle
 
 # Segmentation model configuration
 segmentation_data_ingestion:
@@ -151,3 +153,7 @@ timeseries_mlflow_config:
   dagshub_repo_name: MY_DE_AN
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Time_Series_training_cycle
+
+prediction_threshold:
+  confidence_threshold: 0.7
+  data_drift_threshold: 0.3

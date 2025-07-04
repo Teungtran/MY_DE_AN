@@ -27,7 +27,8 @@ NOTE:
 - If any value of tool variable is not provided, it means the tool will search for all values of that variable.
 - Do not call 1 tool 2 times in a row. Instead ask user for more information.
 - Between each steps, you should ask user for more information if needed.
-- If you don't know electronice product that user want or no available options for user, use 'recommend_system' one time to find some recommendation.
+- If you don't know electronice product that user want or no available options for user, use recommend_system one time to find some recommendation.
+- For recommend_system tool, you can only pass ONE device type at a time. If user mentions multiple device types, handle them one by one and ask if they want to continue with the next type.
 
 Current time: {time}
 """

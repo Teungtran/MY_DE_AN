@@ -1,6 +1,6 @@
 from fastapi import UploadFile, HTTPException,Form,BackgroundTasks
 from src.Churn.components.support import import_data,most_common,get_dummies
-
+from typing_extensions import Optional
 import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
@@ -11,7 +11,7 @@ import mlflow
 from src.Churn.utils.logging import logger
 from src.Churn.utils.visualize_ouput import visualize_customer_churn
 from src.Churn.utils.notify_webhook import post_to_webhook
-
+from src.Churn.utils.check_drift import get_data_drift
 from datetime import datetime
 import time
 import os
@@ -20,27 +20,10 @@ import tempfile
 import os
 web_hook_url = WebhookConfig().url
 
-async def send_webhook_payload(
-    message: str,
-    avg_confidence: Optional[float] = None,
-):
-    try:
-        logger.info("Preparing webhook notification")
-
-        payload = {
-            "message": message,
-            "avg_confidence": avg_confidence,
-        }
-
-        await post_to_webhook(web_hook_url, payload)
-
-    except Exception as e:
-        logger.error(f"Webhook notification failed with unexpected error: {str(e)}")
-
 class PredictionPipeline:
-    def __init__(self, model_uri: str, scaler_uri: str):
-        mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
-
+    def __init__(self, model_uri: str, scaler_uri: str,):
+        pass
+    
         try:
             self.model = mlflow.pyfunc.load_model(model_uri)
             scaler_path = mlflow.artifacts.download_artifacts(artifact_uri=scaler_uri)
@@ -75,53 +58,137 @@ class PredictionPipeline:
         df_features['LastPurchaseDate'] = df_features['LastPurchaseDate'].dt.date
         df_features['Avg_Spend_Per_Purchase'] = df_features['TotalSpent']/df_features['Frequency'].replace(0,1)
         df_features['Purchase_Consistency'] = df_features['Recency'] / df_features['Frequency'].replace(0, 1)
-        df_features.drop(columns=["LastPurchaseDate"],axis=1,inplace=True)
         return df_features
     def encode_churn(self, df_features):
+        """
+        Encode categorical features using one-hot encoding.
+        Assumes customer_id and Customer_Name have already been dropped.
+        """
         df_copy = df_features.copy()
-        df_copy.drop(columns=["customer_id","Customer_Name"],axis=1,inplace=True)
         df_features_encode = get_dummies(df_copy)
         return df_features_encode
-    def predict(self):
+    
+    def upload_to_s3(self, file_path):
+        """
+        Upload a file to S3 and return the public URL
+        """
+        try:
+            config = ConfigurationManager().get_cloud_storage_push_config()
+            bucket_name = config.bucket_name
+            region_name = config.region_name
+            
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=config.aws_key_id,
+                aws_secret_access_key=config.aws_secret_key,
+                region_name=region_name
+            )
+            
+            timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
+            object_key = f"churn_data_store/prediction/prediction_{timestamp}.csv"
+            
+            s3_client.upload_file(file_path, bucket_name, object_key)
+            
+            url = f"https://{bucket_name}.s3.{region_name}.amazonaws.com/{object_key}"
+            logger.info(f"Successfully uploaded prediction results to S3: {url}")
+            
+            return url
+        except Exception as e:
+            logger.error(f"Failed to upload to S3: {e}")
+            raise
+    
+    async def predict(self, reference_data: Optional[str] = None):
         try:
             start_time = time.time()
             start_datetime = datetime.now()
             time_str = start_datetime.strftime('%Y%m%dT%H%M%S')
-            
             config_manager = ConfigurationManager()
             data_ingestion_config = config_manager.get_data_ingestion_config()
+            mlflow_config = config_manager.get_mlflow_config()
+            threshold_config = config_manager.get_threshold_config()
+            
             dagshub.init(
-            repo_owner="Teungtran",
-            repo_name="churn_mlops",
+            repo_owner=mlflow_config.dagshub_username,
+            repo_name=mlflow_config.dagshub_repo_name,
             mlflow=True
         )
-            mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
-            mlflow.set_experiment("Churn_model_prediction_cycle")  
+            mlflow.set_tracking_uri(mlflow_config.tracking_uri)
+            mlflow.set_experiment(mlflow_config.prediction_experiment_name)  
             with mlflow.start_run(run_name=f"prediction_run_{time_str}"):
                 data_ingestion = DataIngestion(config=data_ingestion_config)
-                
                 df = data_ingestion.load_data()
                 df_features = self.process_data_for_churn(df)
-                df_encoded = self.encode_churn(df_features)
-                X = self.scaler.transform(df_encoded)
+                drift_ratio = 0
+                n_drifted_features = 0
 
+                if reference_data:
+                    try:
+                        logger.info(f"Loading reference data from {reference_data}")
+                        reference_df = pd.read_csv(reference_data)
+                        
+                        logger.info(f"Reference data columns: {reference_df.columns.tolist()}")
+                        logger.info(f"Current data columns: {df_features.columns.tolist()}")
+                        
+                        if 'customer_id' in reference_df.columns and 'customer_id' in df_features.columns:
+                            logger.info("customer_id found in both dataframes")
+                        else:
+                            logger.warning(f"customer_id missing in one or both dataframes. Reference has customer_id: {'customer_id' in reference_df.columns}, Current has customer_id: {'customer_id' in df_features.columns}")
+                        
+                        drift_result = get_data_drift(reference_df, df_features)
+                        drift_ratio = drift_result.get("drift_ratio", 0)
+                        n_drifted_features = drift_result.get("n_drifted_features", 0)
+                    except Exception as e:
+                        logger.warning(f"Skipping data drift due to error: {e}")
+                        import traceback
+                        logger.warning(traceback.format_exc())
+                else:
+                    logger.info("No reference data provided. Skipping data drift detection.")
+                
+                df_features_for_prediction = df_features.copy()
+                
+                columns_to_drop = []
+                if "customer_id" in df_features_for_prediction.columns:
+                    columns_to_drop.append("customer_id")
+                if "LastPurchaseDate" in df_features_for_prediction.columns:
+                    columns_to_drop.append("LastPurchaseDate")
+                if "Customer_Name" in df_features_for_prediction.columns:
+                    columns_to_drop.append("Customer_Name")
+                
+                if columns_to_drop:
+                    logger.info(f"Dropping columns for prediction: {columns_to_drop}")
+                    df_features_for_prediction.drop(columns=columns_to_drop, inplace=True)
+                
+                # Encode the features for prediction
+                df_encoded = self.encode_churn(df_features_for_prediction)
+
+                X = self.scaler.transform(df_encoded)
                 y_pred = self.model.predict(X)
+                
+                # Add predictions back to the original df_features
                 df_features['Churn_RATE'] = y_pred
                 counts = df_features['Churn_RATE'].value_counts()
                 count_churn = counts.get(1, 0)
                 count_not_churn = counts.get(0, 0)
+                
+                s3_url = None
+                prediction_csv_path = None
+                
                 try:
                     with tempfile.NamedTemporaryFile(suffix='.csv', delete=False) as temp_file:
                         prediction_csv_path = temp_file.name
                         df_features.to_csv(prediction_csv_path, index=False)
-                        mlflow.log_artifact(prediction_csv_path, "predictions")
-                        logger.info(f"Successfully saved prediction results to {prediction_csv_path} and logged as MLflow artifact")
+                        logger.info(f"Successfully saved prediction results to {prediction_csv_path}")
                     
+                    s3_url = self.upload_to_s3(prediction_csv_path)
+                    mlflow.set_tag("prediction_file", s3_url)
+                    logger.info(f"Uploaded prediction file to S3: {s3_url}")
+
                     os.remove(prediction_csv_path)
                     logger.info(f"Deleted temporary prediction file: {prediction_csv_path}")
 
                 except Exception as e:
                     logger.error(f"An error occurred during prediction saving or cleanup: {e}")
+
                 
                 try:    
                     sklearn_model = self.model._model_impl  
@@ -147,39 +214,54 @@ class PredictionPipeline:
                 mlflow.log_param("end_time", end_datetime.strftime('%Y-%m-%d %H:%M:%S'))
                 mlflow.log_param("rawdata_records", len(df))
                 mlflow.log_metric("records_processed", len(df_encoded))
+                message = ""
+                if reference_data:
+                    DRIFTED_FEATURE_THRESHOLD = threshold_config.data_drift_threshold
+                    if drift_ratio > DRIFTED_FEATURE_THRESHOLD:
+                        message += (
+                            f"⚠️ Data drift detected in {n_drifted_features} feature(s) "
+                            f"({drift_ratio:.0%} of all features). Consider retraining the model.\n"
+                        )
+                    else:
+                        message += f"✅ No significant data drift detected ({drift_ratio:.0%} of features).\n"
+                else:
+                    message = ""
+
+                CONFIDENCE_THRESHOLD = threshold_config.confidence_threshold
                 if average_confidence is not None:
                     mlflow.log_metric("average_prediction_confidence", average_confidence)
-                    CONFIDENCE_THRESHOLD = 0.7 
-                    if average_confidence is not None and average_confidence < CONFIDENCE_THRESHOLD:
-                        message = (
+
+                    if average_confidence < CONFIDENCE_THRESHOLD:
+                        message += (
                             f"⚠️ Average prediction confidence ({average_confidence:.2%}) is below the threshold "
                             f"of {CONFIDENCE_THRESHOLD:.2%}. Consider retraining the model."
                         )
                     else:
-                        message = (
-                            f"Average prediction confidence ({average_confidence:.2%}) is above the threshold "
+                        message += (
+                            f"✅ Average prediction confidence ({average_confidence:.2%}) is above the threshold "
                             f"of {CONFIDENCE_THRESHOLD:.2%}. No further action required."
                         )
                 mlflow.log_text(message, "prediction_summary.txt")
-            return message
+            return message,  s3_url
 
         except Exception as e:
             raise RuntimeError(f"Prediction error: {e}")
         
-def run_prediction_task(
+async def run_prediction_task(
     file_path: str,
     model_version: str,
     scaler_version: str,
     run_id: str,
+    reference_data: Optional[str] = None,
 ):
     """
-    Background task to run prediction pipeline
+    Background task to run prediction pipeline and notify webhook.
     """
     try:
-        model_uri = f"models:/RandomForestClassifier/{model_version}"  
+        model_uri = f"models:/RandomForestClassifier/{model_version}"
         scaler_uri = f"runs:/{run_id}/{scaler_version}"
         pipeline = PredictionPipeline(model_uri, scaler_uri)
-        message = pipeline.predict()
+        message, s3_url = await pipeline.predict(reference_data=reference_data)
 
         if os.path.exists(file_path):
             try:
@@ -187,12 +269,20 @@ def run_prediction_task(
                 logger.info(f"Cleanup: Deleted input file {file_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete input file during cleanup: {e}")
+        web_hook_url = WebhookConfig().url
+        webhook_payload = {
+            "message": message,
+            "prediction_url": s3_url,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+        logger.info(f"Sending webhook payload: {webhook_payload}")
+        await post_to_webhook(web_hook_url, webhook_payload)
 
-        return message
+        return message, s3_url
 
     except Exception as e:
         logger.error(f"Background prediction task error: {e}")
-        return f"Prediction error: {e}"
+        return f"Prediction error: {e}", None
 
 
 class ChurnController:
@@ -203,6 +293,7 @@ class ChurnController:
         model_version: str = Form(default="1"),
         scaler_version: str = Form(default="scaler_churn_version_20250701T105905.pkl"),
         run_id: str = Form(default="b523ba441ea0465085716dcebb916294"),
+        reference_data: Optional[str] = Form(default="s3://churndataversion/churn_data_store/data_version/features_data_version_20250704T005200.csv"),
     ):
         """
         Predict churn using uploaded file and dynamic model/scaler versions.
@@ -216,20 +307,19 @@ class ChurnController:
 
         try:
             await import_data(file)
-
+                
             background_tasks.add_task(
                 run_prediction_task,
                 file_path=input_file_path,
                 model_version=model_version,
                 scaler_version=scaler_version,
-                run_id=run_id
+                run_id=run_id,
+                reference_data=reference_data
             )
             
-            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/MY_DE_AN.mlflow "
+            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/churn_mlops.mlflow and uploaded to S3. Check your webhook for status."
             
-            return {
-                "message": message
-            }
+            return {"message": message}
 
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))

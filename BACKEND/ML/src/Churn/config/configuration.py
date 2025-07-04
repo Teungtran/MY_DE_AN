@@ -1,7 +1,7 @@
 from src.Churn.utils.common import read_yaml, create_directories
 from src.Churn.utils.logging import logger
 from pydantic import BaseModel, Field
-from langchain_core.utils import from_env
+
 from dotenv import load_dotenv
 
 
@@ -11,8 +11,11 @@ from src.Churn.entity.config_entity import (
     TrainingConfig,
     EvaluationConfig,
     CloudStoragePushConfig,
-    MLFlowConfig
+    MLFlowConfig,
+    ThresholdConfig
 )
+import os
+
 from pathlib import Path
 # Initialize the _env_loaded variable
 _env_loaded = False
@@ -25,11 +28,13 @@ def ensure_env_loaded():
         _env_loaded = True
         
 class CloudConfig(BaseModel):
-    aws_access_key_id: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_ACCESS_KEY_ID")())[1])
-    aws_secret_access_key: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_SECRET_ACCESS_KEY")())[1])
-    region_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_REGION")())[1])
+    aws_access_key_id: str = Field(default_factory=lambda: (ensure_env_loaded(), os.getenv("AWS_ACCESS_KEY_ID"))[1])
+    aws_secret_access_key: str = Field(default_factory=lambda: (ensure_env_loaded(), os.getenv("AWS_SECRET_ACCESS_KEY"))[1])
+    region_name: str = Field(default_factory=lambda: (ensure_env_loaded(), os.getenv("AWS_REGION"))[1])
+
+
 class WebhookConfig(BaseModel):
-    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("WEB_HOOK")())[1])
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), os.getenv("WEB_HOOK"))[1])
 class ConfigurationManager:
     def __init__(
         self,
@@ -50,7 +55,8 @@ class ConfigurationManager:
             dagshub_username=config.dagshub_username,
             dagshub_repo_name=config.dagshub_repo_name,
             tracking_uri=config.tracking_uri,
-            experiment_name=base_experiment_name
+            experiment_name=base_experiment_name,
+            prediction_experiment_name=config.prediction_experiment_name
         )
 
         logger.info(f"MLFlow configuration for {self.model_name}: {mlflow_config}")
@@ -150,3 +156,14 @@ class ConfigurationManager:
         logger.info(f"Cloud Storage Push config for {self.model_name}: {config}")
         return cloud_storage_push_config
     
+    def get_threshold_config(self) -> ThresholdConfig:
+        config = self.config.prediction_threshold
+
+        threshold_config = ThresholdConfig(
+            confidence_threshold=config.confidence_threshold,
+            data_drift_threshold=config.data_drift_threshold
+
+        )
+
+        logger.info(f"MLFlow configuration: {threshold_config}")
+        return threshold_config
