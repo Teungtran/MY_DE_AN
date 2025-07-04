@@ -65,26 +65,35 @@ class WorkflowRunner:
                     raise
             else:
                 raise ValueError("No data file found and no uploaded file provided. Please provide a data file.")
-
-        # Stage 1: Data Preparation
-        logger.info("=" * 50)
-        logger.info("STAGE 1: Data Preparation")
-        logger.info("=" * 50)
-        
-        data_prep = DataPreparationPipeline()
-        _, _, _, train_data, test_data = data_prep.main()
-        
-        logger.info("Data preparation completed successfully")
-
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"Sentiment_model_training_cycle_{timestamp}"
         
         with mlflow.start_run(run_name=run_name):
+            # Stage 1: Data Preparation
+            logger.info("=" * 50)
+            logger.info("STAGE 1: Data Preparation")
+            logger.info("=" * 50)
+            
+            data_prep = DataPreparationPipeline()
+            df_load,df_processed, _, _,train_data,test_data = data_prep.main()
+            raw_dataset = mlflow.data.from_pandas(
+                df=df_load,
+                name="sentiment-prediction-raw-training-data",
+                targets="Sentiment"
+            )
+            mlflow.log_input(raw_dataset, context="train_data_raw")
+
+            feature_dataset = mlflow.data.from_pandas(
+                df=df_processed,
+                name="sentiment-prediction-feature-data",
+                targets="sentiment"
+            )
+            mlflow.log_input(feature_dataset, context="train_data_features")
+            logger.info("Data preparation completed successfully")
             logger.info("=" * 50)
             logger.info("STAGE 2: Model Preparation")
             logger.info("=" * 50)
             
-            # Pass mlflow_config even though we're using hardcoded experiment name
             mlflow_config = self.config_manager.get_mlflow_config()
             model_prep = ModelPreparationPipeline(mlflow_config=mlflow_config)
             model, base_model_path, tokenizer_path , _ = model_prep.main(train_data)

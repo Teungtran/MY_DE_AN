@@ -175,4 +175,4 @@ class DataIngestion:
         
         logger.info("Data ingestion completed successfully")
         logger.info(f"First few rows of processed data: \n{df_processed.head()}")
-        return df_processed, train_path, test_path,train_data,test_data
+        return df_load,df_processed, train_path, test_path,train_data,test_data

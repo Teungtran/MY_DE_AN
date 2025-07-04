@@ -44,13 +44,11 @@ class TrainAndEvaluateModel:
     def log_model_to_mlflow(self, model, model_name: str):
         logger.info(f"Logging model to MLflow as {model_name}")
         try:
-            # Log the model to the current run
             mlflow.tensorflow.log_model(model, model_name)
             run_id = mlflow.active_run().info.run_id
             artifact_uri = f"runs:/{run_id}/{model_name}"
             
-            model_id = uuid.uuid4().hex[:8]
-            registered_model_name = f"CNN_{model_id}"
+            registered_model_name = "CNN"
             
             mlflow.register_model(model_uri=artifact_uri, name=registered_model_name)
 
@@ -151,7 +149,7 @@ class TrainAndEvaluateModel:
             "f1_score": f1,
         })
         
-        mlflow.log_artifact(str(metrics_file_versioned))
+        mlflow.log_artifact(str(metrics_file_versioned), artifact_path="metrics")
         
         logger.info("Detailed evaluation completed")        
         return metrics, y_pred, y_pred_prob
@@ -184,7 +182,7 @@ class TrainAndEvaluateModel:
         plt.savefig(history_fig_path)
         plt.close()
         logger.info(f"Training history plot saved at: {history_fig_path}")
-        mlflow.log_artifact(history_fig_path)
+        mlflow.log_artifact(history_fig_path, artifact_path="visualizations")
         return history_fig_path
     def plot_confusion_matrix(self, y_test, y_pred):
         """Plot and save confusion matrix."""
@@ -202,7 +200,7 @@ class TrainAndEvaluateModel:
         plt.savefig(cm_path)
         plt.close()
         logger.info(f"Confusion matrix saved to: {cm_path}")
-        mlflow.log_artifact(cm_path)
+        mlflow.log_artifact(cm_path, artifact_path="visualizations")
 
         return cm_path
     def plot_precision_recall_curve(self, y_test, y_pred_prob):
@@ -225,7 +223,7 @@ class TrainAndEvaluateModel:
         plt.savefig(pr_path)
         plt.close()
         logger.info(f"Precision-Recall curve saved to: {pr_path}")
-        mlflow.log_artifact(pr_path)
+        mlflow.log_artifact(pr_path, artifact_path="visualizations")
         return pr_path
     
     def plot_roc_curve(self, y_test, y_pred_prob):
@@ -250,7 +248,7 @@ class TrainAndEvaluateModel:
         plt.savefig(roc_path)
         plt.close()
         logger.info(f"ROC curve saved to: {roc_path}")
-        mlflow.log_artifact(roc_path)
+        mlflow.log_artifact(roc_path, artifact_path="visualizations")
 
         return roc_path
     

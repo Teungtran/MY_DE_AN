@@ -8,12 +8,11 @@ class DataPreparationPipeline:
     def main(self):
         logger.info(f">>> Stage {STAGE_NAME} started <<<")
         
-        config = ConfigurationManager(model_name="churn")
+        config = ConfigurationManager()
         data_ingestion_config = config.get_data_ingestion_config()
         data_ingestion = DataIngestion(config=data_ingestion_config)
         
-        X_train, X_test, y_train, y_test,_,_ = data_ingestion.data_ingestion_pipeline()
+        X_train, X_test, y_train, y_test,df_processed,df,df_features = data_ingestion.data_ingestion_pipeline()
         
         logger.info(f">>> Stage {STAGE_NAME} completed <<<")
-        return X_train, X_test, y_train, y_test,_,_ 
-
+        return X_train, X_test, y_train, y_test,df_processed,df ,df_features

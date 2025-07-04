@@ -8,12 +8,11 @@ from controller.churn import prediction, retraining
 # Load environment variables
 load_dotenv()
 
-mlflow.set_tracking_uri("https://dagshub.com/Teungtran/MY_DE_AN.mlflow")
 
 # Create FastAPI app
 app = FastAPI(
-    title="Churn Prediction API",
-    description="API for customer churn prediction and model retraining",
+    title="MLOps API",
+    description="API for MLOps operations",
     version="1.0.0"
 )
 

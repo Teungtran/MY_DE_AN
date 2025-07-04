@@ -12,8 +12,8 @@ class DataPreparationPipeline:
         data_ingestion_config = config.get_data_ingestion_config()
         data_ingestion = DataIngestion(config=data_ingestion_config)
         
-        df_processed, train_path, test_path,train_data,test_data = data_ingestion.data_ingestion_pipeline()
+        df_load,df_processed, train_path, test_path,train_data,test_data = data_ingestion.data_ingestion_pipeline()
         
         logger.info(f">>> Stage {STAGE_NAME} completed <<<")
-        return df_processed, train_path, test_path, train_data, test_data
+        return df_load,df_processed, train_path, test_path,train_data,test_data
 

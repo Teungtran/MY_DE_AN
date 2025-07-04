@@ -145,7 +145,7 @@ class TrainAndEvaluateModel:
                     if isinstance(value, (int, float)):  # Only log numeric values
                         mlflow.log_metric(f"class_{class_label}_{metric_name}", value)
         
-        mlflow.log_artifact(str(metrics_file_versioned))
+        mlflow.log_artifact(str(metrics_file_versioned), artifact_path="metrics")
         return metrics, y_pred, y_pred_prob
     
     def plot_confusion_matrix(self, y_test, y_pred):
@@ -164,7 +164,7 @@ class TrainAndEvaluateModel:
         plt.savefig(cm_path)
         plt.close()
         logger.info(f"Confusion matrix saved to: {cm_path}")
-        mlflow.log_artifact(cm_path)
+        mlflow.log_artifact(cm_path, artifact_path="visualizations")
 
         return cm_path
     def plot_precision_recall_curve(self, y_test, y_pred_prob):
@@ -188,7 +188,7 @@ class TrainAndEvaluateModel:
         plt.savefig(pr_path)
         plt.close()
         logger.info(f"Precision-Recall curve saved to: {pr_path}")
-        mlflow.log_artifact(pr_path)
+        mlflow.log_artifact(pr_path, artifact_path="visualizations")
         return pr_path
     def plot_roc_curve(self, y_test, y_pred_prob):
         """Plot and save ROC curve."""
@@ -213,7 +213,7 @@ class TrainAndEvaluateModel:
         plt.savefig(roc_path)
         plt.close()
         logger.info(f"ROC curve saved to: {roc_path}")
-        mlflow.log_artifact(roc_path)
+        mlflow.log_artifact(roc_path, artifact_path="visualizations")
 
         return roc_path
     

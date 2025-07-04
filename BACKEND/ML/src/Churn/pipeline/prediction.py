@@ -5,19 +5,21 @@ import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 from src.Churn.components.data_ingestion import DataIngestion
-from src.Churn.config.configuration import ConfigurationManager,WebhookConfig
+from src.Churn.config.configuration import ConfigurationManager, WebhookConfig
 import joblib 
 import mlflow
 from src.Churn.utils.logging import logger
-from src.Churn.utils.visualize_ouput import visualize_customer_churn
 from src.Churn.utils.notify_webhook import post_to_webhook
+from src.Churn.utils.visualize_ouput import visualize_customer_churn
 from src.Churn.utils.check_drift import get_data_drift
+
 from datetime import datetime
 import time
 import os
 import dagshub
 import tempfile
 import os
+import boto3
 web_hook_url = WebhookConfig().url
 
 class PredictionPipeline:
@@ -25,6 +27,9 @@ class PredictionPipeline:
         pass
     
         try:
+            config = ConfigurationManager().get_mlflow_config()
+            mlflow.set_tracking_uri(config.tracking_uri)
+            logger.info(f"MLflow tracking URI set to: {mlflow.get_tracking_uri()}")
             self.model = mlflow.pyfunc.load_model(model_uri)
             scaler_path = mlflow.artifacts.download_artifacts(artifact_uri=scaler_uri)
             self.scaler = joblib.load(scaler_path)
