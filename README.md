@@ -2,7 +2,7 @@
 
 SAGE is an integrated enterprise system that provides intelligent chatbot services, machine learning capabilities, and data preprocessing tools with role-based access control.
 
-USE CASE: **FPT Shop** (due to their recent drama)
+CASE STUDY: **FPT Shop** 
 
 ## System Overview
 
