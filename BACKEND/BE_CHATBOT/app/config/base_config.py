@@ -36,7 +36,7 @@ class RedisConfig(BaseModel):
     host: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_HOST")())[1])
     password: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_PASS")())[1])
 class MongoDBConfig(BaseModel):
-    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_URL", default="mongodb+srv://nguyentrantrung2504:NBg7vdR1KSDlW1E3@cluster0.hpkg9.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0")())[1])
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_URL", default="....")())[1])
 class OpenAIConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
     model: Optional[str] = Field(default="gpt-4o-mini")

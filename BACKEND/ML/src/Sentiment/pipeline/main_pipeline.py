@@ -96,7 +96,7 @@ class WorkflowRunner:
             
             mlflow_config = self.config_manager.get_mlflow_config()
             model_prep = ModelPreparationPipeline(mlflow_config=mlflow_config)
-            model, base_model_path, tokenizer_path , _ = model_prep.main(train_data)
+            model, base_model_path, tokenizer_path , tokenizer = model_prep.main(train_data)
             
             logger.info("Model preparation completed successfully")
             logger.info(f"Base model: {base_model_path}")
@@ -110,7 +110,8 @@ class WorkflowRunner:
             model, metrics = train_eval.main(
                 base_model=model,
                 test_data=test_data,
-                train_data=train_data
+                train_data=train_data,
+                tokenizer=tokenizer
             )
             
             logger.info("Training and evaluation completed successfully")
