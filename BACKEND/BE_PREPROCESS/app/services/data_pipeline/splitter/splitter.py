@@ -28,7 +28,7 @@ class DocumentSplitter:
         self,
         chunk_size: int = 512,
         chunk_overlap: int = 100,
-        splitter: str = "markdown",
+        splitter: str = "table",
         embedding_model: Optional[Embeddings] = None,
     ):
         """

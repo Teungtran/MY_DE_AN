@@ -1,5 +1,4 @@
 import datetime
-import json
 import os
 import re
 import tempfile
@@ -7,15 +6,16 @@ from typing import List
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, status
+
 from config.base_config import APP_CONFIG
 from schemas.urls import DocumentMetadata, UrlsRequest, UrlsResponse
-from services.data_pipeline.store.recommend_preprocessing_pipeline import RecommendProcessingPipeline
+from services.data_pipeline.store.url_rag_preprocessing_pipeline import URLRAGPreprocessingPipeline
 from services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 from utils.logger.logger import get_logger
 
 logger = get_logger(__name__)
-recommend_router = APIRouter(prefix="/url")
+url_router = APIRouter(prefix="/url")
 
 _BUCKET_NAME = APP_CONFIG.s3config.bucket_name
 if _BUCKET_NAME is None:
@@ -57,10 +57,11 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
     paths: List[str] = [url.source for url in doc_metadata if url.source is not None]
 
     try:
-        pipeline_url = RecommendProcessingPipeline()
+        pipeline_url = URLRAGPreprocessingPipeline(type="urls")
         logger.info("Start URL processing pipeline", url=paths)
-        raw_data = await pipeline_url._get_documents(urls=paths)
-        documents = await pipeline_url._batch_process_documents(raw_data)
+        # get content from URLs
+        documents = await pipeline_url._get_documents(paths=paths, metadatas=doc_metadata)
+
         if not documents:
             logger.error("No documents were processed")
             failed_list.extend(paths)
@@ -75,10 +76,12 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
                 content_md = doc.page_content
                 metadata = {
                     "source": url_md or "",
+                    "description": doc.metadata.get("description") or "",
+                    "type": doc.metadata.get("type") or "",
                     "processed_date": datetime.datetime.now(datetime.timezone.utc).isoformat()
                 }
                 name = get_filename_from_url(url_md or "")
-                md_filename = f"store_product/recommend_{name}_{idx}.md"
+                md_filename = f"policy/processed_rag_data_{name}_{idx}_from_url.md"
                 with tempfile.NamedTemporaryFile(delete=False, mode="w", encoding="utf-8", suffix=".md") as md_file:
                     md_file.write(str(content_md))
                     md_file_path = md_file.name
@@ -88,9 +91,6 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
                     extra_args={"Metadata": metadata},
                 )
                 logger.info("Markdown content uploaded to S3 with metadata", s3_key=md_filename)
-                total_docs = len(documents)
-                progress = ((idx + 1) / total_docs) * 100
-                logger.info(f"Uploading progress: {progress:.2f}% ({idx + 1}/{total_docs})")
                 try:
                     os.remove(md_file_path)
                 except Exception as cleanup_error:
@@ -100,7 +100,7 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
                         error=str(cleanup_error),
                     )
             # save to Vector DB
-            await pipeline_url._run(paths=paths, preloaded_documents=documents)
+            await pipeline_url._run(paths=paths, metadatas=doc_metadata, preloaded_documents=documents)
 
             for idx, doc in enumerate(documents):
                 url_md = doc.metadata.get("source")
@@ -126,7 +126,7 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
     return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
 
 
-@recommend_router.post("/recommend/", response_model=UrlsResponse, status_code=status.HTTP_200_OK)
+@url_router.post("/urls-rag/", response_model=UrlsResponse, status_code=status.HTTP_200_OK)
 async def url_processing(
     request: UrlsRequest,
     s3_client: AsyncS3Client = Depends(get_s3_client),

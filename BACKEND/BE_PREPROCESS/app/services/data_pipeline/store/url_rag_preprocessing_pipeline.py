@@ -8,7 +8,6 @@ from config.base_config import APP_CONFIG, BaseConfiguration
 from schemas.urls import DocumentMetadata
 from services.data_pipeline.embeddings import create_embedding_model
 from services.data_pipeline.loaders.urls import FPTCrawler
-from services.data_pipeline.loaders.pdf import FPTPDFLoader
 
 from services.data_pipeline.splitter import DocumentSplitter
 from services.data_pipeline.vector_store import create_policy_store
@@ -17,16 +16,14 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class RAGPreprocessingPipeline:
+class URLRAGPreprocessingPipeline:
     def __init__(self, config: BaseConfiguration = APP_CONFIG,type="urls"):
         self.config = config
 
         self.embedding_model = create_embedding_model(config.embedding_model_config)
         self.vector_store = create_policy_store(configuration=config, embedding_model=self.embedding_model)
         if type == "urls":
-            self.loader = FPTCrawler()
-        elif type == "pdfs":
-            self.loader = FPTPDFLoader()        
+            self.loader = FPTCrawler()     
         self.text_splitter = DocumentSplitter(
             chunk_size=self.config.chunking_method_config.chunk_size,
             chunk_overlap=self.config.chunking_method_config.chunk_overlap,
@@ -111,15 +108,3 @@ class RAGPreprocessingPipeline:
         logger.info(f"Pipeline completed successfully in {round(time.time()-_start_time, 3)} seconds!")
 
 
-# import asyncio
-# async def main():
-#     loader = DocumentPreprocessingPipeline(type="urls")
-#     chunks = await loader._run(
-#         paths = [
-#             "https://www.vietnamairlines.com/vn/vi/travel-information/baggage/restricted-baggage",
-#             "https://www.vietnamairlines.com/vn/vi/travel-information/baggage/special-baggage",
-#         ]
-#     )
-#     print(chunks)
-# if __name__ == "__main__":
-#     asyncio.run(main())

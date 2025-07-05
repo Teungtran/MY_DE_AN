@@ -36,7 +36,12 @@ class PolicyConfig(BaseModel):
     url: str = Field(default_factory=from_env("QDRANT_URL"))
     api_key: SecretStr = Field(default_factory=secret_from_env("QDRANT_API_KEY"))
     collection_name: str = Field(default_factory=from_env("POLICY"))
-
+    
+class ExpertConfig(BaseModel):
+    url: str = Field(default_factory=from_env("QDRANT_URL"))
+    api_key: SecretStr = Field(default_factory=secret_from_env("QDRANT_API_KEY"))
+    collection_name: str = Field(default_factory=from_env("EXPERT"))
+    
 class ChunkingMethodConfig(BaseModel):
     chunking_method: Literal["table"] = get_value_from_dict("chunking_method_config.method", CONFIG, default="table")()
     chunk_size: int = get_value_from_dict("chunking_method_config.chunk_size", CONFIG, default=512)()
@@ -44,13 +49,8 @@ class ChunkingMethodConfig(BaseModel):
     chunking_kwargs: Dict = get_value_from_dict("chunking_method_config.kwargs", CONFIG, default={})()
 
 
-class WebhookConfig(BaseModel):
-    url: str = Field(default_factory=from_env("WEBHOOK_URL"))
-    rag_processed_endpoint: str = Field(default="/internal/callback/rag_processed")
-    recommend_processed_endpoint: str = Field(default="/internal/callback/recommend_process")
-
 class S3Config(BaseModel):
-    bucket_name: str = Field(default_factory=from_env("BUCKET_NAME"))
+    bucket_name: str = Field(default_factory=from_env("PREPROCESS_BUCKET_NAME"))
     region_name: str = Field(default_factory=from_env("AWS_REGION"))
     access_key_id: SecretStr = Field(default_factory=secret_from_env("AWS_ACCESS_KEY_ID"))
     secret_access_key: SecretStr = Field(default_factory=secret_from_env("AWS_SECRET_ACCESS_KEY"))
@@ -74,13 +74,13 @@ class BaseConfiguration(BaseModel):
 
     chunking_method_config: Union[ChunkingMethodConfig] = ChunkingMethodConfig()
     s3config: Union[S3Config] = S3Config()
-    webhook_config: WebhookConfig = WebhookConfig()
     embedding_model_config: Union[EmbeddingConfig] = EmbeddingConfig()
     chat_model_config: Union[OpenAIConfig] = OpenAIConfig()
 
     crawl_config: Union[URLCrawlConfig] = URLCrawlConfig()
     vector_store_config: Union[PolicyConfig] = PolicyConfig()
     recommend_config: Union[RecommendConfig] = RecommendConfig()
+    expert_config: Union[ExpertConfig] = ExpertConfig()
 
     @model_validator(mode="after")
     def validate_provider(self) -> Self:

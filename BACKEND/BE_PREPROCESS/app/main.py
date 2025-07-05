@@ -8,9 +8,10 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from opentelemetry import context
 from opentelemetry.trace import SpanKind, StatusCode, Tracer
 import structlog
-from controllers.url_controllers.url import url_router
-from controllers.pdf_controller.pdf import pdf_router
-
+from controllers.url_controllers.rag_url import url_router as rag_url_router
+from controllers.pdf_controller.rag_pdf import pdf_router as rag_pdf_router
+from controllers.url_controllers.expert_url import url_router as expert_url_router
+from controllers.pdf_controller.expert_pdf import pdf_router as expert_pdf_router
 from controllers.url_controllers.recommend_data import recommend_router
 from utils.helpers import LoggingMiddleware
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
@@ -211,8 +212,10 @@ async def root():
     }
 
 
-app.include_router(url_router, prefix="/internal/v1", tags=["RAG controller"])
-app.include_router(pdf_router, prefix="/internal/v1", tags=["RAG controller"])
+app.include_router(rag_url_router, prefix="/internal/v1", tags=["RAG controller"])
+app.include_router(rag_pdf_router, prefix="/internal/v1", tags=["RAG controller"])
+app.include_router(expert_pdf_router, prefix="/internal/v1", tags=["Expert controller"])
+app.include_router(expert_url_router, prefix="/internal/v1", tags=["Expert controller"])
 app.include_router(recommend_router, prefix="/internal/v1", tags=["Reommmend controller"])
 
 
