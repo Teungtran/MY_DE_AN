@@ -79,13 +79,13 @@ class WorkflowRunner:
             raw_dataset = mlflow.data.from_pandas(
                 df=df_load,
                 name="sentiment-prediction-raw-training-data",
-                targets="Sentiment"
+                targets="sentiment"
             )
             mlflow.log_input(raw_dataset, context="train_data_raw")
 
             feature_dataset = mlflow.data.from_pandas(
                 df=df_processed,
-                name="sentiment-prediction-feature-data",
+                name="sentiment-prediction-processed-data",
                 targets="sentiment"
             )
             mlflow.log_input(feature_dataset, context="train_data_features")

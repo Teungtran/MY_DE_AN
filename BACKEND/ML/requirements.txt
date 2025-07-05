@@ -21,7 +21,7 @@ python-multipart==0.0.6
 
 # Cloud and Storage
 boto3==1.28.15
-
+s3fs
 # Utilities
 python-dotenv==1.0.0
 s3fs 

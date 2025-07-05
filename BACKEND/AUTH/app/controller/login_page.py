@@ -367,17 +367,24 @@ def require_role(required_role: str):
 
 @auth.get("/admin-only")
 async def admin_only_route(current_user: dict = Depends(require_role("admin"))):
-    return {"message": f"Hello {current_user['user_id']}"}
+    return {
+        "user_id": current_user["user_id"],
+        "email": current_user["email"],
+        "role": current_user["role"],
+        "access_token": current_user["token"],
+        "token_exp": current_user["token_exp"]
+    }
 @auth.get("/user-profile")
-async def user_profile(current_user: dict = Depends(require_role("user"))):
-    return {"message": f"Hello {current_user['user_id']}"}
+async def user_only(current_user: dict = Depends(require_role("user"))):
+    return {
+        "user_id": current_user["user_id"],
+        "email": current_user["email"],
+        "role": current_user["role"],
+        "access_token": current_user["token"],
+        "token_exp": current_user["token_exp"]
+    }
 @auth.get("/viewer-profile")
-async def viewer_profile(current_user: dict = Depends(require_role("viewer"))):
-    return {"message": f"Hello {current_user['user_id']}"}
-
-@auth.get("/me")
-async def get_me(current_user: dict = Depends(get_current_user)):
-    """Return current authenticated user's info including role and token"""
+async def staff_only(current_user: dict = Depends(require_role("staff"))):
     return {
         "user_id": current_user["user_id"],
         "email": current_user["email"],

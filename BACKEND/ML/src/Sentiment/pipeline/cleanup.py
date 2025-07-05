@@ -1,7 +1,7 @@
-from src.Churn.utils.logging import logger
+from src.Sentiment.utils.logging import logger
 import os
 import glob
-from src.Churn.config.configuration import ConfigurationManager
+from src.Sentiment.config.configuration import ConfigurationManager
 
 def cleanup_temp_files():
     """Clean up temporary versioned files after pipeline completion."""

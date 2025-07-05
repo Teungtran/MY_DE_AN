@@ -13,7 +13,7 @@ class WorkflowResponse(BaseModel):
 
 
 
-@router.post("/train", response_model=WorkflowResponse)
+@router.post("/", response_model=WorkflowResponse)
 async def train_model(
     file: Optional[UploadFile] = File(None)
 ):

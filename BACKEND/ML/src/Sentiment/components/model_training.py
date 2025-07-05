@@ -3,7 +3,6 @@ import matplotlib
 import mlflow.tensorflow
 matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
-import joblib as jb
 from pathlib import Path
 import seaborn as sns
 from datetime import datetime
@@ -17,8 +16,7 @@ from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.models import load_model
 from pathlib import Path
 import mlflow
-from mlflow import register_model
-import uuid
+
 from src.Sentiment.utils.logging import logger
 from src.Sentiment.entity.config_entity import TrainingConfig, EvaluationConfig
 from src.Sentiment.utils.common import save_json

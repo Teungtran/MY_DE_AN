@@ -64,7 +64,7 @@ class PrepareBaseModel:
         
         os.makedirs(self.config.data_version_dir, exist_ok=True)
         os.makedirs(self.config.model_version_dir, exist_ok=True)
-        tokenizer_path = os.path.join(self.config.model_version_dir, f"tokinezer_version_{self.datetime_suffix}.pkl")
+        tokenizer_path = os.path.join(self.config.model_version_dir, f"tokenizer_version_{self.datetime_suffix}.pkl")
 
         try:
             logger.info(f"Loading training data from: {train_data}")
@@ -76,7 +76,7 @@ class PrepareBaseModel:
             processed_count = len(train_data)
             dropped_count = original_count - processed_count
             logger.info(f"Tokenizer fitted on {processed_count} reviews (dropped {dropped_count} rows with missing 'review')")
-            tokenizer = Tokenizer(num_words=self.config.params_num_words)
+            tokenizer = Tokenizer(num_words=self.config.num_words)
             tokenizer.fit_on_texts(train_data["review"])
             jb.dump(tokenizer, tokenizer_path)
             

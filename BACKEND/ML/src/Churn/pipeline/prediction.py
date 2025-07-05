@@ -90,7 +90,7 @@ class PredictionPipeline:
             )
             
             timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
-            object_key = f"churn_data_store/prediction/prediction_{timestamp}.csv"
+            object_key = f"churn_data_store/prediction/prediction_churn_{timestamp}.csv"
             
             s3_client.upload_file(file_path, bucket_name, object_key)
             
@@ -274,14 +274,24 @@ async def run_prediction_task(
                 logger.info(f"Cleanup: Deleted input file {file_path}")
             except Exception as e:
                 logger.warning(f"Failed to delete input file during cleanup: {e}")
-        web_hook_url = WebhookConfig().url
-        webhook_payload = {
+        payload = {
             "message": message,
             "prediction_url": s3_url,
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
-        logger.info(f"Sending webhook payload: {webhook_payload}")
-        await post_to_webhook(web_hook_url, webhook_payload)
+
+
+        return payload
+
+    except Exception as e:
+        logger.error(f"Background prediction task error: {e}")
+        return {
+            "error": f"Prediction error: {e}",
+            "prediction_url": None,
+            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        }
+
+
 
         return message, s3_url
 
@@ -293,7 +303,6 @@ async def run_prediction_task(
 class ChurnController:
     @staticmethod
     async def predict_churn(
-        background_tasks: BackgroundTasks,
         file: UploadFile,
         model_version: str = Form(default="1"),
         scaler_version: str = Form(default="scaler_churn_version_20250701T105905.pkl"),
@@ -313,18 +322,15 @@ class ChurnController:
         try:
             await import_data(file)
                 
-            background_tasks.add_task(
-                run_prediction_task,
+            payload = await run_prediction_task(
                 file_path=input_file_path,
                 model_version=model_version,
                 scaler_version=scaler_version,
                 run_id=run_id,
                 reference_data=reference_data
             )
-            
-            message = "Prediction task started in background. Results will be saved to experiment 'Churn_model_prediction_cycle' in https://dagshub.com/Teungtran/churn_mlops.mlflow and uploaded to S3. Check your webhook for status."
-            
-            return {"message": message}
+
+            return payload
 
         except RuntimeError as e:
             raise HTTPException(status_code=400, detail=str(e))

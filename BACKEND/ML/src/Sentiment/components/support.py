@@ -2,9 +2,9 @@ from collections import Counter
 import pandas as pd
 import pandas as pd
 import json
-from src.Churn.config.configuration import ConfigurationManager
+from src.Sentiment.config.configuration import ConfigurationManager
 from pathlib import Path
-from src.Churn.utils.logging import logger
+from src.Sentiment.utils.logging import logger
 
 def most_common(lst):
     counts = Counter(lst)

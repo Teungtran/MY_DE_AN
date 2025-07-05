@@ -1,15 +1,14 @@
 import os
 import glob
-from pathlib import Path
-from src.Churn.utils.logging import logger
-from src.Churn.entity.config_entity import CloudStoragePushConfig
+from src.Sentiment.utils.logging import logger
+from src.Sentiment.entity.config_entity import CloudStoragePushConfig
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 class CloudStoragePush:
-    def __init__(self, config: CloudStoragePushConfig, model_name="churn"):
+    def __init__(self, config: CloudStoragePushConfig, model_name="sentiment"):
         self.config = config
         self.model_name = model_name
         self.s3_client = boto3.client(
