@@ -17,7 +17,7 @@ from config.base_config import APP_CONFIG
 from services.dynamodb import DynamoHistory
 from services.redis_caching import redis_caching
 from schemas.user_inputs import UserInputs,AuthenticatedUserInputs
-from .login_page import get_current_user
+from .login_page import require_user_role
 from pydantic import EmailStr
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 logger = get_logger(__name__)
@@ -465,7 +465,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
 @router.post("/streaming-answer")
 async def stream(
     user_inputs: UserInputs,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(require_user_role)
 ):
     """Stream AI response with authentication"""
     exception_handler = ExceptionHandler(

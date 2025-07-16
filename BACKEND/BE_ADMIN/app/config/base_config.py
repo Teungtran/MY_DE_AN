@@ -26,21 +26,22 @@ def ensure_env_loaded():
 
 class EmbeddingConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
-    model: Optional[str] = Field(default="text-embedding-3-small")
+    id: Optional[str] = Field(default="text-embedding-3-small")
     kwargs: Dict = Field(default={})
 
-class RedisConfig(BaseModel):
-    host: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_HOST")())[1])
-    password: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_PASS")())[1])
+
 class MongoDBConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_URL", default="mongodb+srv://nguyentrantrung2504:NBg7vdR1KSDlW1E3@cluster0.hpkg9.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0")())[1])
+    db_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_DB_NAME")())[1])
+    store_collection:str  = Field(default_factory=lambda: (ensure_env_loaded(), from_env("STORE_COLLECTION")())[1])
+    memory_collection:str  = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MEMORY_COLLECTION")())[1])
+    
 class OpenAIConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
-    model: Optional[str] = Field(default="gpt-4o-mini")
+    id: Optional[str] = Field(default="gpt-4o-mini")
     kwargs: Dict = Field(default_factory=dict)
     
-class KeyBERTConfig(BaseModel):
-    model: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("KEYBERT_MODEL")())[1])
+
 
 class DynamoDBConfig(BaseModel):
     aws_access_key_id: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_ACCESS_KEY_ID")())[1])
@@ -49,22 +50,12 @@ class DynamoDBConfig(BaseModel):
     region_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_REGION")())[1])
 
 
-class PolicyConfig(BaseModel):
+class ExpertConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
     api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
-    collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POLICY")())[1])
+    collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("EXPERT")())[1])
 
-class RecommendConfig(BaseModel):
-    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
-    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
-    collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("STORAGE")())[1])
     
-    
-class OauthConfig(BaseModel):
-    token_url: str = Field(
-        default_factory=lambda: (ensure_env_loaded(), from_env("OAUTH_TOKEN_URL")())[1], 
-        description="The URL to obtain the OAuth token."
-    )
 
 
 class BaseConfiguration(BaseModel):
@@ -99,14 +90,9 @@ class BaseConfiguration(BaseModel):
 
     # Lazy-loaded configurations
     _chat_model_config = None
-    _key_bert_config = None
     _embedding_model_config = None
     _vector_store_config = None
-    _recommend_config = None
     _dynamo_config = None
-    _oauth_config = None
-    _embedding_config = None
-    _redis_config = None
     _mongo_config = None
 
     @property
@@ -115,11 +101,7 @@ class BaseConfiguration(BaseModel):
             self._chat_model_config = OpenAIConfig()
         return self._chat_model_config
         
-    @property
-    def key_bert_config(self) -> Union[KeyBERTConfig]:
-        if self._key_bert_config is None:
-            self._key_bert_config = KeyBERTConfig()
-        return self._key_bert_config
+
         
     @property
     def embedding_model_config(self) -> Union[EmbeddingConfig]:
@@ -128,43 +110,26 @@ class BaseConfiguration(BaseModel):
         return self._embedding_model_config
         
     @property
-    def vector_store_config(self) -> Union[PolicyConfig]:
+    def vector_store_config(self) -> Union[ExpertConfig]:
         if self._vector_store_config is None:
-            self._vector_store_config = PolicyConfig()
+            self._vector_store_config = ExpertConfig()
         return self._vector_store_config
         
-    @property
-    def recommend_config(self) -> Union[RecommendConfig]:
-        if self._recommend_config is None:
-            self._recommend_config = RecommendConfig()
-        return self._recommend_config
         
     @property
     def dynamo_config(self) -> Union[DynamoDBConfig]:
         if self._dynamo_config is None:
             self._dynamo_config = DynamoDBConfig()
         return self._dynamo_config
-    @property
-    def redis_config(self) -> Union[RedisConfig]:
-        if self._redis_config is None:
-            self._redis_config = RedisConfig()
-        return self._redis_config
+
     @property
     def mongo_config(self) -> Union[MongoDBConfig]:
         if self._mongo_config is None:
             self._mongo_config = MongoDBConfig()
         return self._mongo_config   
-    @property
-    def oauth_config(self) -> Union[OauthConfig]:
-        if self._oauth_config is None:
-            self._oauth_config = OauthConfig()
-        return self._oauth_config
+    
         
-    @property
-    def embedding_config(self) -> Union[EmbeddingConfig]:
-        if self._embedding_config is None:
-            self._embedding_config = EmbeddingConfig()
-        return self._embedding_config
+
 
     @model_validator(mode="after")
     def validate_provider(self) -> Self:
@@ -229,7 +194,7 @@ AVAILABLE_CHAT_MODEL = {"openai": OpenAIConfig}
 
 AVAILABLE_EMBEDDING_MODEL = {"openai": EmbeddingConfig}
 
-AVAILABLE_RETRIEVER = {"qdrant": PolicyConfig}
+AVAILABLE_RETRIEVER = {"qdrant": ExpertConfig}
 
 # Lazy-loaded singleton instance
 _APP_CONFIG = None

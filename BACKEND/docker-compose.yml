@@ -24,6 +24,8 @@ services:
       context: ./AUTH
       dockerfile: Dockerfile
     container_name: de_an_auth
+    env_file:
+      - ./AUTH/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -41,6 +43,8 @@ services:
       context: ./BE_ADMIN
       dockerfile: Dockerfile
     container_name: de_an_admin
+    env_file:
+      - ./BE_ADMIN/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -58,9 +62,11 @@ services:
       context: ./BE_CHATBOT
       dockerfile: Dockerfile
     container_name: de_an_chatbot
+    env_file:
+      - ./BE_CHATBOT/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
-      - "8888"
+      - "8090"
     volumes:
       - ./BE_CHATBOT/logs:/code/logs
     environment:
@@ -75,9 +81,11 @@ services:
       context: ./BE_PREPROCESS
       dockerfile: Dockerfile
     container_name: de_an_preprocess
+    env_file:
+      - ./BE_PREPROCESS/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
-      - "8888"
+      - "8002"
     volumes:
       - ./BE_PREPROCESS/logs:/code/logs
     environment:
@@ -92,6 +100,8 @@ services:
       context: ./ML
       dockerfile: Dockerfile
     container_name: de_an_ml
+    env_file:
+      - ./ML/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -109,12 +119,3 @@ services:
 networks:
   de_an_network:
     driver: bridge
-
-volumes:
-  auth_logs:
-  admin_logs:
-  chatbot_logs:
-  preprocess_logs:
-  ml_artifacts:
-  ml_logs:
-  ml_plots:

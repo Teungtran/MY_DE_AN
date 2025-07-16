@@ -108,10 +108,9 @@ class RecommendProcessingPipeline:
         }
 
         try:
-            # Get existing indexes to avoid recreating them
-            existing_indexes = client.get_collection(collection_name).payload_indexes
-            existing_fields = {index.field_name for index in existing_indexes}
-            
+            collection_info = client.get_collection(collection_name)
+            existing_fields = set(collection_info.payload_schema.keys()) if collection_info.payload_schema else set()
+
             for field_name, field_config in payload_schema.items():
                 if field_name not in existing_fields:
                     client.create_payload_index(

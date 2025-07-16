@@ -369,7 +369,7 @@ def recommend_system(
 
 
 @tool("device_details")
-def get_device_details(user_input: str, top_device_names: Optional[List[str]] = None, state: Optional[Dict] = None) -> str:
+def get_device_details(user_input: str) -> str:
     """
     Retrieve detailed information about a specific device.
     Uses a cache to avoid repeated lookups for the same device.
@@ -381,23 +381,8 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
     """
     try:
         
-        # Try to get device names from various sources in order of priority
         device_names = None
-        
-        # 1. Directly provided top_device_names parameter
-        if top_device_names and isinstance(top_device_names, list) and len(top_device_names) > 0:
-            device_names = top_device_names
-            print(f"Using provided top_device_names with {len(device_names)} devices")
-        
-        # 2. State's recommended_devices
-        elif state and isinstance(state, dict) and "recommended_devices" in state:
-            state_devices = state["recommended_devices"]
-            if isinstance(state_devices, list) and len(state_devices) > 0:
-                device_names = state_devices
-                print(f"Using state.recommended_devices with {len(device_names)} devices")
-        
-        # 3. Global cache
-        elif recommended_devices_cache and len(recommended_devices_cache) > 0:
+        if recommended_devices_cache and len(recommended_devices_cache) > 0:
             device_names = recommended_devices_cache
             print(f"Using global recommended_devices_cache with {len(device_names)} devices")
         
@@ -411,10 +396,18 @@ def get_device_details(user_input: str, top_device_names: Optional[List[str]] = 
 
         top_device, top_score = max(scored_devices, key=lambda x: x[1])
         print(f"Top matched device: {top_device} (score: {top_score})")
+        device_type_scores = [
+            (dtype, partial_ratio(dtype.lower(),top_device.lower()))
+            for dtype in ["phone", "laptop/pc", "earphone", "mouse", "keyboard"]
+        ]
+        
+        device_type, type_score = max(device_type_scores, key=lambda x: x[1])
+        print(f"Inferred device type: {device_type} (score: {type_score})")
+        all_points_dict = get_all_points(type=device_type)
+        points_list = all_points_dict.get(device_type, [])
 
-        all_points = get_all_points()
         matching_doc = next(
-            (doc for doc in all_points
+            (doc for doc in points_list
             if doc.payload.get("metadata", {}).get("device_name", "").lower() == top_device.lower()),
             None
         )

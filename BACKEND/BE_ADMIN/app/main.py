@@ -195,4 +195,4 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     
     # Start the server
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8090, reload=True, log_level="debug")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8888, reload=True, log_level="debug")

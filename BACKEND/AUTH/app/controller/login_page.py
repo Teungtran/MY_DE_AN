@@ -247,7 +247,7 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user["user_id"], "role": user["role"]},
+            data={"sub": user["user_id"], "email": user["email"], "role": user["role"]},
             expires_delta=access_token_expires
 )
         
@@ -281,7 +281,7 @@ async def login_user(request: LoginRequest, db: Session = Depends(get_db)):
     
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["user_id"]}, expires_delta=access_token_expires
+        data={"sub": user["user_id"], "email": user["email"], "role": user["role"]}, expires_delta=access_token_expires
     )
     
     print(f"Login successful for user: {user['user_id']}")
@@ -368,6 +368,7 @@ def require_role(required_role: str):
 @auth.get("/admin-only")
 async def admin_only_route(current_user: dict = Depends(require_role("admin"))):
     return {
+        "name": current_user["name"],
         "user_id": current_user["user_id"],
         "email": current_user["email"],
         "role": current_user["role"],
@@ -377,6 +378,7 @@ async def admin_only_route(current_user: dict = Depends(require_role("admin"))):
 @auth.get("/user-profile")
 async def user_only(current_user: dict = Depends(require_role("user"))):
     return {
+        "name": current_user["name"],
         "user_id": current_user["user_id"],
         "email": current_user["email"],
         "role": current_user["role"],
@@ -386,6 +388,7 @@ async def user_only(current_user: dict = Depends(require_role("user"))):
 @auth.get("/viewer-profile")
 async def staff_only(current_user: dict = Depends(require_role("staff"))):
     return {
+        "name": current_user["name"],
         "user_id": current_user["user_id"],
         "email": current_user["email"],
         "role": current_user["role"],
