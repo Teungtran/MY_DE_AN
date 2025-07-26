@@ -5,7 +5,7 @@ from pydantic import EmailStr
 from config.base_config import APP_CONFIG
 
 security = HTTPBearer()
-SECREAT_KEY = APP_CONFIG.auth_config.key
+SECRET_KEY = APP_CONFIG.auth_config.key
 ALGORITHM = APP_CONFIG.auth_config.algorithm
 def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
     """

@@ -54,7 +54,14 @@ class ExpertConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
     api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
     collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("EXPERT")())[1])
+    
+class RecommendConfig(BaseModel):
+    url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
+    collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("STORAGE")())[1])
 
+class SearchConfig(BaseModel):
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("TAVILY_API_KEY")())[1])
     
 
 
@@ -94,14 +101,24 @@ class BaseConfiguration(BaseModel):
     _vector_store_config = None
     _dynamo_config = None
     _mongo_config = None
+    _recommend_config = None
+    _search_config = None
 
     @property
     def chat_model_config(self) -> Union[OpenAIConfig]:
         if self._chat_model_config is None:
             self._chat_model_config = OpenAIConfig()
         return self._chat_model_config
-        
-
+    @property
+    def search_config(self) -> Union[SearchConfig]:
+        if self._search_config is None:
+            self._search_config = SearchConfig()
+        return self._search_config
+    @property
+    def recommend_config(self) -> Union[RecommendConfig]:
+        if self._recommend_config is None:
+            self._recommend_config = RecommendConfig()
+        return self._recommend_config
         
     @property
     def embedding_model_config(self) -> Union[EmbeddingConfig]:

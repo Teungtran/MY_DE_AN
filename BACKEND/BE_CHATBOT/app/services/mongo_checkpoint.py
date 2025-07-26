@@ -4,6 +4,7 @@ from langgraph.checkpoint.mongodb import MongoDBSaver
 from pymongo import MongoClient
 from typing import Optional
 
+
 MONGO_DB_URL = APP_CONFIG.mongo_config.url
 logger = get_logger(__name__)
 
