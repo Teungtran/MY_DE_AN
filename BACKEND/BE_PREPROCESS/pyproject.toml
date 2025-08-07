@@ -1,0 +1,40 @@
+[project]
+name = "be-preprocess"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "asgi-correlation-id>=4.3.4",
+    "beautifulsoup4>=4.13.4",
+    "boto3>=1.40.2",
+    "bs4>=0.0.2",
+    "cloudscraper>=1.2.71",
+    "fastapi>=0.116.1",
+    "langchain>=0.3.27",
+    "langchain-chroma>=0.2.5",
+    "langchain-community>=0.3.27",
+    "langchain-core>=0.3.72",
+    "langchain-elasticsearch>=0.3.2",
+    "langchain-experimental>=0.3.4",
+    "langchain-google-genai>=2.1.9",
+    "langchain-openai>=0.3.28",
+    "langchain-text-splitters>=0.3.9",
+    "nltk>=3.9.1",
+    "opentelemetry-api>=1.36.0",
+    "opentelemetry-sdk>=1.36.0",
+    "pillow>=11.3.0",
+    "pydantic>=2.11.7",
+    "pymongo>=4.13.2",
+    "pymupdf>=1.26.3",
+    "python-dotenv>=1.1.1",
+    "qdrant-client>=1.15.1",
+    "rank-bm25>=0.2.2",
+    "rapidfuzz>=3.13.0",
+    "redis>=6.3.0",
+    "requests>=2.32.4",
+    "sqlalchemy>=2.0.42",
+    "structlog>=25.4.0",
+    "typing-extensions>=4.14.1",
+    "uvicorn>=0.35.0",
+]

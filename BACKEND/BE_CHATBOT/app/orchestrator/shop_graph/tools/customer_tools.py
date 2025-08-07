@@ -1,22 +1,28 @@
 from langchain_core.tools import tool
 from rapidfuzz import process
-from rapidfuzz.fuzz import partial_ratio,token_sort_ratio 
+from rapidfuzz.fuzz import partial_ratio,token_set_ratio 
 from collections import defaultdict
 from pydantic import EmailStr
-from typing import List, Dict, Optional, Tuple
-from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder
+from typing import Optional, Tuple
+from schemas.device_schemas import RecommendationConfig, CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder, DeviceDetailSchema
 from .get_score import (
     calculate_similarities_batch, get_all_points, convert_to_string,determine_field_relevance)
+from langchain.retrievers import BM25Retriever
+from services.get_retriever import get_device_retriever
+from functools import lru_cache
 from config.base_config import APP_CONFIG
 import json
 from .get_id import generate_short_id
+from services.inmemory_store import create_temporary_faiss_store
 from .send_email import send_order_confirmation,send_order_update,send_order_cancel
 from utils.email import send_email
+from services.setup_caching import store_recommended_devices, clear_expired_recommendations,get_recommended_devices
 from models.database import CustomerInfo, Order as OrderModel, Item, SessionLocal
 import heapq
+from utils.logging.logger import get_logger
+logger = get_logger(__name__)
 sql_config = APP_CONFIG.sql_config
 
-# Create a function to get a database session
 def get_shop_db():
     db = SessionLocal()
     try:
@@ -24,8 +30,7 @@ def get_shop_db():
     finally:
         db.close()
 
-recommended_devices_cache = []
-METADATA_CACHE_DURATION = 300  
+
 def get_other_preference(user_id):
     db = get_shop_db()
     try:
@@ -57,6 +62,8 @@ def get_other_preference(user_id):
     finally:
         db.close()
 
+recommended_devices_cache = []
+current_device_faiss = None
 
 @tool("recommend_system", args_schema=RecommendSystem)
 def recommend_system(
@@ -77,6 +84,9 @@ def recommend_system(
         custom_config: Custom configuration for recommendation engine
         global_config: Global config that may contain recommended devices for persistence
     """
+    global recommended_devices_cache 
+    global current_device_faiss
+    clear_expired_recommendations()
     recommendation_config = RecommendationConfig()
     db = get_shop_db()
     
@@ -114,14 +124,20 @@ def recommend_system(
         brands = list(set(all_brands))  
         has_brands = len(brands) > 0
 
-    # Price handling
     price_input = [price] if price else []
     has_price_input = bool(price_input)
-
-    price_min = price_max = None
+    
     price_range = preference.get("price_range", []) if preference else []
     has_price = bool(price_range)
-    if has_price:
+    
+    price_filter_threshold = None
+    if has_price_input:
+        try:
+            price_filter_threshold = float(price_input[0])
+            logger.info(f"Using price input as filter threshold: {price_filter_threshold:,} VND")
+        except (ValueError, TypeError):
+            logger.warning("Invalid price input, skipping price filtering")
+    elif has_price:
         numeric_prices = []
         for p in price_range:
             try:
@@ -129,8 +145,11 @@ def recommend_system(
             except (ValueError, TypeError):
                 continue
         if numeric_prices:
-            price_min = min(numeric_prices)
-            price_max = max(numeric_prices)
+            price_filter_threshold = max(numeric_prices)
+            logger.info(f"Using price_max from preferences as filter threshold: {price_filter_threshold:,} VND")
+    
+    if price_filter_threshold is None:
+        logger.warning("No price filtering applied")
 
     text_fields = [
         "device_name", "cpu", "card", "brand", "battery", 
@@ -139,295 +158,219 @@ def recommend_system(
 
     final_results = {}  
     final_text_blocks = []
-
-    if type == "get_all":
-        for type_key, points_list in all_points_dict.items():
-            print(f"\n>>> Processing get_all recommendations for type: {type_key} ({len(points_list)} points)")
-            candidates = [{"doc": doc, "score": 0} for doc in points_list]
-
-            if price_max:
-                candidates = [
-                    candidate for candidate in candidates
-                    if isinstance(candidate["doc"].payload.get("metadata", {}).get("sale_price"), (int, float))
-                    and candidate["doc"].payload.get("metadata", {}).get("sale_price") <= price_max * 1.2
-                ]
-
-            for candidate in candidates:
-                meta = candidate["doc"].payload.get("metadata", {})
-                sale_price = meta.get("sale_price")
-
-                if has_brands:
-                    doc_brand = meta.get("brand", "").lower()
-                    best_match = process.extractOne(doc_brand, brands, scorer=partial_ratio)
-                    best_brand_score = best_match[1] if best_match else 0
-
-                    if best_brand_score >= 90:
-                        candidate["score"] += recommendation_config.BRAND_MATCH_STRONG
-                    elif best_brand_score >= 75:
-                        candidate["score"] += recommendation_config.BRAND_MATCH_MEDIUM
-                    elif best_brand_score >= 50:
-                        candidate["score"] += recommendation_config.BRAND_MATCH_WEAK
-                    else:
-                        candidate["score"] += recommendation_config.BRAND_MISMATCH_PENALTY
-
-                if has_price_input:
-                    try:
-                        price_number = float(price_input[0])
-                        price_diff = abs(sale_price - price_number) / price_number
-                        price_similarity = max(0, 1 - price_diff)
-                        candidate["score"] += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
-                    except:
-                        pass
-                elif has_price:
-                    if isinstance(sale_price, (int, float)):
-                        if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
-                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST
-                        elif price_max is not None and sale_price <= price_max:
-                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-                        elif price_min is not None and sale_price >= price_min:
-                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-
-            top_match_count = min(recommendation_config.get_max_results(type_key), len(candidates))
-            top_matches = heapq.nlargest(top_match_count, candidates, key=lambda x: x["score"])
-
-            top_device_names = []
-            for match in top_matches:
-                device_name = match["doc"].payload.get("metadata", {}).get("device_name")
-                if device_name:
-                    top_device_names.append(device_name)
-
-            final_results[type_key] = top_device_names
-
-            if top_matches:
-                meta_fields = [
-                    "device_name", "cpu", "card", "screen", "storage", "image_link",
-                    "sale_price", "discount_percent", "installment_price", "sales_perks", 
-                    "guarantee_program", "payment_perks", "source"
-                ]
-                products_info = []
-                for idx, item in enumerate(top_matches, start=1):
-                    meta = item["doc"].payload.get("metadata", {})
-                    content = f"Product {idx} (Score: {item['score']:.2f}) [{type_key}]:\n"
-                    for field in meta_fields:
-                        if field in meta and meta[field]:
-                            if field in ["sale_price", "installment_price"]:
-                                value = meta[field]
-                                if isinstance(value, (int, float)):
-                                    content += f"- {field}: {value:,} VND\n"
-                                else:
-                                    content += f"- {field}: {value} VND\n"
-                            elif field == "discount_percent":
-                                content += f"- {field}: {meta[field]}%\n"
-                            else:
-                                content += f"- {field}: {meta[field]}\n"
-                    products_info.append(content)
-                final_text_blocks.append("\n".join(products_info))
-
-        if not any(final_results.values()):
-            return "I couldn't find any products matching your preferences.", []
-        recommended_devices_cache = [d for devices in final_results.values() for d in devices]
-        search_context = "\n\n".join(final_text_blocks)
-        return search_context, recommended_devices_cache
     
-    else:
-        for type_key, points_list in all_points_dict.items():
-            print(f"\n>>> Processing recommendations for type: {type_key} ({len(points_list)} points)")
+    for type_key, points_list in all_points_dict.items():
+        logger.info(f"\n>>> Processing recommendations for type: {type_key} ({len(points_list)} points)")
 
-            field_relevance = determine_field_relevance(main_query_lower, points_list, text_fields)
-            print(f"Field relevance ranking: {field_relevance}")
+        field_relevance = determine_field_relevance(main_query_lower, points_list, text_fields)
+        logger.info(f"Field relevance ranking: {field_relevance}")
 
-            candidates = [{"doc": doc, "score": 0} for doc in points_list]
+        candidates = [{"doc": doc, "score": 0} for doc in points_list]
 
-            if price_max:
-                candidates = [
-                    candidate for candidate in candidates
-                    if isinstance(candidate["doc"].payload.get("metadata", {}).get("sale_price"), (int, float))
-                    and candidate["doc"].payload.get("metadata", {}).get("sale_price") <= price_max * 1.2
-                ]
+        # Apply price filtering upfront
+        if price_filter_threshold is not None:
+            initial_count = len(candidates)
+            candidates = [
+                candidate for candidate in candidates
+                if isinstance(candidate["doc"].payload.get("metadata", {}).get("sale_price"), (int, float))
+                and candidate["doc"].payload.get("metadata", {}).get("sale_price") <= price_filter_threshold
+            ]
+            logger.info(f"Price filtering: {initial_count} -> {len(candidates)} candidates (threshold: {price_filter_threshold:,} VND)")
+        else:
+            logger.info(f"Starting with {len(candidates)} candidates (no price filtering)")
 
-            print(f"Starting with {len(candidates)} candidates after basic filtering")
+        for stage_idx, (field, relevance_score) in enumerate(field_relevance):
+            if len(candidates) <= 5:
+                break
 
-            for stage_idx, (field, relevance_score) in enumerate(field_relevance):
-                if len(candidates) <= 5:
-                    break
-
-                print(f"Stage {stage_idx + 1}: Filtering by '{field}' (relevance: {relevance_score:.2f})")
-                
-                similarities = calculate_similarities_batch(main_query_lower, candidates, field)
-                
-                field_scores = []
-                for i, candidate in enumerate(candidates):
-                    meta = candidate["doc"].payload.get("metadata", {})
-                    field_value = convert_to_string(meta.get(field, ""))
-                    
-                    if not field_value:
-                        fuzzy_score = 0
-                        cosine_score = 0
-                    else:
-                        function = partial_ratio if len(main_query_lower.split()) < 5 else token_sort_ratio
-                        fuzzy_score = function(main_query_lower, field_value.lower())
-                        cosine_score = similarities.get(i, 0)
-                    
-                    combined_score = (
-                        fuzzy_score * recommendation_config.FUZZY_WEIGHT + 
-                        cosine_score * 100 * recommendation_config.COSINE_WEIGHT
-                    )
-                    field_scores.append((candidate, combined_score))
-
-                field_scores.sort(key=lambda x: x[1], reverse=True)
-
-                keep_ratio = [0.80, 0.65, 0.50, 0.35]
-                keep_count = max(5, int(len(field_scores) * keep_ratio[min(stage_idx, 3)]))
-
-                candidates = []
-                for i, (candidate, field_score) in enumerate(field_scores[:keep_count]):
-                    candidate["score"] += field_score * relevance_score * (1.0 / (stage_idx + 1))
-                    candidates.append(candidate)
-
-                print(f"After stage {stage_idx + 1}: {len(candidates)} candidates remaining")
-
-            for candidate in candidates:
+            logger.info(f"Stage {stage_idx + 1}: Filtering by '{field}' (relevance: {relevance_score:.2f})")
+            
+            similarities = calculate_similarities_batch(main_query_lower, candidates, field)
+            
+            field_scores = []
+            for i, candidate in enumerate(candidates):
                 meta = candidate["doc"].payload.get("metadata", {})
-                sale_price = meta.get("sale_price")
+                field_value = convert_to_string(meta.get(field, ""))
+                
+                if not field_value:
+                    fuzzy_score = 0
+                    cosine_score = 0
+                else:
+                    function = partial_ratio if len(main_query_lower.split()) < 5 else token_set_ratio
+                    fuzzy_score = function(main_query_lower, field_value.lower())
+                    cosine_score = similarities.get(i, 0)
+                
+                combined_score = (
+                    fuzzy_score * recommendation_config.FUZZY_WEIGHT + 
+                    cosine_score * 100 * recommendation_config.COSINE_WEIGHT
+                )
+                field_scores.append((candidate, combined_score))
 
-                if has_brands:
-                    doc_brand = meta.get("brand", "").lower()
-                    best_match = process.extractOne(doc_brand, brands, scorer=partial_ratio)
-                    best_brand_score = best_match[1] if best_match else 0
+            field_scores.sort(key=lambda x: x[1], reverse=True)
 
-                    if best_brand_score >= 90:
-                        candidate["score"] += recommendation_config.BRAND_MATCH_STRONG
-                    elif best_brand_score >= 75:
-                        candidate["score"] += recommendation_config.BRAND_MATCH_MEDIUM
-                    elif best_brand_score >= 50:
-                        candidate["score"] += recommendation_config.BRAND_MATCH_WEAK
-                    else:
-                        candidate["score"] += recommendation_config.BRAND_MISMATCH_PENALTY
+            keep_ratio = [0.80, 0.65, 0.50, 0.35]
+            keep_count = max(5, int(len(field_scores) * keep_ratio[min(stage_idx, 3)]))
 
-                if has_price_input:
-                    try:
-                        price_number = float(price_input[0])
-                        price_diff = abs(sale_price - price_number) / price_number
-                        price_similarity = max(0, 1 - price_diff)
-                        candidate["score"] += price_similarity * recommendation_config.PRICE_RANGE_MATCH_BOOST
-                    except:
-                        pass
-                elif has_price:
-                    if isinstance(sale_price, (int, float)):
-                        if price_min is not None and price_max is not None and price_min <= sale_price <= price_max:
-                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST
-                        elif price_max is not None and sale_price <= price_max:
-                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
-                        elif price_min is not None and sale_price >= price_min:
-                            candidate["score"] += recommendation_config.PRICE_RANGE_MATCH_BOOST * 0.7
+            candidates = []
+            for i, (candidate, field_score) in enumerate(field_scores[:keep_count]):
+                candidate["score"] += field_score * relevance_score * (1.0 / (stage_idx + 1))
+                candidates.append(candidate)
 
-            top_match_count = min(recommendation_config.get_max_results(type_key), len(candidates))
-            top_matches = heapq.nlargest(top_match_count, candidates, key=lambda x: x["score"])
+            logger.info(f"After stage {stage_idx + 1}: {len(candidates)} candidates remaining")
 
-            top_device_names = []
-            for match in top_matches:
-                device_name = match["doc"].payload.get("metadata", {}).get("device_name")
-                if device_name:
-                    top_device_names.append(device_name)
+        # Apply brand scoring (price scoring removed as requested)
+        for candidate in candidates:
+            meta = candidate["doc"].payload.get("metadata", {})
 
-            final_results[type_key] = top_device_names
+            if has_brands:
+                doc_brand = meta.get("brand", "").lower()
+                best_match = process.extractOne(doc_brand, brands, scorer=token_set_ratio)
+                best_brand_score = best_match[1] if best_match else 0
 
-            if top_matches:
-                meta_fields = [
-                    "device_name", "cpu", "card", "screen", "storage", "image_link",
-                    "sale_price", "discount_percent", "installment_price", "sales_perks", 
-                    "guarantee_program", "payment_perks", "source"
-                ]
+                if best_brand_score >= 90:
+                    candidate["score"] += recommendation_config.BRAND_MATCH_STRONG
+                elif best_brand_score >= 75:
+                    candidate["score"] += recommendation_config.BRAND_MATCH_MEDIUM
+                elif best_brand_score >= 50:
+                    candidate["score"] += recommendation_config.BRAND_MATCH_WEAK
+                else:
+                    candidate["score"] += recommendation_config.BRAND_MISMATCH_PENALTY
 
-                products_info = []
-                for idx, item in enumerate(top_matches, start=1):
-                    meta = item["doc"].payload.get("metadata", {})
-                    content = f"Product {idx} (Score: {item['score']:.2f}) [{type_key}]:\n"
-                    for field in meta_fields:
-                        if field in meta and meta[field]:
-                            if field in ["sale_price", "installment_price"]:
-                                value = meta[field]
-                                if isinstance(value, (int, float)):
-                                    content += f"- {field}: {value:,} VND\n"
-                                else:
-                                    content += f"- {field}: {value} VND\n"
-                            elif field == "discount_percent":
-                                content += f"- {field}: {meta[field]}%\n"
+        top_match_count = min(recommendation_config.get_max_results(type_key), len(candidates))
+        top_matches = heapq.nlargest(top_match_count, candidates, key=lambda x: x["score"])
+
+        top_device_names = []
+        for match in top_matches:
+            device_name = match["doc"].payload.get("metadata", {}).get("device_name")
+            if device_name:
+                top_device_names.append(device_name)
+
+        final_results[type_key] = top_device_names
+
+        if top_matches:
+            meta_fields = [
+                "device_name", "cpu", "card", "screen", "storage", "image_link",
+                "sale_price", "discount_percent", "installment_price", "sales_perks", 
+                "guarantee_program", "payment_perks", "source"
+            ]
+
+            products_info = []
+            for idx, item in enumerate(top_matches, start=1):
+                meta = item["doc"].payload.get("metadata", {})
+                content = f"Product {idx} (Score: {item['score']:.2f}) [{type_key}]:\n"
+                for field in meta_fields:
+                    if field in meta and meta[field]:
+                        if field in ["sale_price", "installment_price"]:
+                            value = meta[field]
+                            if isinstance(value, (int, float)):
+                                content += f"- {field}: {value:,} VND\n"
                             else:
-                                content += f"- {field}: {meta[field]}\n"
-                    products_info.append(content)
-                final_text_blocks.append("\n".join(products_info))
+                                content += f"- {field}: {value} VND\n"
+                        elif field == "discount_percent":
+                            content += f"- {field}: {meta[field]}%\n"
+                        else:
+                            content += f"- {field}: {meta[field]}\n"
+                products_info.append(content)
+            final_text_blocks.append("\n".join(products_info))
 
-        if not any(final_results.values()):
-            return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
+    if not any(final_results.values()):
+        return "I couldn't find any products matching your criteria. Could you provide more specific details?", []
 
-        search_context = "\n\n".join(final_text_blocks)
-        recommended_devices_cache = [d for devices in final_results.values() for d in devices]
+    search_context = "\n\n".join(final_text_blocks)
+    recommended_devices = [d for devices in final_results.values() for d in devices]
+    store_recommended_devices(recommended_devices, user_input)
+    faiss_store = create_temporary_faiss_store(top_matches=top_matches)
+    current_device_faiss = faiss_store
+    logger.info(f"Recommendation completed. Found {len(recommended_devices)} products across {len(final_results)} type(s).")
+    return search_context, recommended_devices
 
-        print(f"Recommendation completed. Found {len(recommended_devices_cache)} products across {len(final_results)} type(s).")
-        return search_context, recommended_devices_cache
+@lru_cache(maxsize=1000)
+def cached_faiss_retrieve(query: str,faiss_store):
+    retriever = get_device_retriever(faiss_store)
+    return retriever.get_relevant_documents(query)
 
-
-@tool("device_details")
-def get_device_details(user_input: str) -> str:
+@tool("get_device_details", args_schema=DeviceDetailSchema)
+def get_device_details(user_input: str, device_name, count_devices: int) -> str:
     """
     Retrieve detailed information about a specific device.
-    Uses a cache to avoid repeated lookups for the same device.
-
-    Args:
-        user_input: User query text for selecting a device
-        top_device_names: List of recommended device names (optional)
-        state: Current state containing recommended devices (optional)
+    This tool is not a preset tool, you should not call this tool FIRST.
     """
     try:
-        
-        device_names = None
-        if recommended_devices_cache and len(recommended_devices_cache) > 0:
-            device_names = recommended_devices_cache
-            print(f"Using global recommended_devices_cache with {len(device_names)} devices")
-        
-        if not device_names or len(device_names) == 0:
-            return "No recommended devices available. Please search for devices first."
+        clear_expired_recommendations()
+        cached_result = get_recommended_devices()
 
-        scored_devices = [
-            (rec_device, partial_ratio(user_input.lower(), rec_device.lower()))
-            for rec_device in device_names
-        ]
+        if not cached_result:
+            return "No recent recommendations found. Please use the recommend_system tool first."
 
-        top_device, top_score = max(scored_devices, key=lambda x: x[1])
-        print(f"Top matched device: {top_device} (score: {top_score})")
-        device_type_scores = [
-            (dtype, partial_ratio(dtype.lower(),top_device.lower()))
-            for dtype in ["phone", "laptop/pc", "earphone", "mouse", "keyboard"]
-        ]
-        
-        device_type, type_score = max(device_type_scores, key=lambda x: x[1])
-        print(f"Inferred device type: {device_type} (score: {type_score})")
-        all_points_dict = get_all_points(type=device_type)
-        points_list = all_points_dict.get(device_type, [])
+        device_names, original_query, timestamp = cached_result
+        logger.info(f"Using cached devices from query: '{original_query}'")
+        logger.info(f"Available devices: {device_names}")
 
-        matching_doc = next(
-            (doc for doc in points_list
-            if doc.payload.get("metadata", {}).get("device_name", "").lower() == top_device.lower()),
-            None
-        )
-
-        if not matching_doc:
-            return f"No detailed information found for '{top_device}'. Please try another product."
-
-        detail = matching_doc.payload.get('page_content', '')
-        price = str(matching_doc.payload['metadata'].get('price', 'N/A'))
-        sale_perks = matching_doc.payload['metadata'].get('sales_perks', '')
-
-        if isinstance(sale_perks, list):
-            sale_perks = ", ".join(map(str, sale_perks))
+        if device_name:
+            scored_devices = [
+                (rec_device, token_set_ratio(device_name.lower(), rec_device.lower()))
+                for rec_device in device_names
+            ]
+            if not scored_devices:
+                return "No matching devices found. Try using the full device name."
+            scored_devices.sort(key=lambda x: x[1], reverse=True)
+            top_device, top_score = scored_devices[0]
+            logger.info(f"Top matched device: {top_device} (score: {top_score})")
         else:
-            sale_perks = str(sale_perks)
+            top_device = device_names[0]
+            logger.info(f"Using first device from cache: {top_device}")
 
-        content = f"{detail}\n\nSales Perks: {sale_perks}\nPrice: {price} VND"
-        return content
+        global current_device_faiss
+        if current_device_faiss is None:
+            return "Session expired or device data unavailable. Please search again."
+
+        results = []
+
+        if count_devices == 1:
+            if device_name:
+                scored_devices = [
+                    (rec_device, token_set_ratio(user_input.lower(), rec_device.lower()))
+                    for rec_device in device_names
+                ]
+                if not scored_devices:
+                    return "No matching devices found. Try using the full device name."
+                scored_devices.sort(key=lambda x: x[1], reverse=True)
+                top_device, _ = scored_devices[0]
+            else:
+                top_device = device_names[0]
+
+            query = f"{user_input} {top_device}"
+            all_chunks = cached_faiss_retrieve(query, current_device_faiss)
+            results.append((top_device, all_chunks))
+
+        else:
+            for top_device in device_names:
+                query = f"{user_input}"
+                all_chunks = cached_faiss_retrieve(query, current_device_faiss)
+                results.append((top_device, all_chunks))
+
+        final_output = []
+
+        for _, chunks in results:
+            unique_chunks = []
+            seen_content = set()
+            for chunk in chunks:
+                content_hash = hash(chunk.page_content.strip())
+                if content_hash not in seen_content:
+                    seen_content.add(content_hash)
+                    unique_chunks.append(chunk)
+
+            bm25_retriever = BM25Retriever.from_documents(unique_chunks, k=len(unique_chunks))
+            bm25_results = bm25_retriever.get_relevant_documents(f"{user_input}")
+            top_chunks = bm25_results[:5]
+            chunk_texts = "\n\n---\n\n".join([doc.page_content for doc in top_chunks])
+            final_output.append(f"### Top Relevant Content for `{user_input}`:\n\n{chunk_texts}")
+
+        return "\n\n\n".join(final_output)
+
     except Exception as e:
         return f"An error occurred: {str(e)}"
+
 
 @tool("order_purchase", args_schema=Order)
 def order_purchase(
@@ -519,7 +462,7 @@ def order_purchase(
         }
 
     except Exception as e:
-        print(f"Error in order_purchase: {str(e)}")
+        logger.info(f"Error in order_purchase: {str(e)}")
         return {"error": f"Error placing order: {str(e)}"}
     
 @tool("update_order", args_schema=UpdateOrder)
@@ -646,7 +589,7 @@ def update_order(
         }
 
     except Exception as e:
-        print(f"Error in update_order: {str(e)}")
+        logger.info(f"Error in update_order: {str(e)}")
         return {"error": f"Error updating order: {str(e)}"}
 
 @tool("cancel_order", args_schema=CancelOrder)

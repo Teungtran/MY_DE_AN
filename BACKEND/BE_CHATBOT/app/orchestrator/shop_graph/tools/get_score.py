@@ -1,7 +1,6 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from rapidfuzz.fuzz import partial_ratio
-from typing import List
+from rapidfuzz.fuzz import token_set_ratio
 from qdrant_client import QdrantClient
 import time
 from qdrant_client.http import models
@@ -14,9 +13,6 @@ QDRANT_URL = APP_CONFIG.recommend_config.url
 QDRANT_API_KEY = APP_CONFIG.recommend_config.api_key
 COLLECTION = APP_CONFIG.recommend_config.collection_name
 
-
-# Global variables for caching
-_vectorizer = None
 _cached_all_points = None
 _cache_timestamp = 0
 _client_cache = None
@@ -176,7 +172,7 @@ def determine_field_relevance(query: str, all_points: list, text_fields: list) -
             field_value = convert_to_string(meta.get(field, ""))
             
             if field_value:
-                score = partial_ratio(query, field_value.lower())
+                score = token_set_ratio(query, field_value.lower())
                 field_scores.append(score)
         
         if field_scores:

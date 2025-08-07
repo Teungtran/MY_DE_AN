@@ -1,7 +1,7 @@
-FROM python:3.11-slim
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
 
 # Set the working directory
-WORKDIR /app
+WORKDIR /code
 
 # Create necessary directories
 RUN mkdir -p /app/artifacts/data_ingestion \
@@ -11,22 +11,16 @@ RUN mkdir -p /app/artifacts/data_ingestion \
     /app/plots \
     /app/logs
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    ln -s /root/.cargo/bin/uv /usr/local/bin/uv
-
 # Copy dependency definition
-COPY ./requirements.txt /app/requirements.txt
-
-# Install dependencies
-RUN uv pip install --no-cache -r /app/requirements.txt --system
+COPY pyproject.toml uv.lock ./
+RUN uv sync --no-cache-dir
 
 # Copy app code
-COPY ./src /app/src
-COPY ./controller /app/controller
-COPY ./config /app/config
-COPY ./main.py /app/main.py
-COPY ./run_pipeline.py /app/run_pipeline.py
+COPY ./src /code/src
+COPY ./controller /code/controller
+COPY ./config /code/config
+COPY ./main.py /code/main.py
+COPY ./run_pipeline.py /code/run_pipeline.py
 
 # Expose FastAPI default port
 EXPOSE 8888

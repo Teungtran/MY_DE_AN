@@ -1,4 +1,4 @@
-from pydantic import BaseModel,EmailStr,field_validator
+from pydantic import BaseModel,EmailStr,field_validator, Field
 from typing import Annotated, Literal, Optional, List
 from datetime import datetime
 
@@ -321,6 +321,29 @@ class RecommendSystem(BaseModel):
             }
         }
 
+
+class DeviceDetailSchema(BaseModel):
+    user_input: str = Field(
+        ...,
+        description="User query for detail information"
+    )
+
+    device_name: bool = Field(
+        ...,
+        description="True or False if device name exsist"
+    )
+    count_devices: int = Field(
+        ...,
+        description="number of devices names in user_input"
+    )
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_input": "can you tell me more about the macbook you recommend",
+                "device_name": False,
+                "count_devices": 1
+            }
+        }
 class RecommendationConfig:
     DEFAULT_RESULTS = 4  
     MAX_RESULTS_BY_TYPE = {
