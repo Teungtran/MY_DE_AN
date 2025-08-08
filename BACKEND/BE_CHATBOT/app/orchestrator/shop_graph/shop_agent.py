@@ -1,6 +1,7 @@
 from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import SHOP_SYSTEM_PROMPT
 import datetime
+from textwrap import dedent
 from .tools.customer_tools import recommend_system, get_device_details, order_purchase, cancel_order, track_order,update_order
 from schemas.device_schemas import CompleteOrEscalate
 from utils.logging.logger import get_logger
@@ -8,7 +9,7 @@ logger = get_logger(__name__)
 
 
 SHOP_SYSTEM_MESSAGES = [
-    ("system", SHOP_SYSTEM_PROMPT.strip()),
+    ("system", dedent(SHOP_SYSTEM_PROMPT.strip())),
     ("placeholder", "{messages}")
 ]
 shop_assistant_prompt = ChatPromptTemplate.from_messages(SHOP_SYSTEM_MESSAGES).partial(time=datetime.datetime.now)

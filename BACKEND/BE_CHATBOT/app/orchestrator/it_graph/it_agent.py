@@ -1,5 +1,6 @@
 from langchain.prompts.chat import ChatPromptTemplate
 from .prompts import IT_SYSTEM_PROMPT
+from textwrap import dedent
 from .tools.message import track_ticket,send_ticket,cancel_ticket,update_ticket
 from schemas.device_schemas import CompleteOrEscalate
 from .tools.it_support import it_support_agent
@@ -9,7 +10,7 @@ logger = get_logger(__name__)
 
 import datetime
 IT_SYSTEM_MESSAGES = [
-    ("system", IT_SYSTEM_PROMPT.strip()),
+    ("system", dedent(IT_SYSTEM_PROMPT).strip()),
     ("placeholder", "{messages}")
 ]
 

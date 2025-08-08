@@ -7,8 +7,8 @@ from .support.get_type import get_type
 
 @tool(
     name="extract_url_content", 
-    description="Extract content from URL",
-    instructions="Get and extract content from URL if user ask to generate an ad script from URL",
+    description="Extract content from URL (https://),if user ask to generate an ad script from URL",
+    instructions="Get and extract content from URL (https://) if user ask to generate an ad script from URL",
     add_instructions=True, 
     cache_results=True)
 def extract_url_content(url: str) -> str:

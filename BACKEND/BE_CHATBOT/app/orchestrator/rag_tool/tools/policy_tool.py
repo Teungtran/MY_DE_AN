@@ -6,6 +6,7 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from typing_extensions import Optional
 from qdrant_client import QdrantClient
+from textwrap import dedent
 
 from langchain.chains.combine_documents import create_stuff_documents_chain
 from config.base_config import APP_CONFIG
@@ -82,7 +83,7 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
             return "I'm having trouble accessing my knowledge base right now.", []
         
         RAG_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
-            [("system", GENERATE_PROMPT), ("human", "{input}")]
+            [("system", dedent(GENERATE_PROMPT)), ("human", "{input}")]
         )
         
         # Get extended queries and translated language in parallel operations

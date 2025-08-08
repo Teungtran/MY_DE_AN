@@ -112,8 +112,8 @@ class URLCrawler:
     def clean_html_content(self, html_content: str) -> Tuple[str, List[str]]:
         """
         Cleans HTML content by removing headers, navs, footers, etc.,
-        extracts og:image meta tags and processes tables into Markdown.
-        Returns (cleaned_html, extracted_images).
+        and removes all links and images entirely.
+        Returns (cleaned_html, empty_list_for_images).
         """
         soup = BeautifulSoup(html_content, 'html.parser')
 
@@ -135,28 +135,23 @@ class URLCrawler:
                 for element in soup.find_all(selector):
                     element.decompose()
 
-        extracted_images = []
-        seen_image_srcs = set()
-        for tag in soup.find_all("meta", property="og:image"):
-            src = tag.get("content", "")
-            if (src.endswith(".png") or src.endswith(".jpg")) and src not in seen_image_srcs:
-                full_url = urljoin(self.base_url, src)
-                seen_image_srcs.add(full_url)
-                extracted_images.append(f"![Images]({full_url})")
-
-        # Add extraction for all img tags
-        for img_tag in soup.find_all("img"):
-            src = img_tag.get("src", "")
-            if (src.endswith(".png") or src.endswith(".jpg")) and src not in seen_image_srcs:
-                full_url = urljoin(self.base_url, src)
-                seen_image_srcs.add(full_url)
-                extracted_images.append(f"![Images]({full_url})")
-
+        # Remove all <a> tags entirely
         for a_tag in soup.find_all('a'):
-            if a_tag.has_attr('href') and not a_tag['href'].startswith(('http://', 'https://', 'data:', '#', 'javascript:')):
-                a_tag['href'] = urljoin(self.base_url, a_tag['href'])
+            a_tag.decompose()
+
+        # Remove all <img> tags entirely
+        for img_tag in soup.find_all('img'):
+            img_tag.decompose()
+
+        # Remove all og:image meta tags
+        for meta_tag in soup.find_all("meta", property="og:image"):
+            meta_tag.decompose()
+
+        # No extracted images since we're removing them all
+        extracted_images = []
 
         return str(soup), extracted_images
+
 
     def format_markdown_content(self, markdown_text: str, extracted_images: List[str]) -> str:
         """

@@ -13,7 +13,7 @@ from ..shop_graph.shop_agent import create_shop_tool, shop_safe_tools
 from ..shop_graph.state import ToShopAssistant
 from ..rag_tool.tools.policy_tool import RAG_Agent
 from ..web_crawler.tool import url_extraction, url_followup
-
+from textwrap import dedent
 from ..appointment_graph.state import ToAppointmentAssistant
 from ..appointment_graph.appointment_agent  import create_appointment_tool , appointment_safe_tools
 from ..it_graph.state import ToITAssistant
@@ -39,7 +39,7 @@ def assistant_runnable_with_user_info(state):
     return inject_user_info(state, result)
 
 MAIN_SYSTEM_MESSAGES = [
-    ("system", MAIN_SYSTEM_PROMPT.strip()),
+    ("system", dedent(MAIN_SYSTEM_PROMPT).strip()),
     ("placeholder", "{messages}")
 ]
 primary_assistant_prompt = ChatPromptTemplate.from_messages(MAIN_SYSTEM_MESSAGES).partial(time=datetime.datetime.now)

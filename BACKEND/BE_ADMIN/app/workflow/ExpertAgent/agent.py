@@ -4,6 +4,7 @@ from agno.knowledge.agent import AgentKnowledge
 from .knowledge import get_vector_db
 from config.base_config import OpenAIConfig
 from .prompt import PROMPT
+from textwrap import dedent
 from typing import Callable
 from pydantic import SecretStr
 chat_config = OpenAIConfig()
@@ -28,7 +29,7 @@ expert_agent = Agent(
     optimize_on=100
     
     ),
-    instructions=PROMPT,
+    instructions=dedent(PROMPT),
     goal="Provide strategic, practical advice to help stores grow and succeed.",
     show_tool_calls=True,
     search_knowledge=True,

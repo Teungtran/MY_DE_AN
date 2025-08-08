@@ -8,6 +8,7 @@ from .SearchAgent.agent import tavily_agent
 from .SQLAgent.agent import sql_agent
 from .ExpertAgent.agent import expert_agent
 from .team_memory import get_storage
+from textwrap import dedent
 from typing import Callable
 from pydantic import SecretStr
 chat_config = OpenAIConfig()
@@ -25,7 +26,7 @@ store_team = Team(
     model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
     mode="coordinate",
     tools=[ReasoningTools(add_instructions=True,think=True, analyze=True)],
-    instructions=TEAM_PROMPT,
+    instructions=dedent(TEAM_PROMPT),
     members=[tavily_agent, sql_agent, expert_agent, advertise_expert],
     expected_output="A Markdown format answer that is clear for the user, using simple vocabulary",
     markdown=True,
@@ -42,3 +43,12 @@ store_team = Team(
     share_member_interactions=True,
     show_members_responses=True,
 )
+# Example usage:
+# session_id = "66666"
+# user_id = "boss"
+# result = store_team.run(
+#     session_id=session_id, 
+#     user_id=user_id, 
+#     message="Your message here",
+#     stream=True
+# )

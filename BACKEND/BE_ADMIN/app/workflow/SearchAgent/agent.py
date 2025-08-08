@@ -5,6 +5,7 @@ from agno.tools.tavily import TavilyTools
 from config.base_config import OpenAIConfig, APP_CONFIG
 from .prompt import PROMPT
 from typing import Callable
+from textwrap import dedent
 from pydantic import SecretStr
 chat_config = OpenAIConfig()
 api_key = chat_config.api_key
@@ -24,7 +25,7 @@ tavily_agent = Agent(
     role="Access to Internet, retrieve latest informations from user request",
     model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
     tools=[TavilyTools(api_key=TAVILY_API_KEY)],
-    instructions=PROMPT,
+    instructions=dedent(PROMPT),
     goal="Provide accurate, real-time information",
     show_tool_calls=True
 )

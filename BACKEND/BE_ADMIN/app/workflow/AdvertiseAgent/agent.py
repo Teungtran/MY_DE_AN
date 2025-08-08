@@ -4,6 +4,7 @@ from custom_tools.agent_tools import extract_url_content, draft_advertise_from_i
 from agno.models.openai import OpenAIChat
 from typing import Callable
 from pydantic import SecretStr
+from textwrap import dedent
 from config.base_config import OpenAIConfig
 from .prompt import ADVERTISE_PROMPT,ROLE,GOAL
 
@@ -20,7 +21,7 @@ advertise_expert =  Agent(
     role=ROLE,
     model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
     tools=[extract_url_content, draft_advertise_from_input],
-    instructions = ADVERTISE_PROMPT,
+    instructions = dedent(ADVERTISE_PROMPT),
     goal=GOAL,
     show_tool_calls=True,
     markdown=True
