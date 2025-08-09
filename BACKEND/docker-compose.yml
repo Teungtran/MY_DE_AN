@@ -66,7 +66,7 @@ services:
       - ./BE_CHATBOT/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
-      - "8090"
+      - "8888"
     volumes:
       - ./BE_CHATBOT/logs:/code/logs
     environment:
@@ -85,7 +85,7 @@ services:
       - ./BE_PREPROCESS/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
-      - "8002"
+      - "8888"
     volumes:
       - ./BE_PREPROCESS/logs:/code/logs
     environment:

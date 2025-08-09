@@ -13,8 +13,9 @@ RUN uv sync --no-cache-dir
 # Copy app code
 COPY ./app /code/app
 COPY ./config /code/config
+COPY ./start.sh /code/start.sh
 
-RUN chmod +x /app/start.sh
+RUN chmod +x /code/start.sh
 # Expose FastAPI default port
 EXPOSE 8888
 # Set environment variables
@@ -22,5 +23,5 @@ ENV PYTHONPATH=/code
 ENV PYTHONUNBUFFERED=1
 
 # Run FastAPI using uvicorn
-CMD ["/app/start.sh"]
+CMD ["/code/start.sh"]
 
