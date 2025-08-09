@@ -54,7 +54,7 @@ sentiment_prepare_base_model:
   maxlen: 200
   num_words: 5000
   embedding_dim: 128
-  batch_size: 64
+  batch_size: 128  # Increased for faster training
   epochs: 5
   filters: 128
   kernel_size: 5
@@ -64,13 +64,13 @@ sentiment_training:
   model_version_dir: artifacts/sentiment/model_version
   data_version_dir: artifacts/sentiment/data_version
   maxlen: 200
-  batch_size: 64
+  batch_size: 128  # Increased for faster training
   epochs: 5
   validation_split: 0.2
 
 sentiment_evaluation:
   model_version_dir: artifacts/sentiment/model_version
-  data_ve rsion_dir: artifacts/sentiment/data_version
+  data_version_dir: artifacts/sentiment/data_version
   evaluation_dir: artifacts/sentiment/evaluation
 
 sentiment_cloud_storage_push:

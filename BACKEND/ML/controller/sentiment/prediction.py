@@ -11,8 +11,8 @@ class SentimentResponse(BaseModel):
 async def predict_sentiment(
     file: UploadFile = File(...),
     model_version: str = Form(default="1"),
-    tokenizer_version: str = Form(default="tokenizer/tokenizer_version_20250701T105905.pkl"),
-    run_id: str = Form(default="a523ba441ea0465085716dcebb916294")
+    tokenizer_version: str = Form(default="tokenizer/tokenizer_version_20250810T020107.pkl"),
+    run_id: str = Form(default="e5eb544e473d4a7b9109b98c5255de04")
     ) :
     result = await SentimentController.predict_sentiment(
         file=file, 

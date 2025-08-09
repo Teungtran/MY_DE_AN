@@ -16,7 +16,6 @@ async def predict_churn(
     model_version: str = Form(default="1"),
     scaler_version: str = Form(default="scaler/scaler_churn_version_20250705T125012.pkl"),
     run_id: str = Form(default="e26506b0b99247c6bcec84a630fa665e"),
-    reference_data: Optional[str] = Form(default="s3://ml-dataversion/churn_data_store/churn/data_version/features_data_version_20250705T125002.csv"),
     current_user: Dict[str, Any] = Depends(require_staff_or_admin)
     ):
     """
@@ -34,8 +33,7 @@ async def predict_churn(
         file=file,
         model_version=model_version,
         scaler_version=scaler_version,
-        run_id=run_id,
-        reference_data=reference_data
+        run_id=run_id
     )
     
     # Handle different response types and include user info

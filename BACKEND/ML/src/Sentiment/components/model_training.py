@@ -5,6 +5,7 @@ matplotlib.use('Agg')  # Set non-interactive backend before importing pyplot
 import matplotlib.pyplot as plt
 from pathlib import Path
 import seaborn as sns
+import numpy as np
 from datetime import datetime
 from sklearn.metrics import (
     roc_auc_score, precision_score, recall_score, f1_score,
@@ -71,22 +72,37 @@ class TrainAndEvaluateModel:
             )
         ]
 
-    def split_tokienize(self, train_data, test_data,tokenizer):
+    def split_tokienize(self, train_data, test_data, tokenizer):
+        """Optimized tokenization with batch processing."""
         train_data = train_data.dropna(subset=["review"])
         train_data["review"] = train_data["review"].astype(str)
         test_data = test_data.dropna(subset=["review"])
         test_data["review"] = test_data["review"].astype(str)
-        logger.info("Converting text to sequences")
-        X_train = pad_sequences(
-            tokenizer.texts_to_sequences(train_data["review"]), 
-            maxlen=self.train_config.maxlen
-        )
-        X_test = pad_sequences(
-            tokenizer.texts_to_sequences(test_data["review"]), 
-            maxlen=self.train_config.maxlen
-        )
-        y_train = train_data["sentiment"]
-        y_test = test_data["sentiment"]
+        
+        logger.info("Converting text to sequences with optimized tokenization")
+        
+        # Batch tokenization for better performance
+        batch_size = 10000  # Process in batches to manage memory
+        
+        def tokenize_in_batches(reviews, batch_size):
+            """Tokenize reviews in batches for memory efficiency."""
+            sequences = []
+            for i in range(0, len(reviews), batch_size):
+                batch = reviews[i:i + batch_size]
+                batch_sequences = tokenizer.texts_to_sequences(batch)
+                sequences.extend(batch_sequences)
+            return sequences
+        
+        # Process training data
+        train_sequences = tokenize_in_batches(train_data["review"].tolist(), batch_size)
+        X_train = pad_sequences(train_sequences, maxlen=self.train_config.maxlen)
+        
+        # Process test data
+        test_sequences = tokenize_in_batches(test_data["review"].tolist(), batch_size)
+        X_test = pad_sequences(test_sequences, maxlen=self.train_config.maxlen)
+        
+        y_train = train_data["sentiment"].values
+        y_test = test_data["sentiment"].values
         
         logger.info(f"Training data shape: {X_train.shape}")
         logger.info(f"Test data shape: {X_test.shape}")
@@ -139,7 +155,7 @@ class TrainAndEvaluateModel:
         metrics_file_versioned = Path(self.eval_config.evaluation_dir) / f"metrics_{self.datetime_suffix}.json"
         
         save_json(metrics_file_versioned, metrics)
-        logger.info(f"Detailed metrics saved to: {self.eval_config.metrics_file}")
+        logger.info(f"Detailed metrics saved to: {metrics_file_versioned}")
         
         mlflow.log_metrics({
             "precision": precision,
@@ -254,23 +270,30 @@ class TrainAndEvaluateModel:
         """Main method to train and evaluate the model using temporary directories."""
         logger.info("Initiating model training and evaluation with temporary directory management")
 
-        X_train, X_test, y_train, y_test = self.split_tokienize(train_data, test_data,tokenizer)
+        X_train, y_train, X_test, y_test = self.split_tokienize(train_data, test_data, tokenizer)
         try:
             try:
                 logger.info(f"Loaded y_train shape: {y_train.shape}")
                 logger.info(f"Loaded y_test shape: {y_test.shape}")
                 
-                # Handle NaN values in target variables
-                logger.info(f"NaN count in y_train: {y_train.isna().sum()}")
-                logger.info(f"NaN count in y_test: {y_test.isna().sum()}")
+                # Handle NaN values in target variables (using numpy methods for arrays)
+                # Convert to numpy arrays if they aren't already
+                y_train = np.array(y_train)
+                y_test = np.array(y_test)
                 
-                if y_train.isna().sum() > 0:
-                    logger.warning(f"Found {y_train.isna().sum()} NaN values in y_train, filling with 0")
-                    y_train = y_train.fillna(0)
+                nan_count_train = np.isnan(y_train).sum()
+                nan_count_test = np.isnan(y_test).sum()
+                
+                logger.info(f"NaN count in y_train: {nan_count_train}")
+                logger.info(f"NaN count in y_test: {nan_count_test}")
+                
+                if nan_count_train > 0:
+                    logger.warning(f"Found {nan_count_train} NaN values in y_train, filling with 0")
+                    y_train = np.nan_to_num(y_train, nan=0.0)
                     
-                if y_test.isna().sum() > 0:
-                    logger.warning(f"Found {y_test.isna().sum()} NaN values in y_test, filling with 0")
-                    y_test = y_test.fillna(0)
+                if nan_count_test > 0:
+                    logger.warning(f"Found {nan_count_test} NaN values in y_test, filling with 0")
+                    y_test = np.nan_to_num(y_test, nan=0.0)
                     
             except FileNotFoundError as e:
                 logger.error(f"Target files not found: {e}")

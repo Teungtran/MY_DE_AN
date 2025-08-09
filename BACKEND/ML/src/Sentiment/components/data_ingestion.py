@@ -3,68 +3,129 @@ from src.Sentiment.entity.config_entity import DataIngestionConfig
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 import re
-import nltk
 import pandas as pd
-from nltk.corpus import stopwords
-from nltk.corpus import opinion_lexicon
 import contractions 
-nltk.download('opinion_lexicon')
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
-nltk.download('stopwords')
-nltk.download('wordnet')
-nltk.download('punkt')
-nltk.download('averaged_perceptron_tagger')
-from nltk.tag import pos_tag
 from tqdm import tqdm
-from datetime import datetime, timezone 
+from datetime import datetime, timezone
+import numpy as np
+from multiprocessing import Pool, cpu_count
+import os
+import hashlib
+import pickle
+
+
+# Global preprocessing function for multiprocessing
+def preprocess_text_worker(review):
+    """Simple text cleaning using regex only."""
+    try:
+        review = str(review).lower()
+    except:
+        return ""
+
+    # Fast contraction expansion
+    try:
+        review = contractions.fix(review)
+    except:
+        pass
+
+    # Remove URLs
+    review = re.sub(r'https*\S+', ' ', review)
+    # Remove mentions and hashtags
+    review = re.sub(r'[@#]\S+', ' ', review)
+    # Remove HTML tags
+    review = re.sub(r'<.*?>', '', review)
+    # Replace punctuation with spaces
+    review = re.sub(r'[/(){}\[\]\|@,;]', ' ', review)
+    # Keep only letters and spaces
+    review = re.sub(r'[^a-z\s]', '', review)
+    # Remove extra whitespace
+    review = re.sub(r'\s+', ' ', review).strip()
+    
+    return review 
 
 class DataIngestion:
     def __init__(self, config: DataIngestionConfig):
         self.config = config
         self.rows_processed = 0
         self.datetime_suffix = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        
+        # Initialize text processing cache for faster repeat processing
+        try:
+            os.makedirs(self.config.data_version_dir, exist_ok=True)
+            self.cache_file = os.path.join(self.config.data_version_dir, "text_processing_cache.pkl")
+            self.text_cache = self._load_cache()
+        except Exception as e:
+            logger.warning(f"Could not initialize cache: {e}. Proceeding without cache.")
+            self.cache_file = None
+            self.text_cache = {}
 
-    def _expand_contractions(self, text: str) -> str:
-        """Expand contractions using `contractions` lib."""
-        return contractions.fix(text)
+    def _load_cache(self):
+        """Load text processing cache from disk."""
+        try:
+            if self.cache_file and os.path.exists(self.cache_file):
+                with open(self.cache_file, 'rb') as f:
+                    return pickle.load(f)
+        except Exception as e:
+            logger.warning(f"Could not load cache: {e}")
+        return {}
 
-    def _preprocess_text(self, review):
-        REPLACE_BY_SPACE_RE = re.compile('[/(){}\[\]\|@,;]')
-        BAD_SYMBOLS_RE = re.compile('[^0-9a-z #+_]')
-        NEGATIVE_WORDS = set(opinion_lexicon.negative())
-        POSITIVE_WORDS = set(opinion_lexicon.positive())
+    def _save_cache(self):
+        """Save text processing cache to disk."""
+        try:
+            if self.cache_file:
+                os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
+                with open(self.cache_file, 'wb') as f:
+                    pickle.dump(self.text_cache, f)
+        except Exception as e:
+            logger.warning(f"Could not save cache: {e}")
 
+    def _get_text_hash(self, text):
+        """Generate hash for text to use as cache key."""
+        return hashlib.md5(str(text).encode()).hexdigest()
+
+    def _expand_contractions_fast(self, text: str) -> str:
+        """Fast contraction expansion using precompiled regex."""
+        try:
+            return contractions.fix(text)
+        except:
+            return text
+
+    def _preprocess_text_fast(self, review):
+        """Simple text cleaning using regex only with caching."""
+        text_hash = self._get_text_hash(review)
+        if text_hash in self.text_cache:
+            return self.text_cache[text_hash]
+        
         try:
             review = str(review).lower()
-        except Exception as e:
-            logger.warning(f"Review conversion error: {e}, setting to empty string.")
-            review = ""
+        except:
+            processed_text = ""
+            self.text_cache[text_hash] = processed_text
+            return processed_text
 
-        review = self._expand_contractions(review)
-        review = REPLACE_BY_SPACE_RE.sub(' ', review)
-        review = BAD_SYMBOLS_RE.sub('', review)
+        # Fast contraction expansion
+        try:
+            review = contractions.fix(review)
+        except:
+            pass
+
+        # Remove URLs
         review = re.sub(r'https*\S+', ' ', review)
+        # Remove mentions and hashtags
         review = re.sub(r'[@#]\S+', ' ', review)
-        review = re.sub('<.*?>', '', review)
-
-        tokenizer = word_tokenize(review)
-        stop_words = set(stopwords.words('english')) - NEGATIVE_WORDS - POSITIVE_WORDS
-        tokens = [token for token in tokenizer if token not in stop_words]
-
-        lemmatizer = WordNetLemmatizer()
-        tokens = [lemmatizer.lemmatize(word) for word in tokens]
-
-        tagged_tokens = pos_tag(tokens)
-        IMPORTANT_POS = {'JJ', 'JJR', 'JJS', 'RB', 'RBR', 'RBS',
-                        'VB', 'VBD', 'VBG', 'VBN', 'VBP', 'VBZ',
-                        'NN', 'NNS', 'NNP', 'NNPS', 'MD'}
-        processed_tokens = [
-            lemmatizer.lemmatize(word.lower())
-            for word, tag in tagged_tokens
-            if tag in IMPORTANT_POS and len(word) >= 2
-        ]
-        return ' '.join(processed_tokens)
+        # Remove HTML tags
+        review = re.sub(r'<.*?>', '', review)
+        # Replace punctuation with spaces
+        review = re.sub(r'[/(){}\[\]\|@,;]', ' ', review)
+        # Keep only letters and spaces
+        review = re.sub(r'[^a-z\s]', '', review)
+        # Remove extra whitespace
+        processed_text = re.sub(r'\s+', ' ', review).strip()
+        
+        # Cache the result for future use
+        self.text_cache[text_hash] = processed_text
+        
+        return processed_text
 
     def load_data(self):
         try:
@@ -129,6 +190,31 @@ class DataIngestion:
             logger.error(f"Error in loading data: {e}")
             raise e
 
+    def load_data_for_prediction(self):
+        """
+        Load data specifically for prediction - doesn't require sentiment column.
+        Only needs text data for inference.
+        """
+        try:
+            logger.info(f"Loading prediction data from {self.config.local_data_file}")
+            
+            # Try reading with header first, then without
+            try:
+                df = pd.read_csv(self.config.local_data_file)
+                df.columns = df.columns.str.lower().str.strip()
+                logger.info(f"Loaded data with headers: {list(df.columns)}")
+            except:
+                df = pd.read_csv(self.config.local_data_file, header=None)
+                logger.info(f"Loaded data without headers, {df.shape[1]} columns detected")
+
+            logger.info(f"Data shape: {df.shape}")
+            
+            return df
+
+        except Exception as e:
+            logger.error(f"Error in loading prediction data: {e}")
+            raise e
+
     def save_data(self, df, df_processed):
         input_data_versioned_name = f"input_raw_sentiment_data_version_{self.datetime_suffix}.csv"
         processed_data_versioned_name = f"processed_sentiment_data_version_{self.datetime_suffix}.csv"
@@ -148,17 +234,44 @@ class DataIngestion:
         return str(input_data_versioned_path), str(processed_data_versioned_path)
 
     def preprocess_data(self, df_clean):
+        """Optimized preprocessing with multiprocessing for faster execution."""
         self.rows_processed = 0
-        print(f"Starting preprocessing of {len(df_clean)} rows...")
+        total_rows = len(df_clean)
+        logger.info(f"Starting optimized preprocessing of {total_rows} rows...")
 
-        processed_reviews = []
-        for idx, review in tqdm(enumerate(df_clean['review']), total=len(df_clean)):
-            cleaned_review = self._preprocess_text(review)
-            processed_reviews.append(cleaned_review)
-            self.rows_processed += 1
+        # Use vectorized operations for better performance
+        reviews = df_clean['review'].values
+        
+        # Determine optimal number of processes
+        num_processes = min(cpu_count(), 4)
+        chunk_size = max(1, total_rows // (num_processes * 2))
+        
+        if total_rows < 1000:
+            # For small datasets, use single process to avoid overhead
+            logger.info("Using single-threaded processing for small dataset")
+            processed_reviews = [self._preprocess_text_fast(review) for review in tqdm(reviews)]
+        else:
+            # For larger datasets, use multiprocessing
+            logger.info(f"Using multiprocessing with {num_processes} processes, chunk size: {chunk_size}")
+            
+            processed_reviews = []
+            with Pool(processes=num_processes) as pool:
+                results = list(tqdm(
+                    pool.imap(preprocess_text_worker, reviews, chunksize=chunk_size),
+                    total=total_rows,
+                    desc="Processing reviews"
+                ))
+                processed_reviews = results
 
         df_clean['review'] = processed_reviews
-        logger.info(f"Completed preprocessing. Total rows processed: {self.rows_processed}")
+        self.rows_processed = len(processed_reviews)
+        logger.info(f"Completed optimized preprocessing. Total rows processed: {self.rows_processed}")
+        
+        # Save cache for future runs
+        if len(self.text_cache) > 0:
+            self._save_cache()
+            logger.info(f"Saved {len(self.text_cache)} entries to text processing cache")
+        
         return df_clean
 
     def split_data(self, df_clean):

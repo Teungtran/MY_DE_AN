@@ -1,16 +1,17 @@
 from fastapi import UploadFile, HTTPException,Form,BackgroundTasks
-from src.Sentiment.components.support import import_data,most_common,get_dummies
+from src.Sentiment.components.support import import_data
 from typing_extensions import Optional
 import pandas as pd
 from dotenv import load_dotenv
 load_dotenv()
 from src.Sentiment.components.data_ingestion import DataIngestion
-from src.Sentiment.config.configuration import ConfigurationManager, WebhookConfig
+from src.Sentiment.config.configuration import ConfigurationManager
 import joblib 
 import mlflow
 from src.Sentiment.utils.logging import logger
 from src.Sentiment.utils.visualize_ouput import rating_distribution
-
+import tensorflow as tf
+from tensorflow.keras.preprocessing.sequence import pad_sequences
 from datetime import datetime
 import time
 import os
@@ -18,7 +19,8 @@ import dagshub
 import tempfile
 import os
 import boto3
-
+def calculate_rating(ratings):
+    return [min(5.0, max(0.5, round(r[0] * 10) / 2)) for r in ratings]
 class PredictionPipeline:
     def __init__(self, model_uri: str, tokenizer_uri: str):
         try:
@@ -31,11 +33,36 @@ class PredictionPipeline:
         except Exception as e:
             raise RuntimeError(f"Failed to load model or tokenizer: {e}")
     
-    def preprocess_text(self, df):
-        """Preprocess text data for sentiment analysis"""
+    def preprocess_text(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Preprocess text data for sentiment analysis - prefer 'review', else fallback to longest text column."""
+        df.columns = df.columns.str.lower()
+
+        review_col = None
+
+        if 'review' in df.columns:
+            review_col = 'review'
+            logger.info("Using 'review' column for sentiment analysis.")
+        else:
+            text_columns = [col for col in df.columns if df[col].dtype == 'object']
+            if text_columns:
+                review_col = max(text_columns, key=lambda col: df[col].astype(str).str.len().mean())
+                logger.warning(f"'review' column not found. Falling back to longest text column: '{review_col}'")
+        
+        if review_col is None:
+            raise KeyError("No suitable text column found for sentiment analysis.")
+
+        # Step 3: Process chosen column
+        df_processed = df.copy()
+        df_processed['review'] = df_processed[review_col].astype(str).str.strip()
+
+        # Step 4: Apply preprocessing
         data_ingestion = DataIngestion(config=ConfigurationManager().get_data_ingestion_config())
-        return data_ingestion.preprocess_data(df)
-    
+        df_processed['review'] = [
+            data_ingestion._preprocess_text_fast(text) for text in df_processed['review']
+        ]
+
+        return df_processed
+
     def upload_to_s3(self, file_path):
         """
         Upload a file to S3 and return the public URL
@@ -85,17 +112,19 @@ class PredictionPipeline:
             
             with mlflow.start_run(run_name=f"sentiment_prediction_run_{time_str}"):
                 data_ingestion = DataIngestion(config=data_ingestion_config)
-                df = data_ingestion.load_data()
+                df = data_ingestion.load_data_for_prediction()
                 df_processed = self.preprocess_text(df)
                 
-                X = self.tokenizer.transform(df_processed['review'])
-                y_pred = self.model.predict(X)
+                sequences = self.tokenizer.texts_to_sequences(df_processed['review'].tolist())
+                padded_sequences = pad_sequences(sequences, maxlen=200)
+                ratings = self.model.predict(padded_sequences)
                 
-                df_processed['predicted_sentiment'] = y_pred
-                
-                counts = df_processed['predicted_sentiment'].value_counts()
-                count_positive = counts.get(1, 0)
-                count_negative = counts.get(0, 0)
+                df_processed['predicted_sentiment'] = calculate_rating(ratings)
+                # Create 'rating' column for visualization function
+                df_processed['rating'] = df_processed['predicted_sentiment']
+                # Calculate rating distribution for metrics
+                rating_counts = df_processed['rating'].value_counts()
+                avg_rating = df_processed['rating'].mean()
                 
                 s3_url = None
                 prediction_csv_path = None
@@ -116,12 +145,14 @@ class PredictionPipeline:
                 except Exception as e:
                     logger.error(f"An error occurred during prediction saving or cleanup: {e}")
                 
-                try:    
-                    sklearn_model = self.model._model_impl  
-                    y_proba = sklearn_model.predict_proba(X)
-                    max_confidence = y_proba.max(axis=1)
-                    average_confidence = max_confidence.mean()
-                except AttributeError:
+                # Calculate prediction confidence for TensorFlow model
+                try:
+                    # For rating prediction, confidence can be measured by the spread/variance
+                    rating_variance = df_processed['rating'].var()
+                    # Lower variance indicates more consistent (confident) predictions
+                    average_confidence = max(0.5, min(1.0, 1.0 - (rating_variance / 5.0)))
+                except Exception as e:
+                    logger.warning(f"Could not calculate confidence: {e}")
                     average_confidence = None 
                 
                 end_time = time.time()
@@ -134,32 +165,45 @@ class PredictionPipeline:
                 
                 # Create visualization
                 plot_path = rating_distribution(df_processed)
-                mlflow.log_artifact(plot_path, "visualization")
-                os.remove(plot_path)
+                if plot_path != "visualization_failed.png" and os.path.exists(plot_path):
+                    mlflow.log_artifact(plot_path, "visualization")
+                    os.remove(plot_path)
+                else:
+                    logger.warning("Visualization creation failed, skipping artifact logging")
                 
                 # Log metrics
                 mlflow.log_metric("processing_time_seconds", processing_time)
-                mlflow.log_metric("count_positive", count_positive)
-                mlflow.log_metric("count_negative", count_negative)
+                mlflow.log_metric("average_rating", avg_rating)
+                mlflow.log_metric("rating_variance", rating_variance if 'rating_variance' in locals() else 0)
+                
+                # Log rating distribution
+                for rating, count in rating_counts.items():
+                    mlflow.log_metric(f"count_rating_{rating}", count)
+                
                 mlflow.log_param("start_time", start_datetime.strftime('%Y-%m-%d %H:%M:%S'))
                 mlflow.log_param("end_time", end_datetime.strftime('%Y-%m-%d %H:%M:%S'))
                 mlflow.log_param("rawdata_records", len(df))
                 mlflow.log_metric("records_processed", len(df_processed))
                 
-                message = ""
+                message = f"📊 Rating Analysis Complete:\n"
+                message += f"• Average Rating: {avg_rating:.2f}/5.0\n"
+                message += f"• Total Records Processed: {len(df_processed)}\n"
+                message += f"• Rating Distribution: {dict(rating_counts.sort_index())}\n"
+                
                 CONFIDENCE_THRESHOLD = threshold_config.confidence_threshold
                 if average_confidence is not None:
                     mlflow.log_metric("average_prediction_confidence", average_confidence)
+                    message += f"• Prediction Confidence: {average_confidence:.2%}\n"
 
                     if average_confidence < CONFIDENCE_THRESHOLD:
                         message += (
-                            f"⚠️ Average prediction confidence ({average_confidence:.2%}) is below the threshold "
-                            f"of {CONFIDENCE_THRESHOLD:.2%}. Consider retraining the model."
+                            f"⚠️ Prediction confidence ({average_confidence:.2%}) is below threshold "
+                            f"({CONFIDENCE_THRESHOLD:.2%}). Consider retraining the model."
                         )
                     else:
                         message += (
-                            f"✅ Average prediction confidence ({average_confidence:.2%}) is above the threshold "
-                            f"of {CONFIDENCE_THRESHOLD:.2%}. No further action required."
+                            f"✅ Prediction confidence ({average_confidence:.2%}) meets quality threshold "
+                            f"({CONFIDENCE_THRESHOLD:.2%})."
                         )
                 mlflow.log_text(message, "prediction_summary.txt")
             return message, s3_url

@@ -9,9 +9,7 @@ from src.Churn.config.configuration import ConfigurationManager, WebhookConfig
 import joblib 
 import mlflow
 from src.Churn.utils.logging import logger
-from src.Churn.utils.notify_webhook import post_to_webhook
 from src.Churn.utils.visualize_ouput import visualize_customer_churn
-from src.Churn.utils.check_drift import get_data_drift
 
 from datetime import datetime
 import time
@@ -102,7 +100,7 @@ class PredictionPipeline:
             logger.error(f"Failed to upload to S3: {e}")
             raise
     
-    async def predict(self, reference_data: Optional[str] = None):
+    async def predict(self):
         try:
             start_time = time.time()
             start_datetime = datetime.now()
@@ -123,31 +121,7 @@ class PredictionPipeline:
                 data_ingestion = DataIngestion(config=data_ingestion_config)
                 df = data_ingestion.load_data()
                 df_features = self.process_data_for_churn(df)
-                drift_ratio = 0
-                n_drifted_features = 0
 
-                if reference_data:
-                    try:
-                        logger.info(f"Loading reference data from {reference_data}")
-                        reference_df = pd.read_csv(reference_data)
-                        
-                        logger.info(f"Reference data columns: {reference_df.columns.tolist()}")
-                        logger.info(f"Current data columns: {df_features.columns.tolist()}")
-                        
-                        if 'customer_id' in reference_df.columns and 'customer_id' in df_features.columns:
-                            logger.info("customer_id found in both dataframes")
-                        else:
-                            logger.warning(f"customer_id missing in one or both dataframes. Reference has customer_id: {'customer_id' in reference_df.columns}, Current has customer_id: {'customer_id' in df_features.columns}")
-                        
-                        drift_result = get_data_drift(reference_df, df_features)
-                        drift_ratio = drift_result.get("drift_ratio", 0)
-                        n_drifted_features = drift_result.get("n_drifted_features", 0)
-                    except Exception as e:
-                        logger.warning(f"Skipping data drift due to error: {e}")
-                        import traceback
-                        logger.warning(traceback.format_exc())
-                else:
-                    logger.info("No reference data provided. Skipping data drift detection.")
                 
                 df_features_for_prediction = df_features.copy()
                 
@@ -220,17 +194,6 @@ class PredictionPipeline:
                 mlflow.log_param("rawdata_records", len(df))
                 mlflow.log_metric("records_processed", len(df_encoded))
                 message = ""
-                if reference_data:
-                    DRIFTED_FEATURE_THRESHOLD = threshold_config.data_drift_threshold
-                    if drift_ratio > DRIFTED_FEATURE_THRESHOLD:
-                        message += (
-                            f"⚠️ Data drift detected in {n_drifted_features} feature(s) "
-                            f"({drift_ratio:.0%} of all features). Consider retraining the model.\n"
-                        )
-                    else:
-                        message += f"✅ No significant data drift detected ({drift_ratio:.0%} of features).\n"
-                else:
-                    message = ""
 
                 CONFIDENCE_THRESHOLD = threshold_config.confidence_threshold
                 if average_confidence is not None:
@@ -257,7 +220,6 @@ async def run_prediction_task(
     model_version: str,
     scaler_version: str,
     run_id: str,
-    reference_data: Optional[str] = None,
 ):
     """
     Background task to run prediction pipeline and notify webhook.
@@ -266,7 +228,7 @@ async def run_prediction_task(
         model_uri = f"models:/RandomForestClassifier/{model_version}"
         scaler_uri = f"runs:/{run_id}/{scaler_version}"
         pipeline = PredictionPipeline(model_uri, scaler_uri)
-        message, s3_url = await pipeline.predict(reference_data=reference_data)
+        message, s3_url = await pipeline.predict()
 
         if os.path.exists(file_path):
             try:
@@ -306,9 +268,8 @@ class ChurnController:
         file: UploadFile,
         model_version: str = Form(default="1"),
         scaler_version: str = Form(default="scaler_churn_version_20250701T105905.pkl"),
-        run_id: str = Form(default="b523ba441ea0465085716dcebb916294"),
-        reference_data: Optional[str] = Form(default="s3://churndataversion/churn_data_store/data_version/features_data_version_20250704T005200.csv"),
-    ):
+        run_id: str = Form(default="b523ba441ea0465085716dcebb916294")
+        ):
         """
         Predict churn using uploaded file and dynamic model/scaler versions.
         """
@@ -327,7 +288,6 @@ class ChurnController:
                 model_version=model_version,
                 scaler_version=scaler_version,
                 run_id=run_id,
-                reference_data=reference_data
             )
 
             return payload
