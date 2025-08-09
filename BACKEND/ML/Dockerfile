@@ -22,12 +22,12 @@ COPY ./config /code/config
 COPY ./main.py /code/main.py
 COPY ./run_pipeline.py /code/run_pipeline.py
 
+RUN chmod +x /app/start.sh
 # Expose FastAPI default port
 EXPOSE 8888
-
 # Set environment variables
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/code
 ENV PYTHONUNBUFFERED=1
 
 # Run FastAPI using uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8888"] 
+CMD ["/app/start.sh"]
