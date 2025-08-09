@@ -154,8 +154,8 @@ def register_new_user(
         raise HTTPException(status_code=400, detail="Email already registered")
     if role == "admin":
         id = f"ADMIN_{generate_short_id()}"
-    elif role == "user":
-        id = f"USER_{generate_short_id()}"
+    elif role == "staff":
+        id = f"STAFF_{generate_short_id()}"
     elif role == "viewer":
         id = f"VIEWER_{generate_short_id()}"
     hashed_password = hash_password(password)
@@ -385,7 +385,7 @@ async def user_only(current_user: dict = Depends(require_role("user"))):
         "access_token": current_user["token"],
         "token_exp": current_user["token_exp"]
     }
-@auth.get("/viewer-profile")
+@auth.get("/staff-profile")
 async def staff_only(current_user: dict = Depends(require_role("staff"))):
     return {
         "name": current_user["name"],

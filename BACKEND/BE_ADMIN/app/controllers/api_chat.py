@@ -1,39 +1,42 @@
 import datetime
-
 import json 
 from typing import Optional, Dict
 import asyncio
 import shutil
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from workflow.team_agents import store_team
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
+from .login_page import require_store_role
 from report_agent.agent import DataFrameAgent
 delay: float = 0.01
 router = APIRouter()
 
 class TeamChatRequest(BaseModel):
     """Schema for team chat requests"""
-    user_id: str = Field(..., description="User ID")
     session_id: str = Field(..., description="Session ID")
     message: str = Field(..., description="User message")
 
 
 @router.post("/team/chat/stream")
-async def stream_team_chat(request: TeamChatRequest):
+async def stream_team_chat(
+    request: TeamChatRequest, 
+    current_user: dict = Depends(require_store_role)
+):
     """
-    Stream chat responses from the store team
+    Stream chat responses from the store team (requires admin/staff role)
     """
     try:
-        print(f"Starting team chat stream for user {request.user_id}, session {request.session_id}")
+        user_id = current_user["user_id"]
+        print(f"Starting team chat stream for user {user_id}, session {request.session_id}")
         
         async def event_stream():
             try:
                 # Run the store team with streaming enabled
                 result = store_team.run(
                     session_id=request.session_id,
-                    user_id=request.user_id,
+                    user_id=user_id,
                     message=request.message,
                     stream=True
                 )
@@ -84,16 +87,20 @@ async def stream_team_chat(request: TeamChatRequest):
         raise HTTPException(status_code=500, detail=f"Failed to start chat stream: {str(e)}")
 
 @router.post("/team/chat")
-async def team_chat(request: TeamChatRequest):
+async def team_chat(
+    request: TeamChatRequest, 
+    current_user: dict = Depends(require_store_role)
+):
     """
-    Non-streaming team chat endpoint
+    Non-streaming team chat endpoint (requires admin/staff role)
     """
     try:
-        print(f"Starting team chat for user {request.user_id}, session {request.session_id}")
+        user_id = current_user["user_id"]
+        print(f"Starting team chat for user {user_id}, session {request.session_id}")
         
         result = store_team.run(
             session_id=request.session_id,
-            user_id=request.user_id,
+            user_id=user_id,
             message=request.message,
             stream=False
         )
@@ -101,7 +108,7 @@ async def team_chat(request: TeamChatRequest):
         return {
             "content": str(result),
             "timestamp": datetime.datetime.now().isoformat(),
-            "user_id": request.user_id,
+            "user_id": user_id,
             "session_id": request.session_id
         }
         
@@ -136,7 +143,7 @@ async def upload_file(
 
 @router.post("/report/analyze")
 async def report_agent(
-    question: str
+    question: str,
 ):
     """
     Upload a data file and analyze it with a natural language question
