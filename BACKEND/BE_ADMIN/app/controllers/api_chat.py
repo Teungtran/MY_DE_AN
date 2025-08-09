@@ -1,19 +1,16 @@
 import datetime
-import asyncio
-from typing_extensions import AsyncGenerator
+
 import json 
-from decimal import Decimal
 from typing import Optional, Dict
-import os
+import asyncio
 import shutil
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from workflow.team_agents import store_team
 from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from report_agent.agent import DataFrameAgent
-
+delay: float = 0.01
 router = APIRouter()
 
 class TeamChatRequest(BaseModel):
@@ -22,14 +19,6 @@ class TeamChatRequest(BaseModel):
     session_id: str = Field(..., description="Session ID")
     message: str = Field(..., description="User message")
 
-
-
-class ReportAnalysisResponse(BaseModel):
-    """Schema for report analysis responses"""
-    question: str = Field(..., description="The question that was asked")
-    analysis: str = Field(..., description="AI analysis result")
-    timestamp: str = Field(..., description="Analysis timestamp")
-    file_info: Optional[Dict] = Field(None, description="Information about the analyzed file")
 
 @router.post("/team/chat/stream")
 async def stream_team_chat(request: TeamChatRequest):
@@ -122,49 +111,47 @@ async def team_chat(request: TeamChatRequest):
 
 
 # Report Analysis Endpoints
-@router.post("/report/upload-and-analyze", response_model=ReportAnalysisResponse)
-async def upload_and_analyze(
+@router.post("/report/upload")
+async def upload_file(
     file: UploadFile = File(...),
-    question: str = Form(...)
+):
+    allowed_extensions = {'.csv', '.xlsx', '.xls'}
+    file_extension = Path(file.filename).suffix.lower()
+    
+    if file_extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
+        )
+    
+    artifact_dir = Path("report_agent/artifact")
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = artifact_dir / file.filename
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    
+    print(f"File uploaded: {file.filename}")
+    return {"filename": file.filename, "message": "File uploaded successfully"}
+
+@router.post("/report/analyze")
+async def report_agent(
+    question: str
 ):
     """
     Upload a data file and analyze it with a natural language question
     """
     try:
-        allowed_extensions = {'.csv', '.txt', '.xlsx', '.xls'}
-        file_extension = Path(file.filename).suffix.lower()
+
         
-        if file_extension not in allowed_extensions:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
-            )
-        
-        artifact_dir = Path("report_agent/artifact")
-        artifact_dir.mkdir(parents=True, exist_ok=True)
-        
-        file_path = artifact_dir / file.filename
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        print(f"File uploaded: {file.filename}")
-        
-        analysis_result = DataFrameAgent(question)
-        
-        file_stats = file_path.stat()
-        file_info = {
-            "filename": file.filename,
-            "size_bytes": file_stats.st_size,
-            "uploaded_at": datetime.datetime.fromtimestamp(file_stats.st_mtime).isoformat()
-        }
-        
-        return ReportAnalysisResponse(
-            question=question,
-            analysis=analysis_result,
-            timestamp=datetime.datetime.now().isoformat(),
-            file_info=file_info
-        )
-        
+        content = DataFrameAgent(question)
+        for i in range(0, len(content), 3):
+            chunk = content[i:i+3]
+            yield chunk
+            await asyncio.sleep(delay * 3)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
     except Exception as e:
         print(f"Failed to upload and analyze file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")

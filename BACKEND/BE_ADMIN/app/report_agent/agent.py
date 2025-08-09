@@ -1,11 +1,11 @@
-from pandasai import SmartDataframe
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
 from config.base_config import OpenAIConfig
-from typing import Callable, Optional
-import pandas as pd
+from typing import Callable
 from textwrap import dedent
-from .prompt import PANDAS_PROMPT, ANALYSE_PROMPT
+from langchain.agents.agent_types import AgentType
+import numpy as np
+from .prompt import ANALYSE_PROMPT
 from .parse_file import import_data
 from pydantic import SecretStr
 chat_config = OpenAIConfig()
@@ -23,34 +23,27 @@ def ai_model():
 
 llm = ai_model()  
 
-AI_prompt = PromptTemplate(input_variables=["question", "columns"], template=dedent(PANDAS_PROMPT))
-analyse_prompt = PromptTemplate(
-    input_variables=["question", "data"],
-    template=dedent(ANALYSE_PROMPT)
-)
 def DataFrameAgent(question: str):
-    """
-    Analyze data from artifact folder using natural language questions.
-    
-    Args:
-        question: Natural language question about the data
-        filename: Optional specific filename to analyze. If None, uses first available file.
-    
-    Returns:
-        Analysis result from the AI agent
-    """
     df = import_data()
-    
-    sdf = SmartDataframe(df, config={
-        "llm": llm,
-        "prompt_template": AI_prompt
-    })
-    result = sdf.chat(question) 
-    if isinstance(result, pd.DataFrame):
-        result = result.to_string()
-    formatted_prompt = analyse_prompt.format(question=question, data=result)  
-    response = llm.invoke(formatted_prompt) 
-
-    return response.content
-
+    data_summary = {
+        'shape': df.shape,
+        'columns': list(df.columns),
+        'dtypes': df.dtypes.astype(str).to_dict(),
+        'missing_values': df.isnull().sum().to_dict(),
+        'numerical_columns': df.select_dtypes(include=[np.number]).columns.tolist(),
+        'categorical_columns': df.select_dtypes(include=['object', 'category']).columns.tolist()
+    }
+    agent = create_pandas_dataframe_agent(
+        llm, 
+        df, 
+        agent_type=AgentType.OPENAI_FUNCTIONS, 
+        verbose=True, 
+        allow_dangerous_code=True,
+        prefix=dedent(ANALYSE_PROMPT.format(data_summary=data_summary)),
+        include_df_in_prompt=True,
+        max_iterations=10,
+        early_stopping_method="generate"
+    )
+    response = agent.invoke({"input": question})
+    return response.get('output') or response.get('result') or response
 
