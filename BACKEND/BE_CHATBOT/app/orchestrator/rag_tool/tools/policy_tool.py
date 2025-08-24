@@ -82,9 +82,6 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
         if not vector_db:
             return "I'm having trouble accessing my knowledge base right now.", []
         
-        RAG_PROMPT_TEMPLATE = ChatPromptTemplate.from_messages(
-            [("system", dedent(GENERATE_PROMPT)), ("human", "{input}")]
-        )
         
         # Get extended queries and translated language in parallel operations
         try:
@@ -129,24 +126,7 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
             print("No relevant documents found")
             return "I couldn't find any information about your question.", []
         
-        try:
-            qa_chain = create_stuff_documents_chain(llm, RAG_PROMPT_TEMPLATE)
-            rag_response = qa_chain.invoke({
-                "input": user_input,  
-                "context": relevant_docs,
-                "metadata": {"requires_reasoning": True}
-            })
-        except Exception as e:
-            print(f"Error in QA chain: {e}")
-            return "I found some information but couldn't process it properly.", []
-        
-        # Extract answer from response
-        if isinstance(rag_response, dict):
-            answer = rag_response.get("answer", rag_response)
-        else:
-            answer = rag_response
-        
-        return answer
+        return str(relevant_docs)
         
     except Exception as e:
         print(f"General error in RAG_Agent: {e}")

@@ -35,6 +35,8 @@ First , you must extract keywords from user_input then follow STRICTLY these gui
     - FPT Shop policies (returns, guarantees, warranties)
     - Shipping policies, or other general store policies
     - Information about FPT Shop , NOT informations about electronic devices
+    - **Note**: If you receive documents output from 'RAG_Agent', you MUST ONLY rephrase the content of the ouput to answer user input DIRECTLY , DO NOT changed any contents!
+
     
   - Use 'url_extraction' tool ONLY when:
     - User provides one or more URLs and wants information from them

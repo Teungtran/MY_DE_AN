@@ -22,17 +22,7 @@ def import_data():
     if not files:
         raise ValueError("No CSV or Excel files found in artifact folder")
 
-    # Find newest file
     newest_file = max(files, key=lambda f: f.stat().st_mtime)
-
-    # Remove old files
-    for f in files:
-        if f != newest_file:
-            try:
-                os.remove(f)
-                print(f"Deleted old file: {f.name}")
-            except Exception as e:
-                print(f"Could not delete {f.name}: {e}")
 
     filename_lower = newest_file.name.lower()
 

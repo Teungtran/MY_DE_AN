@@ -20,7 +20,7 @@ expert_agent = Agent(
     name="ExpertAgent",
     role="Act as a Marketing, Sales, and eCommerce strategist, offering expert advice to help stores grow and succeed.",
     model=OpenAIChat(
-        id=chat_config.id, 
+        id=chat_config.model, 
         api_key=api_key
     ),
     knowledge=AgentKnowledge(

@@ -9,7 +9,7 @@ DB_NAME = APP_CONFIG.mongo_config.db_name
 AGENT_MEMORY_COLLECTION = APP_CONFIG.mongo_config.memory_collection
 STORE_COLLECTION = APP_CONFIG.mongo_config.store_collection
 OPENAI_API_KEY = APP_CONFIG.chat_model_config.api_key
-ID = APP_CONFIG.chat_model_config.id
+ID = APP_CONFIG.chat_model_config.model
 def get_memory():
     memory_db = MongoMemoryDb(
         db_url=DB_URL,

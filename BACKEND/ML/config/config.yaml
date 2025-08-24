@@ -120,39 +120,6 @@ segmentation_mlflow_config:
   tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
   experiment_name: Segmentation_model_training_cycle
 
-# TimeSeries model configuration
-timeseries_data_ingestion:
-  root_dir: artifacts/timeseries/data_ingestion
-  data_version_dir: artifacts/timeseries/data_version
-  local_data_file: artifacts/timeseries/data_ingestion/input_raw.csv
-  test_size: 0.2
-  random_state: 42
-
-timeseries_prepare_base_model:
-  model_version_dir: artifacts/timeseries/model_version
-  data_version_dir: artifacts/timeseries/data_version
-  random_state: 42
-
-timeseries_training:
-  model_version_dir: artifacts/timeseries/model_version
-  data_version_dir: artifacts/timeseries/data_version
-
-timeseries_evaluation:
-  model_version_dir: artifacts/timeseries/model_version
-  data_version_dir: artifacts/timeseries/data_version
-  evaluation_dir: artifacts/timeseries/evaluation
-
-timeseries_cloud_storage_push:
-  root_dir: artifacts
-  bucket_name: ml-dataversion
-  data_version_dir: artifacts/timeseries/data_version  
-  evaluation_dir: artifacts/timeseries/evaluation 
-
-timeseries_mlflow_config:
-  dagshub_username: Teungtran
-  dagshub_repo_name: MY_DE_AN
-  tracking_uri: https://dagshub.com/Teungtran/MY_DE_AN.mlflow
-  experiment_name: Time_Series_training_cycle
 
 prediction_threshold:
   confidence_threshold: 0.7

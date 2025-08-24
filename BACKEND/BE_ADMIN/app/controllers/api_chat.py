@@ -45,18 +45,36 @@ async def stream_team_chat(
                 if hasattr(result, '__iter__'):
                     for chunk in result:
                         if chunk:
+                            # Extract content from the chunk object
+                            content = ""
+                            if hasattr(chunk, 'content'):
+                                content = chunk.content
+                            elif hasattr(chunk, 'data') and hasattr(chunk.data, 'content'):
+                                content = chunk.data.content
+                            else:
+                                content = str(chunk)
+                            
                             yield {
                                 "event": "chunk",
                                 "data": json.dumps({
-                                    "content": str(chunk),
+                                    "content": content,
                                     "timestamp": datetime.datetime.now().isoformat()
                                 })
                             }
                 else:
+                    # Extract content from single result
+                    content = ""
+                    if hasattr(result, 'content'):
+                        content = result.content
+                    elif hasattr(result, 'data') and hasattr(result.data, 'content'):
+                        content = result.data.content
+                    else:
+                        content = str(result)
+                    
                     yield {
                         "event": "chunk", 
                         "data": json.dumps({
-                            "content": str(result),
+                            "content": content,
                             "timestamp": datetime.datetime.now().isoformat()
                         })
                     }
@@ -106,7 +124,7 @@ async def team_chat(
         )
         
         return {
-            "content": str(result),
+            "content": str(result.content),
             "timestamp": datetime.datetime.now().isoformat(),
             "user_id": user_id,
             "session_id": request.session_id
@@ -121,6 +139,8 @@ async def team_chat(
 @router.post("/report/upload")
 async def upload_file(
     file: UploadFile = File(...),
+    current_user: dict = Depends(require_store_role)
+
 ):
     allowed_extensions = {'.csv', '.xlsx', '.xls'}
     file_extension = Path(file.filename).suffix.lower()
@@ -134,6 +154,17 @@ async def upload_file(
     artifact_dir = Path("report_agent/artifact")
     artifact_dir.mkdir(parents=True, exist_ok=True)
     
+    supported_extensions = ['.csv', '.txt', '.xlsx', '.xls']
+    existing_files = [f for f in artifact_dir.iterdir() if f.suffix.lower() in supported_extensions]
+    
+    for existing_file in existing_files:
+        try:
+            existing_file.unlink()  
+            print(f"Deleted old file: {existing_file.name}")
+        except Exception as e:
+            print(f"Could not delete {existing_file.name}: {e}")
+    
+    # Save the new file
     file_path = artifact_dir / file.filename
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -144,23 +175,51 @@ async def upload_file(
 @router.post("/report/analyze")
 async def report_agent(
     question: str,
+    current_user: dict = Depends(require_store_role)
+
 ):
     """
-    Upload a data file and analyze it with a natural language question
+    Analyze uploaded data file with a natural language question
     """
     try:
-
+        async def event_stream():
+            try:
+                content = DataFrameAgent(question)
+                
+                # Stream the content character by character for better UX
+                for i in range(0, len(content), 5):
+                    chunk = content[i:i+5]
+                    yield {
+                        "event": "chunk",
+                        "data": json.dumps({
+                            "content": chunk,
+                            "timestamp": datetime.datetime.now().isoformat()
+                        })
+                    }
+                    await asyncio.sleep(delay * 5)
+                
+                # Send completion event
+                yield {
+                    "event": "complete",
+                    "data": json.dumps({
+                        "status": "completed",
+                        "timestamp": datetime.datetime.now().isoformat()
+                    })
+                }
+                
+            except Exception as e:
+                yield {
+                    "event": "error",
+                    "data": json.dumps({
+                        "error": str(e),
+                        "timestamp": datetime.datetime.now().isoformat()
+                    })
+                }
         
-        content = DataFrameAgent(question)
-        for i in range(0, len(content), 3):
-            chunk = content[i:i+3]
-            yield chunk
-            await asyncio.sleep(delay * 3)
-
+        return EventSourceResponse(event_stream())
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Agent error: {str(e)}")
-    except Exception as e:
-        print(f"Failed to upload and analyze file: {str(e)}")
+        print(f"Failed to analyze file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 

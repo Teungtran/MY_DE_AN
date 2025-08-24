@@ -1,12 +1,10 @@
-from typing import Any, Awaitable, Callable, Dict, Optional, cast
+from typing import cast
 
 from asgi_correlation_id import CorrelationIdMiddleware
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from opentelemetry import context
-from opentelemetry.trace import SpanKind, StatusCode, Tracer
-import structlog
+
 
 from controllers import api_chat
 
@@ -80,4 +78,4 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     
     # Start the server
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8888, reload=True, log_level="debug")
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8888, reload=False, log_level="debug")

@@ -17,7 +17,7 @@ QDRANT_API_KEY = APP_CONFIG.vector_store_config.api_key
 COLLECTION = APP_CONFIG.vector_store_config.collection_name
 embedder = OpenAIEmbedder(
     api_key=api_key,
-    id=embedding_config.id
+    id=embedding_config.model
 )
 def get_vector_db():
     vector_db = Qdrant(

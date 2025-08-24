@@ -15,7 +15,7 @@ retrieval_config:
 
 chat_model_config:
   provider: "openai"
-  deployment_name: "gpt-5-nano-2025-08-07"
+  deployment_name: "gpt-4o-mini"
   # actual top-k documents use as context
   top_k: 10
   # kwargs for ChatModel

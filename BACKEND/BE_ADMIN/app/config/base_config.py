@@ -27,23 +27,22 @@ class AuthenConfig(BaseModel):
     key: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SECRET_KEY")())[1])
     algorithm: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("ALGORITHM")())[1])
 class EmbeddingConfig(BaseModel):
-    api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
-    id: Optional[str] = Field(default="text-embedding-3-small")
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("OPENAI_API_KEY")())[1])
+    model: Optional[str] = Field(default="text-embedding-3-small")
     kwargs: Dict = Field(default={})
 
 
 class MongoDBConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_URL", default="mongodb+srv://nguyentrantrung2504:NBg7vdR1KSDlW1E3@cluster0.hpkg9.mongodb.net/admin?retryWrites=true&w=majority&appName=Cluster0")())[1])
     db_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_DB_NAME")())[1])
-    store_collection:str  = Field(default_factory=lambda: (ensure_env_loaded(), from_env("STORE_COLLECTION")())[1])
-    memory_collection:str  = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MEMORY_COLLECTION")())[1])
+    store_collection:str  = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_AGENT_COLLECTION_NAME")())[1])
+    memory_collection:str  = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_MEMORY_COLLECTION_NAME")())[1])
     
 class OpenAIConfig(BaseModel):
-    api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
-    id: Optional[str] = Field(default="gpt-4o-mini")
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), from_env("OPENAI_API_KEY")())[1])
+    model: Optional[str] = Field(default="gpt-4o-mini")
     kwargs: Dict = Field(default_factory=dict)
     
-
 
 class DynamoDBConfig(BaseModel):
     aws_access_key_id: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("AWS_ACCESS_KEY_ID")())[1])
@@ -54,7 +53,7 @@ class DynamoDBConfig(BaseModel):
 
 class ExpertConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_URL")())[1])
-    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("QDRANT_API_KEY")())[1])
+    api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), from_env("QDRANT_API_KEY")())[1])
     collection_name: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("EXPERT")())[1])
     
 class RecommendConfig(BaseModel):

@@ -141,7 +141,7 @@ class PredictionPipeline:
                 df_encoded = self.encode_churn(df_features_for_prediction)
 
                 X = self.scaler.transform(df_encoded)
-                y_pred = self.model.predict(X)
+                y_pred = self.model.predict_proba(X)[:, 1]
                 
                 # Add predictions back to the original df_features
                 df_features['Churn_RATE'] = y_pred

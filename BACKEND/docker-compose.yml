@@ -25,15 +25,10 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_auth
     env_file:
-      - ./AUTH/.env.docker
+      - ./AUTH/.env
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
-    volumes:
-      - ./AUTH/logs:/code/logs
-    environment:
-      - PYTHONPATH=/code
-      - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
     restart: unless-stopped
@@ -44,15 +39,10 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_admin
     env_file:
-      - ./BE_ADMIN/.env.docker
+      - ./BE_ADMIN/.env
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
-    volumes:
-      - ./BE_ADMIN/logs:/code/logs
-    environment:
-      - PYTHONPATH=/code
-      - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
     restart: unless-stopped
@@ -63,15 +53,10 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_chatbot
     env_file:
-      - ./BE_CHATBOT/.env.docker
+      - ./BE_CHATBOT/.env
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
-    volumes:
-      - ./BE_CHATBOT/logs:/code/logs
-    environment:
-      - PYTHONPATH=/code
-      - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
     restart: unless-stopped
@@ -82,15 +67,10 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_preprocess
     env_file:
-      - ./BE_PREPROCESS/.env.docker
+      - ./BE_PREPROCESS/.env
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
-    volumes:
-      - ./BE_PREPROCESS/logs:/code/logs
-    environment:
-      - PYTHONPATH=/code
-      - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
     restart: unless-stopped
@@ -101,17 +81,10 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_ml
     env_file:
-      - ./ML/.env.docker
+      - ./ML/.env
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
-    volumes:
-      - ./ML/artifacts:/app/artifacts
-      - ./ML/logs:/app/logs
-      - ./ML/plots:/app/plots
-    environment:
-      - PYTHONPATH=/app
-      - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
     restart: unless-stopped

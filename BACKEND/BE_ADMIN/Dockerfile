@@ -1,10 +1,10 @@
-FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
 
 # Set the working directory
-WORKDIR /code
+WORKDIR /app
 
 # Create necessary directories
-RUN mkdir -p /code/logs /code/app/report_agent/artifact
+RUN mkdir -p /app/logs /app/app/report_agent/artifact
 
 # Copy dependency definition first (for better layer caching)
 COPY pyproject.toml uv.lock ./
@@ -12,18 +12,22 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync --no-cache-dir
 
-# Copy app code and config
-COPY ./app /code/app
-COPY ./config /code/config
-COPY ./start.sh /code/start.sh
+COPY ./app /app/app
+COPY ./config /app/config
 
-RUN chmod +x /code/start.sh
+FROM python:3.11-slim-bookworm AS runtime
+
+WORKDIR /app
+
+# Copy venv + app from builder stage
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/app /app/app
+COPY --from=builder /app/config /app/config
+# Ensure venv is used by default
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app:/app/app"
 # Expose FastAPI default port
 EXPOSE 8888
-# Set environment variables
-ENV PYTHONPATH=/code
-ENV PYTHONUNBUFFERED=1
 
 # Run FastAPI using uvicorn
-CMD ["/code/start.sh"]
-
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8888"]

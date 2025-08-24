@@ -64,9 +64,13 @@ async def train_model(
         )
 
 @router.get("/status")
-async def get_workflow_status():
+async def get_workflow_status(
+    current_user: Dict[str, Any] = Depends(require_admin_role)
+):
     """
     Check the status of the workflow system.
+
+    **Access Control**: Requires 'admin' role only.
     """
     try:
         workflow_runner = WorkflowRunner()
