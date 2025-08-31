@@ -284,42 +284,78 @@ class UrlExtraction(BaseModel):
             }
         }
 class RecommendSystem(BaseModel):
-    """Recommend products based on user input and preferences."""
+    user_input: str = Field(
+        ...,
+        description=(
+            "the name of devices ( 1 or many ) OR what device + brand + features to search, THIS MUST BE SEPERATED BY COMMA ',' "
+        )
+    )
+    has_features: bool = Field(
+        ...,
+        description="True or False if there any specific features mentioned"
+    )
+    device_name: bool = Field(
+        ...,
+        description="True or False if device name or any brand like APPLE , Samsung.... exsist"
+    )
+    device_type: Optional[
+        Literal["phone", "laptop/pc", "tablet", "earphone", "mouse", "keyboard"]
+    ] = Field(
+        None,
+        description=(
+            "Categories of the electronic devices. Follow strictly this rule:\n"
+            "- if user_input is related to phone/smartphone -> 'phone'\n"
+            "- if related to laptop/pc/macbook -> 'laptop/pc'\n"
+            "- if related to tablet/ipad -> 'tablet'\n"
+            "- if related to earphone/headphone/airpod -> 'earphone'\n"
+            "- if related to mouse/chuột -> 'mouse'\n"
+            "- if related to keyboard -> 'keyboard'\n"
+        )
+    )
 
-    user_input: Annotated[str, "User query text for recommendations"]
+    price: Optional[str] = Field(
+        None,
+        description="Price mentioned in user_input, in VND in numeric format (e.g., '10000000' means 10 million VND), if you receive a range, take the higher price."
+    )
+    
+    suitable_for: Optional[
+        Literal["gaming/IT", "office", "students", "general"]
+    ] = Field(
+        None,
+        description=(
+            "Categories of the electronic devices. Follow strictly this rule:\n"
+            "- if the 'suitable_for' in user_input == 'gaming/IT' -> 'gaming/IT'\n"
+            "- if the 'suitable_for' in user_input == 'office' -> 'office'\n"
+            "- if the 'suitable_for' in user_input == 'students' -> 'students'\n"
+            "- if the 'suitable_for' in user_input == 'general' -> 'general'"
+        )
+    )
 
-    type: Annotated[
-        Optional[
-            Literal["phone", "laptop/pc", "earphone", "mouse", "keyboard"]
-        ],
-        "Category of the electronic device. Follow strictly this rule: "
-        "if user_input is related to phone, smartphone, type == 'phone'; "
-        "if user_input is related to laptop or pc, type == 'laptop/pc'; "
-        "if user_input is related to earphone, tai nghe, type == 'earphone'; "
-        "if user_input is related to mouse, chuột, type == 'mouse'; "
-        "if user_input is related to keyboard, bàn phím, type == 'keyboard'. "
-        "if user_input does not mention any types or mentions many types (like both phone and laptop), type == None."
-    ] = None
-
-    user_id: Annotated[str, "The unique identifier for the user, always store in 'AgenticState'"]
-
-    price: Optional[Annotated[str, "Price in VND in number format"]]
-
-    @field_validator("type", mode="before")
+    @field_validator("suitable_for", mode="before")
     @classmethod
-    def validate_type(cls, v):
-        allowed_types = {"phone", "laptop/pc", "earphone", "mouse", "keyboard"}
-        return v if v in allowed_types else None
-
+    def validate_suitable_for(cls, v):
+        allowed_types = {
+            "gaming/IT", "office", "students", "general"
+        }
+        if not v:
+            return "general"
+        v = str(v).strip()
+        return v if v in allowed_types else "general"
+    
     class Config:
         json_schema_extra = {
             "example": {
-                "user_input": "I need a good smartphone",
-                "type": "phone",
-                "user_id": "user333232",
+                "user_input": "Laptop Asus A32",
+                "device_name": True,
+                "has_features": False,
+                "device_type": "laptop/pc",
+                "suitable_for": "gaming/IT",
                 "price": "10000000"
             }
         }
+
+
+
 
 
 class DeviceDetailSchema(BaseModel):
@@ -344,24 +380,3 @@ class DeviceDetailSchema(BaseModel):
                 "count_devices": 1
             }
         }
-class RecommendationConfig:
-    DEFAULT_RESULTS = 4  
-    MAX_RESULTS_BY_TYPE = {
-        "phone": 8,        # Large pool, justify showing more
-        "laptop/pc": 8,    # Large pool
-        "earphone": 4,     # Smaller pool, 4 is a good ceiling
-        "mouse": 3,        # Likely small pool, keep as-is
-        "keyboard": 3,     # Same as mouse
-    }
-    BRAND_MATCH_STRONG = 35
-    BRAND_MATCH_MEDIUM = 25
-    BRAND_MATCH_WEAK = 15
-    BRAND_MISMATCH_PENALTY = -10
-    PRICE_RANGE_MATCH_BOOST = 25
-    FUZZY_WEIGHT = 0.4
-    COSINE_WEIGHT = 0.6
-    @classmethod
-    def get_max_results(cls, type_):
-        if not type_:
-            return cls.DEFAULT_RESULTS
-        return cls.MAX_RESULTS_BY_TYPE.get(type_.lower(), cls.DEFAULT_RESULTS)

@@ -1,4 +1,3 @@
-from langchain_core.prompts import ChatPromptTemplate
 from langchain.retrievers.multi_query import MultiQueryRetriever
 import warnings
 warnings.filterwarnings('ignore')
@@ -6,16 +5,13 @@ from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from typing_extensions import Optional
 from qdrant_client import QdrantClient
-from textwrap import dedent
 
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from config.base_config import APP_CONFIG
 from factories.vector_store_factory import create_policy_store
 from factories.embedding_factory import create_embedding_model
 from .llm import extend_query,translate_language
 from .reranking import  most_relevant
 from factories.chat_factory import create_chat_model
-from .prompts import GENERATE_PROMPT
 chat_config = APP_CONFIG.chat_model_config
 import os
 if not chat_config:
@@ -125,8 +121,8 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
         if not relevant_docs:
             print("No relevant documents found")
             return "I couldn't find any information about your question.", []
-        
-        return str(relevant_docs)
+        metadata = [doc.metadata for doc in relevant_docs]
+        return str(relevant_docs), metadata
         
     except Exception as e:
         print(f"General error in RAG_Agent: {e}")
