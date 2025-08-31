@@ -28,16 +28,16 @@ LLM = None
 QDRANT_URL = APP_CONFIG.vector_store_config.url
 QDRANT_API_KEY = APP_CONFIG.vector_store_config.api_key
 COLLECTION = APP_CONFIG.vector_store_config.collection_name
-AWS_SECRET_ACCESS_KEY = APP_CONFIG.dynamo_config.aws_secret_access_key
-TABLE_NAME = APP_CONFIG.dynamo_config.table_name
-AWS_SECRET_ACCESS_ID = APP_CONFIG.dynamo_config.aws_access_key_id
-REGION_NAME = APP_CONFIG.dynamo_config.region_name
 def setup_multi_retrieval(semantic_retriever, llm):
     """Set up multi-query retrieval with caching."""
-        
     multi_retriever = MultiQueryRetriever.from_llm(
         retriever=semantic_retriever,
-        llm=llm
+        llm=llm,
+        prompt="""You are an AI language model assistant, understand both Vietnamese and English. You only support answering questions about FPT Shop.
+        Your task is to generate four different versions of the given user question to retrieve relevant documents from a vector database.
+        Provide these alternative questions separated by newlines.
+        Always generate questions that refer back to FPT Shop, all the questions must be related to FPT Shop.""",
+        include_original=True
     )
     return multi_retriever
 

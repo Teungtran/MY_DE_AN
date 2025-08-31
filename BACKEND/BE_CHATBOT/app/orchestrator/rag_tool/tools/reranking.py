@@ -5,12 +5,6 @@ load_dotenv()
 from typing import List ,Tuple
 from collections import defaultdict
 from langchain_community.retrievers import BM25Retriever
-import nltk
-try:
-    nltk.data.find("tokenizers/punkt")
-except LookupError:
-    nltk.download("punkt", quiet=True)
-from nltk.tokenize import word_tokenize
 
 def setup_dynamic_doc(question: str) -> int:
     """Dynamically determine document count based on query complexity."""
@@ -45,7 +39,6 @@ def set_up_bm25_ranking(documents: List):
     return BM25Retriever.from_texts(
         texts=texts,
         metadatas=metadatas,
-        preprocess_func=word_tokenize,
         k=5
     )
 
@@ -78,7 +71,6 @@ def rrf(vec_docs: List, bm25_docs: List, k=60) -> Tuple[List, List[float]]:
             doc_contents.add(doc_content)
             selected_docs[doc_content] = doc
             combined_scores[doc_content] = 1.0 / (rank + k)
-
     # Sort by combined scores
     sorted_contents = sorted(combined_scores.keys(), key=lambda x: combined_scores[x], reverse=True)
     return [selected_docs[content] for content in sorted_contents], [combined_scores[content] for content in sorted_contents]

@@ -25,7 +25,7 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_auth
     env_file:
-      - ./AUTH/.env
+      - ./AUTH/.env.docker.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -39,7 +39,7 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_admin
     env_file:
-      - ./BE_ADMIN/.env
+      - ./BE_ADMIN/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -53,7 +53,7 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_chatbot
     env_file:
-      - ./BE_CHATBOT/.env
+      - ./BE_CHATBOT/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -67,7 +67,7 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_preprocess
     env_file:
-      - ./BE_PREPROCESS/.env
+      - ./BE_PREPROCESS/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
@@ -81,7 +81,7 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_ml
     env_file:
-      - ./ML/.env
+      - ./ML/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
