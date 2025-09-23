@@ -1,5 +1,5 @@
 from agno.models.openai import OpenAIChat
-from agno.memory.v2.db.mongodb import MongoMemoryDb
+from agno.memory.v2.db.mongodb import MongoMemoryDb    
 from agno.memory.v2.memory import Memory
 from agno.storage.agent.mongodb import MongoDbAgentStorage
 from config.base_config import APP_CONFIG

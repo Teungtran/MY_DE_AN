@@ -7,12 +7,24 @@ from ..it_graph.it_agent import it_sensitive_tools,it_safe_tools
 from ..appointment_graph.appointment_agent import appointment_sensitive_tools,appointment_safe_tools
 from ..rag_tool.tools.policy_tool import RAG_Agent
 from ..web_crawler.tool import url_extraction, url_followup
+from langgraph_dynamodb_checkpoint import DynamoDBSaver
 
-from services.mongo_checkpoint import create_checkpointer
 from utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
+def initiate_dynamodb_checkpointer() -> DynamoDBSaver:
+    """
+    Initialize and return a DynamoDBSaver checkpointer.
+    """
+    saver = DynamoDBSaver(
+        table_name="dynamodb-checkpoint",
+        ttl_seconds=86400,
+        max_read_request_units=1000,
+        max_write_request_units=1000,
+    )
+    return saver
+saver = initiate_dynamodb_checkpointer()
 def setup_agentic_graph():
     """Create the main agent graph with all nodes and edges."""
     builder = StateGraph(AgenticState)
@@ -94,11 +106,11 @@ def setup_agentic_graph():
 
     logger.info("Attempting to connect to MongoDB...")
 
-    checkpointer = create_checkpointer()
 
     graph = builder.compile(
-        checkpointer=checkpointer,
+        checkpointer=saver,
         interrupt_before=["update_shop_sensitive_tools", "update_it_sensitive_tools", "update_appointment_sensitive_tools"],
+        name="Multi-Agentic Graph"
     )
     return graph
 

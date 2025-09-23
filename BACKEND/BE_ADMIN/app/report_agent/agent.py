@@ -4,7 +4,7 @@ from config.base_config import OpenAIConfig
 from typing import Callable
 from textwrap import dedent
 from langchain.agents.agent_types import AgentType
-import numpy as np
+import pandas as pd
 from .prompt import ANALYSE_PROMPT
 from .parse_file import import_data
 from pydantic import SecretStr
@@ -23,27 +23,53 @@ def ai_model():
 
 llm = ai_model()  
 
+def convert_any_datetime(df):
+    datetime_columns = []
+
+    for col in df.columns:
+        if "id" in col.lower():
+            continue
+
+        sample_values = df[col].dropna().astype(str).head(5)
+
+        if sample_values.str.fullmatch(r"\d{4}").all():
+            datetime_columns.append((col, "%Y"))
+            continue
+
+        looks_like_date = sample_values.str.contains(r"[-/:.]").any()
+        if not looks_like_date:
+            continue
+
+        parsed = pd.to_datetime(sample_values, errors='coerce', utc=True)
+        success_rate = parsed.notna().mean()
+
+        if success_rate > 0.8:
+            datetime_columns.append((col, None))  
+
+    for col, fmt in datetime_columns:
+        if fmt:
+            df[col] = pd.to_datetime(df[col], format=fmt, errors='coerce', utc=True)
+        else:
+            df[col] = pd.to_datetime(df[col], format="mixed", errors='coerce', utc=True)
+
+    return df
 def DataFrameAgent(question: str):
     df = import_data()
+    df_time = convert_any_datetime(df)
     data_summary = {
-        'shape': df.shape,
-        'columns': list(df.columns),
-        'dtypes': df.dtypes.astype(str).to_dict(),
-        'missing_values': df.isnull().sum().to_dict(),
-        'numerical_columns': df.select_dtypes(include=[np.number]).columns.tolist(),
-        'categorical_columns': df.select_dtypes(include=['object', 'category']).columns.tolist()
-    }
+        'data_info': df_time.info()
+        }
     agent = create_pandas_dataframe_agent(
         llm, 
-        df, 
+        df_time, 
         agent_type=AgentType.OPENAI_FUNCTIONS, 
         verbose=True, 
         allow_dangerous_code=True,
+        return_intermediate_steps = True,
         prefix=dedent(ANALYSE_PROMPT.format(data_summary=data_summary)),
         include_df_in_prompt=True,
-        max_iterations=10,
-        early_stopping_method="generate"
-    )
+        max_iterations=10
+        )
     response = agent.invoke({"input": question})
     return response.get('output') or response.get('result') or response
 
