@@ -11,3 +11,5 @@ class ChunkMessage(BaseModel):
     tools: Optional[List[Dict[str, Any]]] = None
     prompt_token: Optional[int] = None
     completion_token: Optional[int] = None
+    title: Optional[str] = None
+    conversation_id: Optional[str] = None

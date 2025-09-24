@@ -21,8 +21,10 @@ from .login_page import require_user_role
 from pydantic import EmailStr
 from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 logger = get_logger(__name__)
+from factories.chat_factory import create_chat_model
 
 router = APIRouter()
+chat_config = APP_CONFIG.chat_model_config
 
 # DynamoDB config
 AWS_SECRET_ACCESS_KEY = APP_CONFIG.dynamo_config.aws_secret_access_key
@@ -65,10 +67,27 @@ logger.info("Initializing global graph instance...")
 graph = setup_agentic_graph()
 logger.info("Global graph instance initialized")
 
+# ---------------- UI title cache per conversation -----------------
+_ui_title_cache: Dict[str, str] = {}
+
+llm = create_chat_model(chat_config)
+prompt = """
+give the intention of the given message in less than 5 words
+"""
+
+
+def _get_ui_title_for_session(session_id: str, message: str) -> str:
+    """Return cached ui title for session, computing once if missing."""
+    if session_id in _ui_title_cache:
+        return _ui_title_cache[session_id]
+    title = llm.invoke(prompt + message)
+    _ui_title_cache[session_id] = title
+    return title
+
 async def stream_and_save_response(conversation_id: str, user_id: str, user_message: str, 
-                                final_response, final_tool_call, prompt_token: int, 
-                                completion_token: int, start_time, history_lang: str,
-                                tool_call_name, tool_call_args, tool_call_id, tool_call_type):
+                            final_response, final_tool_call, prompt_token: int, 
+                            completion_token: int, start_time, history_lang: str,
+                            tool_call_name, tool_call_args, tool_call_id, tool_call_type):
     """Helper function to stream response and save to database."""
     content = extract_content_from_response(final_response)
     await save_message_to_redis(conversation_id, "ai", content)
@@ -81,7 +100,9 @@ async def stream_and_save_response(conversation_id: str, user_id: str, user_mess
             response=chunk,
             tools=[final_tool_call] if final_tool_call else None,
             prompt_token=prompt_token,
-            completion_token=completion_token
+            completion_token=completion_token,
+            title=_get_ui_title_for_session(conversation_id, user_message),
+            conversation_id=conversation_id
         )
         yield f"{payload.model_dump_json()}\n\n"
     
@@ -234,6 +255,8 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
         start_time = datetime.datetime.now(datetime.timezone.utc)
         conversation_id = user_inputs.conversation_id
         logger.info(f"Starting event_stream: conversation_id={conversation_id}")
+        # Ensure UI title is generated only once per conversation
+        _ = _get_ui_title_for_session(conversation_id, user_inputs.message)
 
         # Log initial graph state
         logger.debug(f"Initial graph state for conversation {conversation_id}:")
@@ -412,7 +435,9 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                             response=char,
                             tools=None,
                             prompt_token=0,
-                            completion_token=0
+                            completion_token=0,
+                            title=_get_ui_title_for_session(conversation_id, user_message),
+                            conversation_id=conversation_id
                         )
                         yield f"{payload.model_dump_json()}\n\n"
                     return
@@ -458,7 +483,9 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
             response=f"An error occurred: {str(exc)}",
             prompt_token=0,
             completion_token=0,
-            tools=None
+            tools=None,
+            title=_get_ui_title_for_session(user_inputs.conversation_id, user_inputs.message) if user_inputs and user_inputs.conversation_id else None,
+            conversation_id=user_inputs.conversation_id if user_inputs else None
         )
         yield f"{error_payload.model_dump_json()}\n\n"
 

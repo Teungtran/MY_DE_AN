@@ -5,12 +5,10 @@ DROP TABLE IF EXISTS [Order];
 DROP TABLE IF EXISTS Item;
 DROP TABLE IF EXISTS Customer_info;
 
--- Create Customer_info table
 CREATE TABLE Customer_info (
     user_id NVARCHAR(50) PRIMARY KEY,
     customer_name NVARCHAR(100) NOT NULL,
     address NVARCHAR(255),
-    preferences NVARCHAR(255),
     age INT,
     customer_phone NVARCHAR(20) UNIQUE,
     password NVARCHAR(255) NOT NULL

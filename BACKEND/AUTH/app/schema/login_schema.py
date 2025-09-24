@@ -15,9 +15,6 @@ class RegisterRequest(BaseModel):
     customer_phone: str
     password: str
     email: EmailStr 
-    preference_brand: List[str] = []
-    min_price: str = None
-    max_price: str = None
     role: RoleEnum = Field(default=RoleEnum.user, description="User role")
 
     @field_validator('customer_phone')

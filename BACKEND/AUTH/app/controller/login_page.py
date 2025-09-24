@@ -130,9 +130,6 @@ def register_new_user(
     customer_phone: str, 
     password: str,
     db: Session,
-    preference_brand: List[str] = None, 
-    min_price: str = None, 
-    max_price: str = None,
     email: str = None,
     role: str = "user"
 ):
@@ -152,22 +149,14 @@ def register_new_user(
     
     if email and check_email_exists(email, db):
         raise HTTPException(status_code=400, detail="Email already registered")
+
     if role == "admin":
         id = f"ADMIN_{generate_short_id()}"
     elif role == "staff":
         id = f"STAFF_{generate_short_id()}"
-    elif role == "viewer":
-        id = f"VIEWER_{generate_short_id()}"
-    hashed_password = hash_password(password)
-    
-    if preference_brand is None:
-        preference_brand = []
+    else:
+        id = f"USER_{generate_short_id()}"
 
-    prefs = {
-        "brand": preference_brand,
-        "price_range": [min_price, max_price] if min_price is not None and max_price is not None else []
-    }
-    preferences_json = json.dumps(prefs)
     hashed_password = hash_password(password)
 
     try:
@@ -175,11 +164,11 @@ def register_new_user(
             user_id=id,
             customer_name=customer_name,
             address=address,
-            preferences=preferences_json,
             age=age,
             customer_phone=customer_phone,
             password=hashed_password,
-            email=email
+            email=email,
+            role=role
         )
         
         db.add(new_user)
@@ -193,6 +182,7 @@ def register_new_user(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),

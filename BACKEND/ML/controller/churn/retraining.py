@@ -1,6 +1,8 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
+from io import BytesIO
+import pandas as pd
 from src.Churn.pipeline.main_pipeline import WorkflowRunner
 from src.Churn.utils.logging import logger
 from utils.auth import require_admin_role
@@ -12,6 +14,8 @@ class WorkflowResponse(BaseModel):
     message: str
     final_model_path: Optional[str] = None
     user_info: Optional[Dict[str, str]] = None
+    mlflow_url: Optional[str] = None
+    input_data: Optional[list] = None
 
 
 
@@ -38,6 +42,22 @@ async def train_model(
         # Log the admin user who initiated training
         logger.info(f"Churn model training initiated by admin user: {current_user['user_id']} ({current_user['email']})")
 
+        # Read uploaded file into JSON if provided
+        input_records = None
+        if file is not None:
+            contents = await file.read()
+            try:
+                try:
+                    df = pd.read_csv(BytesIO(contents))
+                except Exception:
+                    df = pd.read_excel(BytesIO(contents))
+                df = df.where(pd.notnull(df), None)
+                input_records = df.to_dict(orient="records")
+            except Exception:
+                input_records = None
+            # Reset stream for pipeline consumption
+            file.file = BytesIO(contents)
+
         workflow_runner = WorkflowRunner()
         final_model_path = await workflow_runner.run(uploaded_file=file)
 
@@ -51,7 +71,9 @@ async def train_model(
             status="success",
             message="Model training workflow completed successfully",
             final_model_path=final_model_path,
-            user_info=user_info
+            user_info=user_info,
+            mlflow_url="https://dagshub.com/Teungtran/MY_DE_AN.mlflow",
+            input_data=input_records
         )
     
     except HTTPException:

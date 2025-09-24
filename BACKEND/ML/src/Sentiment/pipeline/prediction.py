@@ -206,7 +206,35 @@ class PredictionPipeline:
                             f"({CONFIDENCE_THRESHOLD:.2%})."
                         )
                 mlflow.log_text(message, "prediction_summary.txt")
-            return message, s3_url
+            
+            # Read actual results from S3 if upload was successful
+            s3_results_data = None
+            if s3_url:
+                try:
+                    # Download the file from S3 and parse it
+                    import requests
+                    response = requests.get(s3_url)
+                    if response.status_code == 200:
+                        from io import StringIO
+                        s3_df = pd.read_csv(StringIO(response.text))
+                        s3_df = s3_df.where(pd.notnull(s3_df), None)
+                        s3_results_data = s3_df.to_dict(orient="records")
+                        logger.info(f"Successfully retrieved {len(s3_results_data)} records from S3")
+                    else:
+                        logger.warning(f"Failed to retrieve S3 file: HTTP {response.status_code}")
+                except Exception as e:
+                    logger.error(f"Error retrieving S3 results: {e}")
+            
+            return {
+                "message": message,
+                "s3_url": s3_url,
+                "s3_results_data": s3_results_data,
+                "summary": {
+                    "total_records": len(df_processed),
+                    "average_rating": avg_rating,
+                    "rating_distribution": dict(rating_counts.sort_index())
+                }
+            }
 
         except Exception as e:
             raise RuntimeError(f"Prediction error: {e}")
@@ -224,7 +252,7 @@ async def run_prediction_task(
         model_uri = f"models:/CNN/{model_version}"
         tokenizer_uri = f"runs:/{run_id}/{tokenizer_version}"
         pipeline = PredictionPipeline(model_uri, tokenizer_uri)
-        message, s3_url = await pipeline.predict()
+        result = await pipeline.predict()
 
         if os.path.exists(file_path):
             try:
@@ -233,19 +261,15 @@ async def run_prediction_task(
             except Exception as e:
                 logger.warning(f"Failed to delete input file during cleanup: {e}")
         
-        payload = {
-            "message": message,
-            "prediction_url": s3_url,
-            "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        }
-
-        return payload
+        # Add timestamp to result
+        result["timestamp"] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return result
 
     except Exception as e:
         logger.error(f"Background prediction task error: {e}")
         return {
             "error": f"Prediction error: {e}",
-            "prediction_url": None,
+            "s3_url": None,
             "timestamp": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         }
 
