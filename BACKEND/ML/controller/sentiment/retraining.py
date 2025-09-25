@@ -10,7 +10,7 @@ router = APIRouter()
 class WorkflowResponse(BaseModel):
     status: str
     message: str
-    user_info: Optional[Dict[str, str]] = None
+    mlflow_url: Optional[str] = None
 
 
 
@@ -39,17 +39,12 @@ async def train_model(
 
         workflow_runner = WorkflowRunner()
         await workflow_runner.run(uploaded_file=file)
-
-        user_info = {
-            "user_id": current_user["user_id"],
-            "role": current_user["role"],
-            "email": current_user["email"]
-        }
         
         return WorkflowResponse(
             status="success",
             message="Model training workflow completed successfully",
-            user_info=user_info
+            mlflow_url="https://dagshub.com/Teungtran/MY_DE_AN.mlflow",
+
         )
     
     except HTTPException:

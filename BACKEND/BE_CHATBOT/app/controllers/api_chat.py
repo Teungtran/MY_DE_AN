@@ -164,60 +164,7 @@ async def save_message_to_redis(conversation_id: str, role: str, message: str):
         await publish_to_channel(f"chat:{conversation_id}", message_data)
     except Exception as e:
         logger.error(f"Error saving message to Redis: {str(e)}")
-##_______________________SETUP SSE____________________________________
-async def retrieve_events(request: Request, conversation_id: str) -> AsyncGenerator[str, None]:
-    pubsub = None
-    try:
-        if not redis_connect:
-            logger.error("Redis not available for SSE")
-            yield json.dumps({"error": "Chat history service unavailable"})
-            return
-            
-        pubsub = redis_connect.pubsub()
-        await asyncio.to_thread(pubsub.subscribe, f"chat:{conversation_id}")
-        
-        # Send existing chat history first
-        try:
-            history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conversation_id}", 0, -1)
-            for msg in history:
-                msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
-                try:
-                    message_data = json.loads(msg_str)
-                    yield f"{json.dumps(message_data)}\n\n"
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping invalid JSON in history: {msg_str}")
-        except Exception as e:
-            logger.error(f"Error retrieving chat history: {e}")
-        
-        # Listen for new messages
-        while not await request.is_disconnected():
-            try:
-                message = await asyncio.to_thread(pubsub.get_message, timeout=1.0, ignore_subscribe_messages=True)
-                if message and message["type"] == "message":
-                    data = message["data"]
-                    if isinstance(data, bytes):
-                        data = data.decode('utf-8')
-                    yield f"{data}\n\n"
-            except Exception as e:
-                logger.error(f"Error in SSE message loop: {e}")
-                break
-    
-    except asyncio.CancelledError:
-        logger.info(f"SSE connection for conversation {conversation_id} was cancelled")
-    except Exception as e:
-        logger.error(f"Error in SSE connection: {e}")
-        yield f"{json.dumps({'error': str(e)})}\n\n"
-    finally:
-        if pubsub:
-            try:
-                await asyncio.to_thread(pubsub.unsubscribe, f"chat:{conversation_id}")
-                await asyncio.to_thread(pubsub.close)
-            except Exception as e:
-                logger.error(f"Error closing pubsub: {e}")
 
-@router.get("/{conversation_id}/subscribe")
-async def subscribe_to_stream(request: Request, conversation_id: str):
-    return EventSourceResponse(retrieve_events(request, conversation_id))
 
 @router.get("/{conversation_id}/messages")
 async def get_chat_history(conversation_id: str):

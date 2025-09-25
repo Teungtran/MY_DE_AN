@@ -65,6 +65,9 @@ class SearchConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), secret_from_env("TAVILY_API_KEY")())[1])
     
 
+class RedisConfig(BaseModel):
+    host: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_HOST")())[1])
+    password: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("REDIS_PASS")())[1])
 
 class BaseConfiguration(BaseModel):
     """Configuration class for indexing and retrieval operations.
@@ -105,6 +108,8 @@ class BaseConfiguration(BaseModel):
     _recommend_config = None
     _search_config = None
     _auth_config = None
+    _redis_config = None
+
     @property
     def chat_model_config(self) -> Union[OpenAIConfig]:
         if self._chat_model_config is None:
@@ -149,7 +154,11 @@ class BaseConfiguration(BaseModel):
         if self._mongo_config is None:
             self._mongo_config = MongoDBConfig()
         return self._mongo_config   
-    
+    @property
+    def redis_config(self) -> Union[RedisConfig]:
+        if self._redis_config is None:
+            self._redis_config = RedisConfig()
+        return self._redis_config
         
 
 

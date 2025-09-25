@@ -227,9 +227,6 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             customer_phone=request.customer_phone,
             password=request.password,
             db=db,
-            preference_brand=request.preference_brand,
-            min_price=request.min_price,
-            max_price=request.max_price,
             email=request.email,
             role=request.role  
 

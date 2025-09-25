@@ -5,9 +5,7 @@ import os
 import traceback
 from typing import Optional, Tuple,List
 from markitdown import MarkItDown 
-import re
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 import asyncio
 from utils.logging.logger import get_logger
 logger = get_logger(__name__)

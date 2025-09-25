@@ -11,7 +11,10 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from .login_page import require_store_role 
 from report_agent.agent import DataFrameAgent,ai_model
+from utils.logging.logger import get_logger
+logger = get_logger(__name__)
 import pandas as pd
+from .redis_caching import redis_caching
 delay: float = 0.01
 router = APIRouter()
 
@@ -23,6 +26,7 @@ llm = ai_model()
 prompt = """
 give the intention of the given message in less than 5 words
 """
+redis_connect = redis_caching()
 
 # Cache for per-session UI titles to ensure we compute it only once per session
 _ui_title_cache: Dict[str, str] = {}
@@ -34,6 +38,56 @@ def _get_ui_title_for_session(session_id: str, message: str) -> str:
     title = llm.invoke(prompt + message)
     _ui_title_cache[session_id] = title
     return title
+
+async def publish_to_channel(channel: str, message: dict):
+    if not redis_connect:
+        logger.warning("Redis not available, skipping channel publish")
+        return
+    try:
+        message_json = json.dumps(message)
+        await asyncio.to_thread(redis_connect.publish, channel, message_json)
+    except Exception as e:
+        logger.error(f"Error publishing to channel {channel}: {str(e)}")
+
+async def save_message_to_redis(id: str, role: str, message: str):
+    if not id or not redis_connect:
+        logger.warning("Redis not available or no id, skipping message save")
+        return
+    
+    message_data = {"role": role, "content": message}
+    message_json = json.dumps(message_data)
+    try:
+        await asyncio.to_thread(redis_connect.rpush, f"chat:{id}", message_json)
+        await asyncio.to_thread(redis_connect.ltrim, f"chat:{id}", -100, -1)
+        await asyncio.to_thread(redis_connect.expire, f"chat:{id}", 86400)  
+        await publish_to_channel(f"chat:{id}", message_data)
+    except Exception as e:
+        logger.error(f"Error saving message to Redis: {str(e)}")
+
+@router.get("/{id}/messages")
+async def get_chat_history(id: str):
+    try:
+        if not redis_connect:
+            logger.warning("Redis not available, returning empty history")
+            return []
+            
+        exists = await asyncio.to_thread(redis_connect.exists, f"chat:{id}")
+        if exists:
+            history = await asyncio.to_thread(redis_connect.lrange, f"chat:{id}", 0, -1)
+            messages = []
+            for msg in history:
+                try:
+                    msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
+                    message_data = json.loads(msg_str)
+                    messages.append(message_data)
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping invalid JSON in history: {msg}")
+            return messages
+        return []
+    except Exception as e:
+        logger.error(f"Error retrieving chat history: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving chat history: {str(e)}")
+    
 @router.post("/team/chat/stream")
 async def stream_team_chat(
     id,
@@ -49,7 +103,8 @@ async def stream_team_chat(
         user_id = current_user["user_id"]
         print(f"Starting team chat stream for user {user_id}, session {id}")
         ui_message = _get_ui_title_for_session(id, request.message)
-        
+        await save_message_to_redis(id, "human", request.message) 
+
         async def event_stream():
             try:
                 # Run the store team with streaming enabled
@@ -59,26 +114,38 @@ async def stream_team_chat(
                     message=request.message,
                     stream=True
                 )
+                
+                # Accumulate complete AI response for Redis storage
+                complete_ai_response = ""
+                
                 # Handle streaming response
                 if hasattr(result, '__iter__'):
                     for chunk in result:
                         if chunk:
                             # Extract content from the chunk object
-                            content = ""
+                            chunk_content = ""
                             if hasattr(chunk, 'content'):
-                                content = chunk.content
+                                chunk_content = chunk.content
                             elif hasattr(chunk, 'data') and hasattr(chunk.data, 'content'):
-                                content = chunk.data.content
+                                chunk_content = chunk.data.content
                             else:
-                                content = str(chunk)
+                                chunk_content = str(chunk)
+                            
+                            # Accumulate the complete response
+                            complete_ai_response += chunk_content
                             
                             yield {
                                 "event": "chunk",
                                 "data": json.dumps({
-                                    "content": content,
+                                    "content": chunk_content,
                                     "timestamp": datetime.datetime.now().isoformat()
                                 })
                             }
+                    
+                    # Save complete AI response to Redis after streaming
+                    if complete_ai_response.strip():
+                        await save_message_to_redis(id, "ai", complete_ai_response)
+
                 else:
                     # Extract content from single result
                     content = ""
@@ -89,6 +156,8 @@ async def stream_team_chat(
                     else:
                         content = str(result)
                     
+                    complete_ai_response = content
+                    
                     yield {
                         "event": "chunk", 
                         "data": json.dumps({
@@ -98,16 +167,21 @@ async def stream_team_chat(
                             "timestamp": datetime.datetime.now().isoformat()
                         })
                     }
-                
+                    
+                    # Save AI response to Redis
+                    if complete_ai_response.strip():
+                        await save_message_to_redis(id, "ai", complete_ai_response)
+
                 # Send completion event
                 yield {
                     "event": "complete",
                     "data": json.dumps({
                         "status": "completed",
+                        "title": ui_message,
+                        "session_id": id,
                         "timestamp": datetime.datetime.now().isoformat()
                     })
                 }
-                
             except Exception as e:
                 print(f"Error in team chat stream: {str(e)}")
                 yield {
@@ -123,40 +197,6 @@ async def stream_team_chat(
     except Exception as e:
         print(f"Failed to start team chat stream: {str(e)}")        
         raise HTTPException(status_code=500, detail=f"Failed to start chat stream: {str(e)}")
-
-@router.post("/team/chat")
-async def team_chat(
-    id,
-    request: TeamChatRequest, 
-    current_user: dict = Depends(require_store_role)
-):
-    """
-    Non-streaming team chat endpoint (requires admin/staff role)
-    """
-    try:
-        if id is None:
-            id = str(uuid.uuid4())
-        user_id = current_user["user_id"]
-        print(f"Starting team chat stream for user {user_id}, session {id}")
-        ui_message = _get_ui_title_for_session(id, request.message)
-        result = store_team.run(
-            session_id=id,
-            user_id=user_id,
-            message=request.message,
-            stream=False
-        )
-        
-        return {
-            "content": str(result.content),
-            "timestamp": datetime.datetime.now().isoformat(),
-            "user_id": user_id,
-            "title": ui_message,
-            "session_id": id
-        }
-        
-    except Exception as e:
-        print(f"Failed to process team chat: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to process chat: {str(e)}")
 
 
 # Report Analysis Endpoints

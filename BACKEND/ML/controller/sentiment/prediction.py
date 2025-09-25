@@ -8,7 +8,6 @@ router = APIRouter()
 
 class SentimentResponse(BaseModel):
     payload: Dict[str, Any]
-    user_info: Optional[Dict[str, str]] = None
     mlflow_url: Optional[str] = None
 
 @router.post("/", response_model=SentimentResponse)
@@ -36,30 +35,20 @@ async def predict_sentiment(
         run_id=run_id
     )
     
-    # Include user info in response
-    user_info = {
-        "user_id": current_user["user_id"],
-        "role": current_user["role"],
-        "email": current_user["email"]
-    }
-    
     # Handle different response types
     if isinstance(result, tuple):
         error_message, _ = result
         return SentimentResponse(
             payload={"error": error_message},
-            user_info=user_info,
             mlflow_url="https://dagshub.com/Teungtran/MY_DE_AN.mlflow"
         )
     elif isinstance(result, dict):
         return SentimentResponse(
             payload=result,
-            user_info=user_info,
             mlflow_url="https://dagshub.com/Teungtran/MY_DE_AN.mlflow"
         )
     else:
         return SentimentResponse(
             payload={"message": str(result)},
-            user_info=user_info,
             mlflow_url="https://dagshub.com/Teungtran/MY_DE_AN.mlflow"
         )
