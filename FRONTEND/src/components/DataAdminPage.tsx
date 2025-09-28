@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { LogOut, Upload, FileText, Link, Database, MessageCircle, Brain, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner@2.0.3';
+import { FPTLogo } from './FPTLogo';
 
 interface User {
   id: string;
@@ -30,6 +31,7 @@ interface DataAdminPageProps {
 export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
   const location = useLocation();
   const [pdfType, setPdfType] = useState<'policy' | 'expert'>('policy');
+  const [urlType, setUrlType] = useState<'product' | 'agent-knowledge' | 'store-policy'>('product');
   const [url, setUrl] = useState('');
 
 
@@ -61,14 +63,18 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
     e.preventDefault();
     if (!url.trim()) return;
 
+    const typeText = urlType === 'product' ? 'Store Product' : 
+                     urlType === 'agent-knowledge' ? 'Agent Knowledge' : 
+                     'Store Policy';
+
     // Show processing toast
-    toast.loading(`Processing URL: ${url}`, {
+    toast.loading(`Processing ${typeText} URL: ${url}`, {
       id: 'url-upload'
     });
 
     // Simulate processing
     setTimeout(() => {
-      toast.success('URL successfully processed and content added to knowledge base!', {
+      toast.success(`${typeText} URL successfully processed and content added to knowledge base!`, {
         id: 'url-upload',
         icon: <CheckCircle className="h-4 w-4" />,
         duration: 4000
@@ -81,9 +87,16 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
 
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-white text-black">
+      {/* Header with FPT Logo */}
+      <div className="border-b border-gray-200 bg-white">
+        <div className="container mx-auto px-4 py-4">
+          <FPTLogo />
+        </div>
+      </div>
+
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-700 bg-gray-900">
+      <div className="border-b border-gray-200 bg-white">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <nav className="flex space-x-6">
@@ -91,8 +104,8 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
                 to="/chat/employee"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/chat/employee'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <MessageCircle className="h-4 w-4" />
@@ -103,8 +116,8 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
                 to="/ml"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/ml'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <Brain className="h-4 w-4" />
@@ -115,8 +128,8 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
                 to="/reports"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/reports'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <FileText className="h-4 w-4" />
@@ -127,8 +140,8 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
                 to="/admin/data"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/admin/data'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <Database className="h-4 w-4" />
@@ -137,11 +150,11 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
             </nav>
             
             <div className="flex items-center space-x-4">
-              <span className="text-gray-400">Welcome, {user.email}</span>
+              <span className="text-gray-600">Welcome, {user.email}</span>
               <Button
                 variant="ghost"
                 onClick={onLogout}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-600 hover:text-black"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -151,30 +164,30 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
       </div>
 
       {/* Header */}
-      <div className="border-b border-gray-700 bg-gray-800">
+      <div className="border-b border-gray-200 bg-white">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center space-x-3">
-            <Database className="h-8 w-8 text-purple-400" />
+            <Database className="h-8 w-8 text-purple-600" />
             <div>
-              <h1 className="text-2xl">Data Administration</h1>
-              <p className="text-gray-400">Manage knowledge base content</p>
+              <h1 className="text-2xl font-semibold text-black">Data Administration</h1>
+              <p className="text-gray-600">Manage knowledge base content</p>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8 bg-gray-50 min-h-screen">
         <div className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* PDF Upload */}
-              <Card className="bg-gray-900 border-gray-700">
+              <Card className="bg-white border-gray-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center text-white">
+                  <CardTitle className="flex items-center text-black">
                     <FileText className="h-5 w-5 mr-2" />
                     PDF Upload
                   </CardTitle>
-                  <CardDescription className="text-gray-400">
+                  <CardDescription className="text-gray-600">
                     Upload PDF documents for knowledge ingestion
                   </CardDescription>
                 </CardHeader>
@@ -182,19 +195,19 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
                   <RadioGroup value={pdfType} onValueChange={(value: 'policy' | 'expert') => setPdfType(value)}>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="policy" id="policy" />
-                      <Label htmlFor="policy" className="text-white">Policy PDF</Label>
+                      <Label htmlFor="policy" className="text-black">Policy PDF</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="expert" id="expert" />
-                      <Label htmlFor="expert" className="text-white">Expert Knowledge PDF</Label>
+                      <Label htmlFor="expert" className="text-black">Expert Knowledge PDF</Label>
                     </div>
                   </RadioGroup>
 
-                  <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center bg-gray-800/50">
+                  <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
                     <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                     <Label htmlFor="pdf-upload" className="cursor-pointer">
-                      <span className="text-white">Click to upload</span>
-                      <span className="text-gray-400"> or drag and drop</span>
+                      <span className="text-black">Click to upload</span>
+                      <span className="text-gray-600"> or drag and drop</span>
                       <Input
                         id="pdf-upload"
                         type="file"
@@ -209,28 +222,43 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
               </Card>
 
               {/* URL Upload */}
-              <Card className="bg-gray-900 border-gray-700">
+              <Card className="bg-white border-gray-200">
                 <CardHeader>
-                  <CardTitle className="flex items-center text-white">
+                  <CardTitle className="flex items-center text-black">
                     <Link className="h-5 w-5 mr-2" />
                     URL Upload
                   </CardTitle>
-                  <CardDescription className="text-gray-400">
+                  <CardDescription className="text-gray-600">
                     Add URLs for content scraping and analysis
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <RadioGroup value={urlType} onValueChange={(value: 'product' | 'agent-knowledge' | 'store-policy') => setUrlType(value)}>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="product" id="product" />
+                      <Label htmlFor="product" className="text-black">Update Store Product</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="agent-knowledge" id="agent-knowledge" />
+                      <Label htmlFor="agent-knowledge" className="text-black">Update Agent Knowledge</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="store-policy" id="store-policy" />
+                      <Label htmlFor="store-policy" className="text-black">Update Store Policy</Label>
+                    </div>
+                  </RadioGroup>
+                  
                   <form onSubmit={handleUrlUpload} className="space-y-4">
                     <Input
                       type="url"
                       placeholder="https://example.com/page"
                       value={url}
                       onChange={(e) => setUrl(e.target.value)}
-                      className="bg-gray-800 border-gray-600 text-white placeholder:text-gray-400"
+                      className="bg-white border-gray-300 text-black placeholder:text-gray-400"
                     />
                     <Button 
                       type="submit" 
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      className="w-full bg-black hover:bg-gray-800 text-white"
                       disabled={!url.trim()}
                     >
                       Upload & Process

@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { FPTLogo } from './FPTLogo';
 
 interface User {
   id: string;
@@ -26,6 +28,11 @@ interface Report {
   name: string;
   uploadedAt: Date;
   status: 'processing' | 'ready';
+}
+
+interface UploadResponse {
+  filename: string;
+  data: Record<string, any>[];
 }
 
 interface ReportAgentPageProps {
@@ -54,6 +61,7 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
       status: 'ready'
     }
   ]);
+  const [uploadedData, setUploadedData] = useState<UploadResponse | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -139,9 +147,16 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
 
 
   return (
-    <div className="h-screen flex flex-col bg-black text-white">
+    <div className="h-screen flex flex-col bg-white text-black">
+      {/* Header with FPT Logo */}
+      <div className="border-b border-gray-200 bg-white">
+        <div className="container mx-auto px-4 py-4">
+          <FPTLogo />
+        </div>
+      </div>
+
       {/* Navigation Tabs */}
-      <div className="border-b border-gray-700 bg-gray-900">
+      <div className="border-b border-gray-200 bg-white">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <nav className="flex space-x-6">
@@ -149,8 +164,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
                 to="/chat/employee"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/chat/employee'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <MessageCircle className="h-4 w-4" />
@@ -161,8 +176,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
                 to="/ml"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/ml'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <Brain className="h-4 w-4" />
@@ -173,8 +188,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
                 to="/reports"
                 className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                   location.pathname === '/reports'
-                    ? 'bg-[#1B4F72] text-white'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 <FileText className="h-4 w-4" />
@@ -186,8 +201,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
                   to="/admin/data"
                   className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                     location.pathname === '/admin/data'
-                      ? 'bg-[#1B4F72] text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-600 hover:text-black hover:bg-gray-100'
                   }`}
                 >
                   <Database className="h-4 w-4" />
@@ -197,11 +212,11 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
             </nav>
             
             <div className="flex items-center space-x-4">
-              <span className="text-gray-400">Welcome, {user.email}</span>
+              <span className="text-gray-600">Welcome, {user.email}</span>
               <Button
                 variant="ghost"
                 onClick={onLogout}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-600 hover:text-black"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -210,22 +225,22 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
         </div>
       </div>
 
-      <div className="flex flex-1">
+      <div className="flex flex-1 bg-gray-50">
         {/* Left Panel - Chat Discussion */}
-        <div className="w-1/2 border-r border-gray-700 flex flex-col">
+        <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white">
           {/* Chat Header */}
-          <div className="p-4 border-b border-gray-700 bg-gray-800">
+          <div className="p-4 border-b border-gray-200 bg-white">
             <div className="flex items-center space-x-3">
-              <FileText className="h-6 w-6 text-green-400" />
+              <FileText className="h-6 w-6 text-green-600" />
               <div>
-                <h2 className="text-lg">Report Discussion</h2>
-                <p className="text-sm text-gray-400">Collaborative analysis</p>
+                <h2 className="text-lg font-semibold text-black">Report Discussion</h2>
+                <p className="text-sm text-gray-600">Collaborative analysis</p>
               </div>
             </div>
           </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-4 bg-gray-50">
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -234,7 +249,7 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
               >
                 <div className={`flex space-x-2 max-w-xs lg:max-w-md ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}>
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className={msg.sender === 'user' ? 'bg-green-600 text-white' : 'bg-gray-700 text-white'}>
+                    <AvatarFallback className={msg.sender === 'user' ? 'bg-green-600 text-white' : 'bg-black text-white'}>
                       {msg.sender === 'user' ? 'U' : 'AI'}
                     </AvatarFallback>
                   </Avatar>
@@ -242,7 +257,7 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
                     className={`rounded-lg p-3 ${
                       msg.sender === 'user'
                         ? 'bg-green-600 text-white'
-                        : 'bg-gray-800 text-white'
+                        : 'bg-white text-black border border-gray-200'
                     }`}
                   >
                     {msg.senderName && (
@@ -261,9 +276,9 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
               <div className="flex justify-start">
                 <div className="flex space-x-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-gray-700 text-white">AI</AvatarFallback>
+                    <AvatarFallback className="bg-black text-white">AI</AvatarFallback>
                   </Avatar>
-                  <div className="bg-gray-800 text-white rounded-lg p-3">
+                  <div className="bg-white text-black border border-gray-200 rounded-lg p-3">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -278,18 +293,18 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
         </ScrollArea>
 
         {/* Message Input */}
-        <div className="p-4 border-t border-gray-700 bg-gray-900">
+        <div className="p-4 border-t border-gray-200 bg-white">
           <form onSubmit={sendMessage} className="flex space-x-2">
             <Input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Ask about the report data..."
-              className="flex-1 bg-gray-800 border-gray-600 text-white placeholder:text-gray-400"
+              className="flex-1 bg-white border-gray-300 text-black placeholder:text-gray-400"
               disabled={isTyping}
             />
             <Button 
               type="submit" 
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-black hover:bg-gray-800 text-white"
               disabled={isTyping || !message.trim()}
             >
               <Send className="h-4 w-4" />
@@ -299,36 +314,36 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
       </div>
 
       {/* Right Panel - Report Upload & Insights */}
-      <div className="w-1/2 flex flex-col">
+      <div className="w-1/2 flex flex-col bg-white">
         {/* Header */}
-        <div className="p-4 border-b border-gray-700 bg-gray-800">
+        <div className="p-4 border-b border-gray-200 bg-white">
           <div className="flex items-center space-x-3">
-            <BarChart3 className="h-6 w-6 text-purple-400" />
+            <BarChart3 className="h-6 w-6 text-purple-600" />
             <div>
-              <h1 className="text-lg">Report Agent</h1>
-              <p className="text-sm text-gray-400">Upload & analyze reports</p>
+              <h1 className="text-lg font-semibold text-black">Report Agent</h1>
+              <p className="text-sm text-gray-600">Upload & analyze reports</p>
             </div>
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4 space-y-6">
+        <ScrollArea className="flex-1 p-4 space-y-6 bg-gray-50">
           {/* File Upload */}
-          <Card className="bg-gray-900 border-gray-700">
+          <Card className="bg-white border-gray-200">
             <CardHeader>
-              <CardTitle className="flex items-center text-white">
+              <CardTitle className="flex items-center text-black">
                 <Upload className="h-5 w-5 mr-2" />
                 Upload Report
               </CardTitle>
-              <CardDescription className="text-gray-400">
+              <CardDescription className="text-gray-600">
                 Upload CSV or Excel files for analysis
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center bg-gray-800/50">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center bg-gray-50">
                 <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
                 <label htmlFor="report-upload" className="cursor-pointer">
-                  <span className="text-white">Click to upload</span>
-                  <span className="text-gray-400"> or drag and drop</span>
+                  <span className="text-black">Click to upload</span>
+                  <span className="text-gray-600"> or drag and drop</span>
                   <input
                     id="report-upload"
                     type="file"
@@ -342,10 +357,10 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
 
               {reports.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  <h4 className="text-white text-sm">Recent Reports</h4>
+                  <h4 className="text-black text-sm font-medium">Recent Reports</h4>
                   {reports.map((report) => (
-                    <div key={report.id} className="flex items-center justify-between p-2 bg-gray-800 rounded">
-                      <span className="text-white text-sm truncate">{report.name}</span>
+                    <div key={report.id} className="flex items-center justify-between p-2 bg-gray-100 rounded">
+                      <span className="text-black text-sm truncate">{report.name}</span>
                       <div className="flex items-center space-x-2">
                         <span className={`text-xs px-2 py-1 rounded ${
                           report.status === 'ready' ? 'bg-green-600 text-white' : 'bg-yellow-600 text-white'

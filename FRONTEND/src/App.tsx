@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
@@ -8,6 +8,7 @@ import { DataAdminPage } from './components/DataAdminPage';
 import { MLPage } from './components/MLPage';
 import { ReportAgentPage } from './components/ReportAgentPage';
 import { Toaster } from './components/ui/sonner';
+import { getUserData, removeAuthToken } from './utils/api';
 
 export default function App() {
   const [user, setUser] = useState<{
@@ -15,6 +16,14 @@ export default function App() {
     email: string;
     role: 'customer' | 'employee' | 'admin';
   } | null>(null);
+
+  // Check for stored user data on app load
+  useEffect(() => {
+    const userData = getUserData();
+    if (userData) {
+      setUser(userData);
+    }
+  }, []);
 
   const handleLogin = (userData: { email: string; role: 'customer' | 'employee' | 'admin' }) => {
     setUser({
@@ -24,6 +33,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    removeAuthToken();
     setUser(null);
   };
 

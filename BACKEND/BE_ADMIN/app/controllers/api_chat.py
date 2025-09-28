@@ -11,6 +11,7 @@ from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from .login_page import require_store_role 
 from report_agent.agent import DataFrameAgent,ai_model
+from report_agent.parse_file import import_data
 from utils.logging.logger import get_logger
 logger = get_logger(__name__)
 import pandas as pd
@@ -233,16 +234,9 @@ async def upload_file(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Parse and return the uploaded data as JSON
     try:
-        if file_extension == '.csv':
-            df = pd.read_csv(file_path)
-        elif file_extension in {'.xlsx', '.xls'}:
-            df = pd.read_excel(file_path)
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file type for parsing")
-
-        # Replace NaN with None for JSON serialization
+        df = import_data()  
+        
         df = df.where(pd.notnull(df), None)
         data_records = df.to_dict(orient="records")
     except Exception as e:

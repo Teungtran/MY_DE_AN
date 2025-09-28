@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Send, Plus, Search, Menu, LogOut, Users, MessageCircle, Brain, FileText, Database } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
+import { FPTLogo } from './FPTLogo';
 
 interface User {
   id: string;
@@ -43,11 +44,11 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const [sessions, setSessions] = useState<Session[]>([
     {
       id: '1',
-      title: 'Customer Support Training',
-      lastMessage: 'How should we handle warranty disputes?',
+      title: 'Welcome to SAGE',
+      lastMessage: 'What can I help you explore today?',
       timestamp: new Date(Date.now() - 1000 * 60 * 15),
       status: 'active',
-      participants: ['John D.', 'Sarah M.'],
+      participants: [user.email.split('@')[0]],
       messages: [
         {
           id: '1',
@@ -58,20 +59,11 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
         },
         {
           id: '2',
-          content: 'For warranty disputes, please follow these steps:\n\n1. Verify the purchase date and warranty period\n2. Check if the issue is covered under warranty terms\n3. Request photos or documentation of the problem\n4. If valid, initiate the replacement/repair process\n\nWould you like me to elaborate on any of these steps?',
+          content: 'For warranty disputes, please follow these steps:\\n\\n1. Verify the purchase date and warranty period\\n2. Check if the issue is covered under warranty terms\\n3. Request photos or documentation of the problem\\n4. If valid, initiate the replacement/repair process\\n\\nWould you like me to elaborate on any of these steps?',
           sender: 'ai',
           timestamp: new Date(Date.now() - 1000 * 60 * 15)
         }
       ]
-    },
-    {
-      id: '2',
-      title: 'Policy Update Discussion',
-      lastMessage: 'The new return policy takes effect next week',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60),
-      status: 'closed',
-      participants: ['Mike R.', 'Lisa K.', 'Tom B.'],
-      messages: []
     }
   ]);
   
@@ -148,14 +140,38 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   };
 
   const createNewSession = () => {
+    const welcomeMessage: Message = {
+      id: 'welcome',
+      content: `👋 Hello, ${user.email.split('@')[0]}!
+
+🎯 I'm SAGE – your smart business assistant at FPT
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✨ Ready to assist you with:
+
+📊 Competitor insights & market analysis
+💡 Strategic planning & decision support  
+📈 Business intelligence & data insights
+🔍 Research & knowledge discovery
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
+
+💬 What can I help you explore today?`,
+      sender: 'ai',
+      timestamp: new Date()
+    };
+
     const newSession: Session = {
       id: Date.now().toString(),
       title: 'New Session',
-      lastMessage: '',
+      lastMessage: 'Welcome to SAGE!',
       timestamp: new Date(),
       status: 'active',
       participants: [user.email.split('@')[0]],
-      messages: []
+      messages: [welcomeMessage]
     };
     setSessions(prev => [newSession, ...prev]);
     setActiveSession(newSession.id);
@@ -168,16 +184,19 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   );
 
   const Sidebar = () => (
-    <div className="flex flex-col h-full bg-gray-900 text-white">
+    <div className="flex flex-col h-full bg-white text-black border-r border-gray-200">
       {/* Header */}
-      <div className="p-4 border-b border-gray-700">
+      <div className="p-4 border-b border-gray-200">
+        <div className="mb-4">
+          <FPTLogo />
+        </div>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg">Employee Hub</h2>
+          <h2 className="text-lg font-semibold">Employee Hub</h2>
           <Button
             variant="ghost"
             size="sm"
             onClick={onLogout}
-            className="text-gray-400 hover:text-white"
+            className="text-gray-600 hover:text-black"
           >
             <LogOut className="h-4 w-4" />
           </Button>
@@ -188,7 +207,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
             placeholder="Search sessions..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-800 border-gray-600 text-white placeholder:text-gray-400"
+            className="pl-10 bg-gray-50 border-gray-300 text-black placeholder:text-gray-400"
           />
         </div>
       </div>
@@ -197,7 +216,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
       <div className="p-4">
         <Button
           onClick={createNewSession}
-          className="w-full bg-[#1B4F72] hover:bg-[#1B4F72]/90 text-white"
+          className="w-full bg-black hover:bg-gray-800 text-white transform transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
         >
           <Plus className="h-4 w-4 mr-2" />
           Start New Session
@@ -210,10 +229,10 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
           {filteredSessions.map((session) => (
             <Card
               key={session.id}
-              className={`p-3 cursor-pointer transition-colors border ${
+              className={`p-3 cursor-pointer transition-all duration-200 border transform hover:scale-102 active:scale-98 ${
                 activeSession === session.id
-                  ? 'bg-[#1B4F72] border-[#1B4F72] text-white'
-                  : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-700'
+                  ? 'bg-gray-100 border-gray-300 text-black shadow-lg'
+                  : 'bg-white border-gray-200 text-black hover:bg-gray-50 hover:shadow-md hover:border-gray-300'
               }`}
               onClick={() => {
                 setActiveSession(session.id);
@@ -249,15 +268,15 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const currentSession = getCurrentSession();
 
   return (
-    <div className="h-screen flex bg-black text-white">
+    <div className="h-screen flex bg-white text-black">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block w-80 border-r border-gray-700">
+      <div className="hidden md:block w-80 border-r border-gray-200">
         <Sidebar />
       </div>
 
       {/* Mobile Sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-        <SheetContent side="left" className="p-0 w-80 bg-gray-900">
+        <SheetContent side="left" className="p-0 w-80 bg-white">
           <Sidebar />
         </SheetContent>
       </Sheet>
@@ -265,12 +284,12 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Navigation Tabs */}
-        <div className="border-b border-gray-700 bg-gray-900">
+        <div className="border-b border-gray-200 bg-white">
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center space-x-6">
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="ghost" size="sm" className="md:hidden">
+                  <Button variant="ghost" size="sm" className="md:hidden text-black">
                     <Menu className="h-5 w-5" />
                   </Button>
                 </SheetTrigger>
@@ -282,8 +301,8 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                   to="/chat/employee"
                   className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                     location.pathname === '/chat/employee'
-                      ? 'bg-[#1B4F72] text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      ? 'bg-gray-100 text-black'
+                      : 'text-gray-600 hover:text-black hover:bg-gray-100'
                   }`}
                 >
                   <MessageCircle className="h-4 w-4" />
@@ -294,8 +313,8 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                   to="/ml"
                   className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                     location.pathname === '/ml'
-                      ? 'bg-[#1B4F72] text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      ? 'bg-gray-100 text-black'
+                      : 'text-gray-600 hover:text-black hover:bg-gray-100'
                   }`}
                 >
                   <Brain className="h-4 w-4" />
@@ -306,8 +325,8 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                   to="/reports"
                   className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                     location.pathname === '/reports'
-                      ? 'bg-[#1B4F72] text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                      ? 'bg-gray-100 text-black'
+                      : 'text-gray-600 hover:text-black hover:bg-gray-100'
                   }`}
                 >
                   <FileText className="h-4 w-4" />
@@ -319,8 +338,8 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                     to="/admin/data"
                     className={`flex items-center space-x-2 px-3 py-2 rounded-md transition-colors ${
                       location.pathname === '/admin/data'
-                        ? 'bg-[#1B4F72] text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-gray-800'
+                        ? 'bg-gray-100 text-black'
+                        : 'text-gray-600 hover:text-black hover:bg-gray-100'
                     }`}
                   >
                     <Database className="h-4 w-4" />
@@ -331,12 +350,12 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
             </div>
             
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-400">Welcome, {user.email}</span>
+              <span className="text-sm text-gray-600">Welcome, {user.email}</span>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={onLogout}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-600 hover:text-black"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -345,10 +364,10 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
         </div>
 
         {/* Chat Header */}
-        <div className="p-4 border-b border-gray-700 bg-gray-800">
+        <div className="p-4 border-b border-gray-200 bg-white">
           <div className="flex items-center space-x-3">
             <div>
-              <h1 className="text-xl">{currentSession?.title || 'Employee Hub'}</h1>
+              <h1 className="text-xl font-semibold text-black">{currentSession?.title || 'Employee Hub'}</h1>
               {currentSession && (
                 <div className="flex items-center space-x-2 mt-1">
                   <Badge 
@@ -357,7 +376,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                   >
                     {currentSession.status}
                   </Badge>
-                  <span className="text-sm text-gray-400">
+                  <span className="text-sm text-gray-600">
                     {currentSession.participants.join(', ')}
                   </span>
                 </div>
@@ -367,7 +386,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4">
+        <ScrollArea className="flex-1 p-4 bg-gray-50">
           <div className="space-y-4 max-w-4xl mx-auto">
             {currentSession?.messages.map((msg) => (
               <div
@@ -377,9 +396,9 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                 <div className={`flex space-x-2 max-w-xs lg:max-w-md ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}>
                   <Avatar className="h-8 w-8">
                     <AvatarFallback className={
-                      msg.sender === 'user' ? 'bg-[#1B4F72] text-white' : 
-                      msg.sender === 'employee' ? 'bg-blue-600 text-white' :
-                      'bg-gray-700 text-white'
+                      msg.sender === 'user' ? 'bg-blue-600 text-white' : 
+                      msg.sender === 'employee' ? 'bg-green-600 text-white' :
+                      'bg-black text-white'
                     }>
                       {msg.sender === 'user' ? 'U' : msg.sender === 'employee' ? 'E' : 'AI'}
                     </AvatarFallback>
@@ -387,10 +406,10 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
                   <div
                     className={`rounded-lg p-3 ${
                       msg.sender === 'user'
-                        ? 'bg-[#1B4F72] text-white'
-                        : msg.sender === 'employee'
                         ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800 text-white'
+                        : msg.sender === 'employee'
+                        ? 'bg-green-600 text-white'
+                        : 'bg-white text-black border border-gray-200'
                     }`}
                   >
                     {msg.senderName && (
@@ -409,9 +428,9 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
               <div className="flex justify-start">
                 <div className="flex space-x-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-gray-700 text-white">AI</AvatarFallback>
+                    <AvatarFallback className="bg-black text-white">AI</AvatarFallback>
                   </Avatar>
-                  <div className="bg-gray-800 text-white rounded-lg p-3">
+                  <div className="bg-white text-black border border-gray-200 rounded-lg p-3">
                     <div className="flex space-x-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -426,18 +445,18 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
         </ScrollArea>
 
         {/* Message Input */}
-        <div className="p-4 border-t border-gray-700 bg-gray-900">
+        <div className="p-4 border-t border-gray-200 bg-white">
           <form onSubmit={sendMessage} className="flex space-x-2 max-w-4xl mx-auto">
             <Input
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               placeholder="Type your message..."
-              className="flex-1 bg-gray-800 border-gray-600 text-white placeholder:text-gray-400"
+              className="flex-1 bg-white border-gray-300 text-black placeholder:text-gray-400"
               disabled={isTyping}
             />
             <Button 
               type="submit" 
-              className="bg-[#1B4F72] hover:bg-[#1B4F72]/90 text-white"
+              className="bg-black hover:bg-gray-800 text-white"
               disabled={isTyping || !message.trim()}
             >
               <Send className="h-4 w-4" />
