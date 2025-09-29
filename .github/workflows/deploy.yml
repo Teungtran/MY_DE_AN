@@ -1,0 +1,72 @@
+name: CI/CD to AWS
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-southeast-2.amazonaws.com
+  IMAGE_TAG: latest
+
+jobs:
+  ci:
+    name: Lint Python code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Run lint
+        run: flake8 .
+
+  cd:
+    name: Build and Deploy to AWS
+    runs-on: ubuntu-latest
+    needs: ci
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & Push images
+        run: |
+          SERVICES=("auth" "be_admin" "be_chatbot" "be_preprocess" "ml" "nginx")
+
+          for SERVICE in "${SERVICES[@]}"; do
+            IMAGE="$ECR_REGISTRY/de_an_${SERVICE}:${IMAGE_TAG}"
+            echo "Building $SERVICE → $IMAGE"
+            docker build -t $IMAGE ./BACKEND/${SERVICE^^} || docker build -t $IMAGE ./nginx
+            docker push $IMAGE
+          done
+
+      - name: Deploy on EC2
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd ~/de_an
+            git pull origin main
+            docker-compose -f docker-compose.prod.yml pull
+            docker-compose -f docker-compose.prod.yml up -d --remove-orphans
