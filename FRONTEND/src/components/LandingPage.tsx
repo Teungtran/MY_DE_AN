@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FPTLogo } from './FPTLogo';
+import { motion, useScroll, useTransform } from 'motion/react';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
@@ -22,19 +24,29 @@ import {
 } from 'lucide-react';
 
 export function LandingPage() {
+  const { scrollY } = useScroll();
+  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
+  const scale = useTransform(scrollY, [0, 300], [1, 0.8]);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      setMousePosition({ x: e.clientX, y: e.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-white text-black">
+    <div className="min-h-screen bg-white text-black relative overflow-hidden">
       {/* Header */}
       <header className="bg-white border-b border-gray-100">
         <div className="container mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <div className="flex items-center space-x-3 hover:opacity-80 transition-opacity duration-200">
-              <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">S</span>
-              </div>
-              <span className="text-xl font-semibold text-gray-800">SAGE</span>
-              <span className="text-sm text-gray-500 ml-2">AI Platform</span>
+            <div className="hover:opacity-80 transition-opacity duration-200">
+              <FPTLogo />
             </div>
             
             {/* Navigation */}
@@ -49,84 +61,121 @@ export function LandingPage() {
               <Link to="/login" className="text-gray-600 hover:text-gray-900 hover:bg-gray-100 px-3 py-2 rounded-md transition-all duration-200">
                 Sign In
               </Link>
-              <Link to="/login">
-                <Button className="bg-gray-800 text-white hover:bg-gray-900 px-4 py-2 rounded-md transition-all duration-200">
-                  Get Started
-                </Button>
-              </Link>
             </div>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="bg-gray-50 py-20">
-        <div className="container mx-auto px-6">
+      <motion.section 
+        className="bg-gray-50 py-20 relative"
+        style={{ opacity, scale }}
+      >
+        {/* Animated background gradient */}
+        <div 
+          className="absolute inset-0 opacity-10 transition-all duration-1000 ease-out"
+          style={{
+            background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(59, 130, 246, 0.1), transparent 80%)`
+          }}
+        />
+        
+        <div className="container mx-auto px-6 relative z-10">
           <div className="flex items-center justify-between">
-            <div className="flex-1 max-w-2xl">
-              <div className="inline-flex items-center bg-gray-100 rounded-full px-4 py-2 mb-8">
+            <motion.div 
+              className="flex-1 max-w-2xl"
+              initial={{ opacity: 0, x: -50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+            >
+              <motion.div 
+                className="inline-flex items-center bg-gray-100 rounded-full px-4 py-2 mb-8"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.1 }}
+                whileHover={{ scale: 1.05 }}
+              >
                 <span className="text-sm text-gray-600">✨ AI-Powered Enterprise Platform</span>
-              </div>
+              </motion.div>
               
-              <h1 className="text-5xl font-bold text-gray-900 mb-6 leading-tight">
+              <motion.h1 
+                className="text-5xl font-bold text-gray-900 mb-6 leading-tight"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+              >
                 Transform FPT Shop with SAGE AI
-              </h1>
+              </motion.h1>
               
-              <p className="text-xl text-gray-600 mb-8 leading-relaxed">
+              <motion.p 
+                className="text-xl text-gray-600 mb-8 leading-relaxed"
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.4 }}
+              >
                 Comprehensive AI platform featuring multi-agentic chatbots, MLOps systems, and intelligent data management. Empower your retail operations with cutting-edge artificial intelligence.
-              </p>
+              </motion.p>
               
-              <Button className="bg-gray-800 text-white hover:bg-gray-900 px-6 py-3 rounded-md inline-flex items-center space-x-2 transition-all duration-200 transform hover:scale-105">
-                <span>Get Started</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="flex-1 flex justify-end">
-              <div className="relative">
-                <div className="w-96 h-80 bg-gradient-to-br from-blue-900 via-purple-800 to-blue-700 rounded-2xl flex items-center justify-center relative overflow-hidden">
-                  {/* Isometric illustration placeholder */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-blue-600/30 to-pink-600/20"></div>
-                  <div className="relative z-10 text-center">
-                    <div className="w-32 h-32 bg-gradient-to-br from-purple-400 to-pink-400 rounded-lg mx-auto mb-4 flex items-center justify-center">
-                      <Brain className="h-16 w-16 text-white" />
-                    </div>
-                    <div className="text-white text-sm font-medium">AI Processing</div>
-                    <div className="text-white/70 text-xs">Real-time Analytics</div>
-                  </div>
-                  
-                  {/* Floating badges */}
-                  <div className="absolute top-4 right-4 bg-gray-800 text-white px-3 py-1 rounded-full text-xs">
-                    AI Processing
-                  </div>
-                  <div className="absolute bottom-4 left-4 bg-gray-800 text-white px-3 py-1 rounded-full text-xs">
-                    Multi-Agent
-                  </div>
-                </div>
-              </div>
-            </div>
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8, delay: 0.6 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Link to="/login">
+                  <Button className="bg-gray-800 text-white hover:bg-gray-900 px-6 py-3 rounded-md inline-flex items-center space-x-2 transition-all duration-200 transform hover:scale-105 hover:shadow-lg group">
+                    <span>Get Started</span>
+                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
+                  </Button>
+                </Link>
+              </motion.div>
+            </motion.div>
+
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Platform Capabilities */}
-      <section id="features" className="py-20 bg-white">
+      <motion.section 
+        id="features" 
+        className="py-20 bg-white"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
-            <div className="inline-flex items-center bg-gray-100 rounded-full px-4 py-2 mb-6">
+          <motion.div 
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+          >
+            <motion.div 
+              className="inline-flex items-center bg-gray-100 rounded-full px-4 py-2 mb-6"
+              whileHover={{ scale: 1.05 }}
+            >
               <span className="text-sm text-gray-600">Enterprise AI Features</span>
-            </div>
+            </motion.div>
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
               Comprehensive AI Platform for Modern Retail
             </h2>
             <p className="text-xl text-gray-600 max-w-4xl mx-auto">
               SAGE delivers a complete suite of AI-powered tools designed specifically for FPT Shop's unique operational needs and customer requirements.
             </p>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-7xl mx-auto">
             {/* AI Sales Assistant */}
-            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 transform hover:scale-102">
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              viewport={{ once: true }}
+              whileHover={{ scale: 1.02, y: -5 }}
+            >
+              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -167,10 +216,18 @@ export function LandingPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+              </Card>
+            </motion.div>
 
             {/* Store Assistant System */}
-            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 transform hover:scale-102">
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              viewport={{ once: true }}
+              whileHover={{ scale: 1.02, y: -5 }}
+            >
+              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -211,10 +268,18 @@ export function LandingPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+              </Card>
+            </motion.div>
 
             {/* Machine Learning Operations */}
-            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 transform hover:scale-102">
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              viewport={{ once: true }}
+              whileHover={{ scale: 1.02, y: -5 }}
+            >
+              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -255,10 +320,18 @@ export function LandingPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+              </Card>
+            </motion.div>
 
             {/* AI-Powered Insights */}
-            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 transform hover:scale-102">
+            <motion.div
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              viewport={{ once: true }}
+              whileHover={{ scale: 1.02, y: -5 }}
+            >
+              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -299,12 +372,20 @@ export function LandingPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+              </Card>
+            </motion.div>
           </div>
 
           {/* Knowledge Base System - Full Width */}
-          <div className="mt-8 max-w-4xl mx-auto">
-            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 transform hover:scale-102">
+          <motion.div 
+            className="mt-8 max-w-4xl mx-auto"
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            viewport={{ once: true }}
+            whileHover={{ scale: 1.02, y: -5 }}
+          >
+            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
                   <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -350,21 +431,33 @@ export function LandingPage() {
                 </div>
               </CardContent>
             </Card>
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* FAQ Section */}
-      <section className="py-20 bg-gray-50">
+      <motion.section 
+        className="py-20 bg-gray-50"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-6">
-          <div className="text-center mb-16">
+          <motion.div 
+            className="text-center mb-16"
+            initial={{ opacity: 0, y: 50 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+          >
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
               Frequently Asked Questions
             </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               Everything you need to know about SAGE AI platform for FPT Shop operations.
             </p>
-          </div>
+          </motion.div>
 
           <div className="max-w-4xl mx-auto">
             <Accordion type="single" collapsible className="space-y-4">
@@ -424,43 +517,67 @@ export function LandingPage() {
             </Accordion>
           </div>
         </div>
-      </section>
+      </motion.section>
 
       {/* CTA Section */}
-      <section className="py-20 bg-white">
+      <motion.section 
+        className="py-20 bg-white"
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 1 }}
+        transition={{ duration: 0.8 }}
+        viewport={{ once: true }}
+      >
         <div className="container mx-auto px-6 text-center">
-          <h2 className="text-4xl font-bold text-gray-900 mb-6">
+          <motion.h2 
+            className="text-4xl font-bold text-gray-900 mb-6"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+            viewport={{ once: true }}
+          >
             Ready to transform your retail operations with SAGE AI?
-          </h2>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+          </motion.h2>
+          <motion.p 
+            className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+            viewport={{ once: true }}
+          >
             Join FPT Shop teams already using SAGE to deliver exceptional customer experiences and streamline store management with cutting-edge AI technology.
-          </p>
-          <div className="flex items-center justify-center space-x-4">
-            <Link to="/login">
-              <Button className="bg-gray-800 text-white hover:bg-gray-900 px-8 py-3 rounded-md inline-flex items-center space-x-2 transition-all duration-200 transform hover:scale-105">
-                <span>Get Started</span>
-                <ArrowRight className="h-4 w-4" />
-              </Button>
-            </Link>
-            <Link to="/login">
-              <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 px-8 py-3 rounded-md transition-all duration-200 transform hover:scale-105">
-                Schedule Demo
-              </Button>
-            </Link>
-          </div>
+          </motion.p>
+          <motion.div 
+            className="flex items-center justify-center space-x-4"
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            viewport={{ once: true }}
+          >
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Link to="/login">
+                <Button className="bg-gray-800 text-white hover:bg-gray-900 px-8 py-3 rounded-md inline-flex items-center space-x-2 transition-all duration-200 transform hover:scale-105 hover:shadow-lg group">
+                  <span>Get Started</span>
+                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
+                </Button>
+              </Link>
+            </motion.div>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+              <Link to="/login">
+                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 px-8 py-3 rounded-md transition-all duration-200 transform hover:scale-105 hover:shadow-lg">
+                  Schedule Demo
+                </Button>
+              </Link>
+            </motion.div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
 
       {/* Footer */}
       <footer className="bg-gray-50 border-t border-gray-200 py-12">
         <div className="container mx-auto px-6">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-8 h-8 bg-gray-700 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">S</span>
-              </div>
-              <span className="text-xl font-semibold text-gray-800">SAGE</span>
-              <span className="text-sm text-gray-500 ml-2">AI Platform</span>
+            <div>
+              <FPTLogo />
             </div>
             <div className="text-center text-gray-500">
               © 2025 SAGE - FPT Shop AI Platform. All rights reserved.

@@ -249,8 +249,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
               >
                 <div className={`flex space-x-2 max-w-xs lg:max-w-md ${msg.sender === 'user' ? 'flex-row-reverse' : ''}`}>
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className={msg.sender === 'user' ? 'bg-green-600 text-white' : 'bg-black text-white'}>
-                      {msg.sender === 'user' ? 'U' : 'AI'}
+                    <AvatarFallback className={msg.sender === 'user' ? 'bg-green-600 text-white' : 'bg-black text-white text-xs'}>
+                      {msg.sender === 'user' ? 'U' : 'SAGE'}
                     </AvatarFallback>
                   </Avatar>
                   <div
@@ -276,7 +276,7 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
               <div className="flex justify-start">
                 <div className="flex space-x-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-black text-white">AI</AvatarFallback>
+                    <AvatarFallback className="bg-black text-white text-xs">SAGE</AvatarFallback>
                   </Avatar>
                   <div className="bg-white text-black border border-gray-200 rounded-lg p-3">
                     <div className="flex space-x-1">

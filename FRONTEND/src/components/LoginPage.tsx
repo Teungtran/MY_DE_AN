@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FPTLogo } from './FPTLogo';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -203,25 +204,8 @@ export function LoginPage({ onLogin }: LoginPageProps) {
       <div className="w-full max-w-lg">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="flex items-center justify-center space-x-4 mb-4">
-            {/* FPT Shop Logo */}
-            <div className="flex items-center space-x-1">
-              <div className="w-8 h-8 bg-red-500 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-sm">F</span>
-              </div>
-              <div className="w-8 h-8 bg-orange-500 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-sm">P</span>
-              </div>
-              <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-                <span className="text-white font-bold text-sm">T</span>
-              </div>
-              <span className="text-gray-700 text-sm ml-1">Shop.vn</span>
-            </div>
-            
-            <div className="text-right">
-              <h1 className="text-2xl font-bold text-black">SAGE</h1>
-              <p className="text-sm text-gray-600">AI Assistant</p>
-            </div>
+          <div className="flex justify-center mb-4">
+            <FPTLogo />
           </div>
         </div>
 

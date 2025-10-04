@@ -6,7 +6,7 @@ import { ScrollArea } from './ui/scroll-area';
 import { Card } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
-import { Send, Plus, Search, Menu, LogOut, Users, MessageCircle, Brain, FileText, Database } from 'lucide-react';
+import { Send, Plus, Search, Menu, LogOut, Users, MessageCircle, Brain, FileText, Database, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { FPTLogo } from './FPTLogo';
 
@@ -72,6 +72,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -142,24 +143,20 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const createNewSession = () => {
     const welcomeMessage: Message = {
       id: 'welcome',
-      content: `👋 Hello, ${user.email.split('@')[0]}!
+      content: `Hello, ${user.email.split('@')[0]}!
 
-🎯 I'm SAGE – your smart business assistant at FPT
+I'm SAGE – your smart business assistant at FPT
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Ready to assist you with:
 
-✨ Ready to assist you with:
-
-📊 Competitor insights & market analysis
-💡 Strategic planning & decision support  
-📈 Business intelligence & data insights
-🔍 Research & knowledge discovery
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Competitor insights & market analysis
+Strategic planning & decision support  
+Business intelligence & data insights
+Research & knowledge discovery
 
 Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
 
-💬 What can I help you explore today?`,
+What can I help you explore today?`,
       sender: 'ai',
       timestamp: new Date()
     };
@@ -178,90 +175,163 @@ Just ask me what you need – from competitor insights to strategy ideas – and
     setSidebarOpen(false);
   };
 
+  const deleteSession = (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (sessions.length <= 1) {
+      alert('Cannot delete the last session. At least one session must remain.');
+      return;
+    }
+    
+    const sessionToDelete = sessions.find(session => session.id === sessionId);
+    if (sessionToDelete && window.confirm(`Are you sure you want to delete "${sessionToDelete.title}"?`)) {
+      setSessions(prev => prev.filter(session => session.id !== sessionId));
+      
+      // If we're deleting the active session, switch to another one
+      if (activeSession === sessionId) {
+        const remainingSessions = sessions.filter(session => session.id !== sessionId);
+        if (remainingSessions.length > 0) {
+          setActiveSession(remainingSessions[0].id);
+        }
+      }
+    }
+  };
+
+  const clearAllHistory = () => {
+    if (window.confirm('Are you sure you want to delete all chat history? This action cannot be undone.')) {
+      createNewSession(); // This will create a fresh session
+      setSessions(prev => prev.slice(0, 1)); // Keep only the new session
+    }
+  };
+
   const filteredSessions = sessions.filter(session =>
     session.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     session.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const Sidebar = () => (
-    <div className="flex flex-col h-full bg-white text-black border-r border-gray-200">
+    <div className={`flex flex-col h-full bg-white text-black border-r border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
-        <div className="mb-4">
-          <FPTLogo />
-        </div>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Employee Hub</h2>
+        {!sidebarCollapsed && (
+          <>
+            <div className="mb-4">
+              <FPTLogo />
+            </div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Employee Hub</h2>
+              <div className="flex items-center space-x-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllHistory}
+                  className="text-gray-600 hover:text-red-600 hover:bg-red-50"
+                  title="Clear all chat history"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onLogout}
+                  className="text-gray-600 hover:text-black"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search sessions..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-gray-50 border-gray-300 text-black placeholder:text-gray-400"
+              />
+            </div>
+          </>
+        )}
+        
+        {/* Collapse Toggle Button */}
+        <div className={`flex ${sidebarCollapsed ? 'justify-center' : 'justify-end'} mt-2`}>
           <Button
             variant="ghost"
             size="sm"
-            onClick={onLogout}
-            className="text-gray-600 hover:text-black"
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="text-gray-600 hover:text-black hover:bg-gray-100"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <LogOut className="h-4 w-4" />
+            {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           </Button>
         </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Search sessions..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 bg-gray-50 border-gray-300 text-black placeholder:text-gray-400"
-          />
-        </div>
       </div>
 
-      {/* New Session Button */}
-      <div className="p-4">
-        <Button
-          onClick={createNewSession}
-          className="w-full bg-black hover:bg-gray-800 text-white transform transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Start New Session
-        </Button>
-      </div>
-
-      {/* Sessions List */}
-      <ScrollArea className="flex-1 px-4">
-        <div className="space-y-2">
-          {filteredSessions.map((session) => (
-            <Card
-              key={session.id}
-              className={`p-3 cursor-pointer transition-all duration-200 border transform hover:scale-102 active:scale-98 ${
-                activeSession === session.id
-                  ? 'bg-gray-100 border-gray-300 text-black shadow-lg'
-                  : 'bg-white border-gray-200 text-black hover:bg-gray-50 hover:shadow-md hover:border-gray-300'
-              }`}
-              onClick={() => {
-                setActiveSession(session.id);
-                setSidebarOpen(false);
-              }}
+      {!sidebarCollapsed && (
+        <>
+          {/* New Session Button */}
+          <div className="p-4">
+            <Button
+              onClick={createNewSession}
+              className="w-full bg-black hover:bg-gray-800 text-white transform transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-medium truncate">{session.title}</div>
-                <Badge 
-                  variant={session.status === 'active' ? 'default' : 'secondary'}
-                  className={session.status === 'active' ? 'bg-green-600' : 'bg-gray-600'}
+              <Plus className="h-4 w-4 mr-2" />
+              Start New Session
+            </Button>
+          </div>
+
+          {/* Sessions List */}
+          <ScrollArea className="flex-1 px-4">
+            <div className="space-y-2">
+              {filteredSessions.map((session) => (
+                <Card
+                  key={session.id}
+                  className={`p-3 cursor-pointer transition-all duration-200 border transform hover:scale-102 active:scale-98 group ${
+                    activeSession === session.id
+                      ? 'bg-gray-100 border-gray-300 text-black shadow-lg'
+                      : 'bg-white border-gray-200 text-black hover:bg-gray-50 hover:shadow-md hover:border-gray-300'
+                  }`}
+                  onClick={() => {
+                    setActiveSession(session.id);
+                    setSidebarOpen(false);
+                  }}
                 >
-                  {session.status}
-                </Badge>
-              </div>
-              <div className="text-sm opacity-70 truncate mb-2">{session.lastMessage}</div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center text-xs opacity-50">
-                  <Users className="h-3 w-3 mr-1" />
-                  {session.participants.length}
-                </div>
-                <div className="text-xs opacity-50">
-                  {session.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </ScrollArea>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="font-medium truncate flex-1">{session.title}</div>
+                    <div className="flex items-center space-x-1">
+                      <Badge 
+                        variant={session.status === 'active' ? 'default' : 'secondary'}
+                        className={session.status === 'active' ? 'bg-green-600' : 'bg-gray-600'}
+                      >
+                        {session.status}
+                      </Badge>
+                      {sessions.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => deleteSession(session.id, e)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6"
+                          title="Delete session"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-sm opacity-70 truncate mb-2">{session.lastMessage}</div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center text-xs opacity-50">
+                      <Users className="h-3 w-3 mr-1" />
+                      {session.participants.length}
+                    </div>
+                    <div className="text-xs opacity-50">
+                      {session.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </ScrollArea>
+        </>
+      )}
     </div>
   );
 
@@ -270,7 +340,7 @@ Just ask me what you need – from competitor insights to strategy ideas – and
   return (
     <div className="h-screen flex bg-white text-black">
       {/* Desktop Sidebar */}
-      <div className="hidden md:block w-80 border-r border-gray-200">
+      <div className={`hidden md:block border-r border-gray-200 transition-all duration-300 ${sidebarCollapsed ? 'w-16' : 'w-80'}`}>
         <Sidebar />
       </div>
 
@@ -398,9 +468,9 @@ Just ask me what you need – from competitor insights to strategy ideas – and
                     <AvatarFallback className={
                       msg.sender === 'user' ? 'bg-blue-600 text-white' : 
                       msg.sender === 'employee' ? 'bg-green-600 text-white' :
-                      'bg-black text-white'
+                      'bg-black text-white text-xs'
                     }>
-                      {msg.sender === 'user' ? 'U' : msg.sender === 'employee' ? 'E' : 'AI'}
+                      {msg.sender === 'user' ? 'U' : msg.sender === 'employee' ? 'E' : 'SAGE'}
                     </AvatarFallback>
                   </Avatar>
                   <div
@@ -428,7 +498,7 @@ Just ask me what you need – from competitor insights to strategy ideas – and
               <div className="flex justify-start">
                 <div className="flex space-x-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarFallback className="bg-black text-white">AI</AvatarFallback>
+                    <AvatarFallback className="bg-black text-white text-xs">SAGE</AvatarFallback>
                   </Avatar>
                   <div className="bg-white text-black border border-gray-200 rounded-lg p-3">
                     <div className="flex space-x-1">
