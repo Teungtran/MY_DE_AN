@@ -10,10 +10,8 @@ RUN mkdir -p /app/logs
 COPY pyproject.toml uv.lock ./
 RUN uv sync --no-cache-dir
 
-# Copy app code
+# Copy app code (includes utils and config subdirectories)
 COPY app/ ./app/
-COPY ./utils /app/utils
-COPY config/ ./config/
 
 FROM python:3.11-slim-bookworm AS runtime
 
@@ -22,7 +20,6 @@ WORKDIR /app
 # Copy venv + app from builder stage
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/app /app/app
-COPY --from=builder /app/config /app/config
 # Ensure venv is used by default
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app:/app/app"

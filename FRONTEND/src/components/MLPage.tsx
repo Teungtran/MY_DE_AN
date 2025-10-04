@@ -10,7 +10,8 @@ import { Input } from './ui/input';
 import { LogOut, Upload, Brain, TrendingUp, RefreshCw, MessageCircle, FileText, Database, Download } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { FPTLogo } from './FPTLogo';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
+import { mlAPI } from '../utils/api';
 
 interface User {
   id: string;
@@ -43,29 +44,6 @@ interface ChurnData {
   LastPurchaseDate: string;
 }
 
-interface APIResponse {
-  payload: {
-    message: string;
-    s3_url: string;
-    s3_results_data: SentimentData[] | ChurnData[];
-    summary: {
-      total_records: number;
-      average_rating?: number;
-      rating_distribution?: Record<string, number>;
-    };
-    timestamp: string;
-  };
-  mlflow_url: string;
-}
-
-interface TrainingRun {
-  id: string;
-  timestamp: Date;
-  status: 'completed' | 'running' | 'failed';
-  accuracy: number;
-  f1Score: number;
-}
-
 interface MLPageProps {
   user: User;
   onLogout: () => void;
@@ -79,7 +57,6 @@ export function MLPage({ user, onLogout }: MLPageProps) {
   const [retrainProgress, setRetrainProgress] = useState(0);
   const [isRetraining, setIsRetraining] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedTrainingFile, setSelectedTrainingFile] = useState<File | null>(null);
   const [selectedSentimentTrainingFile, setSelectedSentimentTrainingFile] = useState<File | null>(null);
   const [selectedChurnTrainingFile, setSelectedChurnTrainingFile] = useState<File | null>(null);
   const [predictionType, setPredictionType] = useState<'sentiment' | 'churn'>('sentiment');
@@ -94,13 +71,6 @@ export function MLPage({ user, onLogout }: MLPageProps) {
     const file = event.target.files?.[0];
     if (file) {
       setSelectedFile(file);
-    }
-  };
-
-  const handleTrainingFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedTrainingFile(file);
     }
   };
 
@@ -126,42 +96,28 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
     setIsProcessing(true);
     try {
-      // TODO: Replace with actual API integration
-      // const formData = new FormData();
-      // formData.append('file', selectedFile);
-      // if (modelVersion) formData.append('model_version', modelVersion);
-      // if (scalerVersion) formData.append('scaler_version', scalerVersion);
-      // if (runId) formData.append('run_id', runId);
-      // const response = await mlAPI.sentimentPredict(formData) or mlAPI.churnPredict(formData);
+      let response: any;
       
-      // Mock API response data structure for development
-      const mockResponse = {
-        payload: {
-          s3_results_data: predictionType === 'sentiment' ? [
-            { review: 'This product is amazing!', predicted_sentiment: 4.2, rating: 5 },
-            { review: 'Not happy with the service', predicted_sentiment: 1.8, rating: 2 },
-            { review: 'It\'s okay, nothing special', predicted_sentiment: 3.0, rating: 3 },
-            { review: 'Love it! Highly recommend', predicted_sentiment: 4.6, rating: 5 },
-            { review: 'Terrible experience', predicted_sentiment: 1.2, rating: 1 },
-            { review: 'Good quality for the price', predicted_sentiment: 4.0, rating: 4 },
-            { review: 'Could be better', predicted_sentiment: 2.5, rating: 3 },
-            { review: 'Outstanding service!', predicted_sentiment: 4.8, rating: 5 }
-          ] : [
-            { customer_id: '12345', Customer_Name: 'John Smith', Frequency: 15, TotalSpent: 2500, Recency: 30, Churn_RATE: 0.85, LastPurchaseDate: '2024-01-15' },
-            { customer_id: '67890', Customer_Name: 'Sarah Johnson', Frequency: 45, TotalSpent: 8900, Recency: 5, Churn_RATE: 0.15, LastPurchaseDate: '2024-03-10' },
-            { customer_id: '54321', Customer_Name: 'Mike Wilson', Frequency: 25, TotalSpent: 4200, Recency: 60, Churn_RATE: 0.65, LastPurchaseDate: '2023-12-20' },
-            { customer_id: '98765', Customer_Name: 'Lisa Brown', Frequency: 8, TotalSpent: 1200, Recency: 90, Churn_RATE: 0.92, LastPurchaseDate: '2023-11-05' },
-            { customer_id: '13579', Customer_Name: 'David Lee', Frequency: 35, TotalSpent: 6700, Recency: 12, Churn_RATE: 0.25, LastPurchaseDate: '2024-02-28' }
-          ]
-        }
-      };
+      if (predictionType === 'sentiment') {
+        response = await mlAPI.sentimentPredict(selectedFile, {
+          model_version: modelVersion || undefined,
+          tokenizer_version: undefined,
+          run_id: runId || undefined
+        });
+      } else {
+        response = await mlAPI.churnPredict(selectedFile, {
+          model_version: modelVersion || undefined,
+          scaler_version: scalerVersion || undefined,
+          run_id: runId || undefined
+        });
+      }
 
       // Store raw data for visualization
-      setRawData(mockResponse.payload.s3_results_data);
-      setApiSummary(mockResponse.payload.summary);
+      setRawData(response.payload.s3_results_data);
+      setApiSummary(response.payload.summary);
 
       // Transform data for prediction results table
-      const results: PredictionResult[] = mockResponse.payload.s3_results_data.map((item: any, index: number) => ({
+      const results: PredictionResult[] = response.payload.s3_results_data.map((item: any, index: number) => ({
         id: index.toString(),
         text: predictionType === 'sentiment' ? item.review : `${item.Customer_Name} (${item.customer_id})`,
         prediction: predictionType === 'sentiment' ? 
@@ -184,46 +140,66 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
 
 
-  const handleSentimentRetrain = () => {
+  const handleSentimentRetrain = async () => {
+    if (user.role !== 'admin') {
+      toast.error('Only administrators can retrain models');
+      return;
+    }
+
     setIsRetraining(true);
     setRetrainProgress(0);
 
-    // TODO: Replace with actual API integration
-    // const response = await mlAPI.sentimentTrain(selectedSentimentTrainingFile);
-    
-    // Mock retraining progress
-    const interval = setInterval(() => {
-      setRetrainProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsRetraining(false);
-          toast.success('Sentiment model retrained successfully!');
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 500);
+    try {
+      // Simulate progress for UX
+      const progressInterval = setInterval(() => {
+        setRetrainProgress(prev => Math.min(prev + 5, 95));
+      }, 1000);
+
+      const response = await mlAPI.sentimentTrain(selectedSentimentTrainingFile || undefined);
+      
+      clearInterval(progressInterval);
+      setRetrainProgress(100);
+      setIsRetraining(false);
+      
+      toast.success('Sentiment model retrained successfully!');
+      console.log('Training result:', response);
+    } catch (error: any) {
+      console.error('Training error:', error);
+      setIsRetraining(false);
+      setRetrainProgress(0);
+      toast.error(error?.message || 'Model retraining failed. Please try again.');
+    }
   };
 
-  const handleChurnRetrain = () => {
+  const handleChurnRetrain = async () => {
+    if (user.role !== 'admin') {
+      toast.error('Only administrators can retrain models');
+      return;
+    }
+
     setIsRetraining(true);
     setRetrainProgress(0);
 
-    // TODO: Replace with actual API integration
-    // const response = await mlAPI.churnTrain(selectedChurnTrainingFile);
-    
-    // Mock retraining progress
-    const interval = setInterval(() => {
-      setRetrainProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsRetraining(false);
-          toast.success('Churn model retrained successfully!');
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 500);
+    try {
+      // Simulate progress for UX
+      const progressInterval = setInterval(() => {
+        setRetrainProgress(prev => Math.min(prev + 5, 95));
+      }, 1000);
+
+      const response = await mlAPI.churnTrain(selectedChurnTrainingFile || undefined);
+      
+      clearInterval(progressInterval);
+      setRetrainProgress(100);
+      setIsRetraining(false);
+      
+      toast.success('Churn model retrained successfully!');
+      console.log('Training result:', response);
+    } catch (error: any) {
+      console.error('Training error:', error);
+      setIsRetraining(false);
+      setRetrainProgress(0);
+      toast.error(error?.message || 'Model retraining failed. Please try again.');
+    }
   };
 
   // Generate sentiment chart data from raw data
@@ -533,7 +509,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                         {Object.entries(apiSummary.rating_distribution).map(([rating, count]) => (
                           <div key={rating} className="text-center p-2 bg-gray-50 rounded">
                             <div className="text-xs text-gray-600">{rating} Star</div>
-                            <div className="text-lg text-black">{count}</div>
+                            <div className="text-lg text-black">{count as number}</div>
                           </div>
                         ))}
                       </div>

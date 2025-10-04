@@ -4,10 +4,11 @@ import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Card } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { Send, Plus, Search, Menu, LogOut, Paperclip, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Send, Plus, Search, Menu, LogOut, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { FPTLogo } from './FPTLogo';
 import ReactMarkdown from 'react-markdown';
+import { chatAPI, generateConversationId } from '../utils/api';
 
 interface User {
   id: string;
@@ -209,9 +210,10 @@ Would you like more details on any specific phone, or are you ready to place an 
     e.preventDefault();
     if (!message.trim()) return;
 
+    const userMessage = message;
     const newMessage: Message = {
       id: Date.now().toString(),
-      content: message,
+      content: userMessage,
       sender: 'user',
       timestamp: new Date()
     };
@@ -219,113 +221,93 @@ Would you like more details on any specific phone, or are you ready to place an 
     // Add user message
     setConversations(prev => prev.map(conv => 
       conv.id === activeConversation 
-        ? { ...conv, messages: [...conv.messages, newMessage], lastMessage: message }
+        ? { ...conv, messages: [...conv.messages, newMessage], lastMessage: userMessage }
         : conv
     ));
 
     setMessage('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: generateAIResponse(message),
-        sender: 'ai',
-        timestamp: new Date()
-      };
+    // Create AI response message that will be updated with streaming chunks
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiResponse: Message = {
+      id: aiMessageId,
+      content: '',
+      sender: 'ai',
+      timestamp: new Date()
+    };
 
+    // Add empty AI message
+    setConversations(prev => prev.map(conv => 
+      conv.id === activeConversation 
+        ? { ...conv, messages: [...conv.messages, aiResponse] }
+        : conv
+    ));
+
+    try {
+      // Use real streaming API
+      await chatAPI.sendMessage(
+        activeConversation,
+        userMessage,
+        (chunk) => {
+          // Update AI message with streaming chunks
+          setConversations(prev => prev.map(conv => 
+            conv.id === activeConversation 
+              ? { 
+                  ...conv, 
+                  messages: conv.messages.map(msg => 
+                    msg.id === aiMessageId 
+                      ? { ...msg, content: msg.content + chunk }
+                      : msg
+                  ),
+                  lastMessage: chunk
+                }
+              : conv
+          ));
+        },
+        (finalData) => {
+          // Handle completion - update conversation title if provided
+          if (finalData?.title) {
+            setConversations(prev => prev.map(conv => 
+              conv.id === activeConversation 
+                ? { ...conv, title: finalData.title }
+                : conv
+            ));
+          }
+          setIsTyping(false);
+        }
+      );
+    } catch (error) {
+      console.error('Chat error:', error);
+      // Update AI message with error
       setConversations(prev => prev.map(conv => 
         conv.id === activeConversation 
-          ? { ...conv, messages: [...conv.messages, aiResponse], lastMessage: aiResponse.content }
+          ? { 
+              ...conv, 
+              messages: conv.messages.map(msg => 
+                msg.id === aiMessageId 
+                  ? { ...msg, content: 'Sorry, I encountered an error. Please try again.' }
+                  : msg
+              )
+            }
           : conv
       ));
-      
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
-  const generateAIResponse = (userMessage: string): string => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    // Context-aware responses
-    if (lowerMessage.includes('phone') || lowerMessage.includes('smartphone') || lowerMessage.includes('mobile')) {
-      return `I'd be happy to help you find the perfect phone! 📱
-
-Based on your interest, here are some popular options:
-
-### **Top Recommendations:**
-
-**iPhone 13 128GB** - 11,790,000 VND (38% discount)
-- Perfect balance of performance and value
-- A15 Bionic chip with excellent camera
-- Sale: Giảm ngay 7,200,000đ
-
-**Samsung Galaxy A06 5G** - 3,490,000 VND (13% discount)  
-- Great budget option with 5G connectivity
-- Sale: Giảm ngay 500,000đ + Tặng củ sạc 25W
-
-**iPhone 15 Pro Max 256GB** - 29,990,000 VND (14% discount)
-- Latest flagship with premium features
-- Sale: Giảm ngay 5,000,000đ
-
-Would you like detailed specifications for any of these models?`;
-    }
-    
-    if (lowerMessage.includes('iphone')) {
-      return `🍎 **iPhone Collection at FPT Shop**
-
-We have amazing deals on iPhones right now:
-
-1. **iPhone 11 64GB** - 9,190,000 VND *(23% off)*
-2. **iPhone 13 128GB** - 11,790,000 VND *(38% off)*  
-3. **iPhone 15 Plus** - 19,590,000 VND *(25% off)*
-4. **iPhone 15 Pro Max** - 29,990,000 VND *(14% off)*
-
-### Special Perks:
-- 🎧 AirPods giảm đến 500,000đ khi mua kèm
-- 💳 Trả góp 0% available
-- 📦 Free shipping nationwide
-
-Which iPhone model interests you most?`;
-    }
-    
-    if (lowerMessage.includes('price') || lowerMessage.includes('cost') || lowerMessage.includes('budget')) {
-      return `💰 **Best Value Phones by Budget:**
-
-**Under 5 million VND:**
-- Samsung Galaxy A06 5G: 3,490,000 VND
-
-**5-15 million VND:**
-- iPhone 11 64GB: 9,190,000 VND
-- iPhone 13 128GB: 11,790,000 VND
-
-**15+ million VND:**
-- iPhone 15 Plus: 19,590,000 VND  
-- iPhone 15 Pro Max: 29,990,000 VND
-
-All prices include current promotions! What's your preferred budget range?`;
-    }
-    
-    // Default responses
-    const responses = [
-      "I understand your concern. Let me help you with that right away. Could you provide more details?",
-      "Thank you for reaching out. I've found some relevant information that might help you.",
-      "I can definitely assist you with this. Based on what you've told me, here are some options...",
-      "That's a great question! Let me check our knowledge base for the most up-to-date information.",
-      "I've reviewed your request and I can help you with that. What specific information are you looking for?",
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
+  // Note: generateAIResponse function removed - now using real streaming API via chatAPI.sendMessage()
 
   const createNewConversation = () => {
+    // Generate UUID for new conversation
+    const conversationId = generateConversationId();
+    
     const welcomeMessage: Message = {
       id: 'welcome',
       content: `Hello, ${user.email.split('@')[0]}!
 
 I'm SAGE – your smart shopping assistant at FPT Shop
 
-━━━━━━━━━━━━━━━━━━━━��━━━━━━━━━━━
 
 I'm here to help you:
 
@@ -341,7 +323,7 @@ What can I help you with today?`,
     };
 
     const newConv: Conversation = {
-      id: Date.now().toString(),
+      id: conversationId,
       title: 'New Conversation',
       lastMessage: 'Welcome to SAGE!',
       timestamp: new Date(),
@@ -352,7 +334,7 @@ What can I help you with today?`,
     setSidebarOpen(false);
   };
 
-  const deleteConversation = (convId: string, e: React.MouseEvent) => {
+  const deleteConversation = (convId: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (conversations.length <= 1) {
       alert('Cannot delete the last conversation. At least one conversation must remain.');
@@ -477,7 +459,7 @@ What can I help you with today?`,
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={(e) => deleteConversation(conv.id, e)}
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteConversation(conv.id, e)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6"
                         title="Delete conversation"
                       >

@@ -1,5 +1,5 @@
 from langgraph.graph import END, StateGraph, START
-from .state import AgenticState, Assistant,pop_dialog_state
+from .state import AgenticState, Assistant,to_main_state
 from .tools.support_nodes import create_entry_node, create_tool_node_with_fallback
 from .primary_assistant import assistant_runnable, update_it_runnable, update_shop_runnable,update_appointment_runnable, route_update_shop,route_primary_assistant,route_update_it,route_update_appointment
 from ..shop_graph.shop_agent import shop_sensitive_tools,shop_safe_tools
@@ -37,7 +37,7 @@ def setup_agentic_graph():
     builder.add_node("call_shop_agent", Assistant(update_shop_runnable))
     builder.add_node("update_shop_sensitive_tools", create_tool_node_with_fallback(shop_sensitive_tools))
     builder.add_node("update_shop_safe_tools", create_tool_node_with_fallback(shop_safe_tools))
-    builder.add_node("leave_skill", pop_dialog_state)
+    builder.add_node("leave_skill", to_main_state)
     
     # it assistant nodes
     builder.add_node("enter_it_node", create_entry_node("IT Assistant", "call_it_agent"))

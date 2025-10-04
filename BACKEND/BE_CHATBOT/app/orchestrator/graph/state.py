@@ -85,7 +85,7 @@ class Assistant:
         return {"messages": result}
     
     
-def pop_dialog_state(state: AgenticState) -> dict:
+def to_main_state(state: AgenticState) -> dict:
     """Pop the dialog stack and return to the main assistant."""
     messages = []
     if state["messages"][-1].tool_calls:

@@ -6,8 +6,9 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { LogOut, Upload, FileText, Link, Database, MessageCircle, Brain, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { toast } from 'sonner';
 import { FPTLogo } from './FPTLogo';
+import { preprocessAPI } from '../utils/api';
 
 interface User {
   id: string;
@@ -35,9 +36,15 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
   const [url, setUrl] = useState('');
 
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file');
+      return;
+    }
 
     const typeText = pdfType === 'policy' ? 'Policy' : 'Expert Knowledge';
     
@@ -46,40 +53,84 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
       id: 'pdf-upload'
     });
 
-    // Simulate processing
-    setTimeout(() => {
+    try {
+      // Use real API based on PDF type
+      if (pdfType === 'policy') {
+        await preprocessAPI.processRagPdfs([file]);
+      } else {
+        await preprocessAPI.processExpertPdfs([file]);
+      }
+
       toast.success(`${typeText} PDF successfully processed and added to knowledge base!`, {
         id: 'pdf-upload',
         icon: <CheckCircle className="h-4 w-4" />,
         duration: 4000
       });
-    }, 3000);
+    } catch (error: any) {
+      console.error('PDF processing error:', error);
+      toast.error(`Failed to process ${typeText} PDF: ${error?.message || 'Unknown error'}`, {
+        id: 'pdf-upload',
+        duration: 5000
+      });
+    }
 
     // Reset file input
     event.target.value = '';
   };
 
-  const handleUrlUpload = (e: React.FormEvent) => {
+  const handleUrlUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
 
+    // Validate URL format
+    try {
+      new URL(url);
+    } catch {
+      toast.error('Please enter a valid URL');
+      return;
+    }
+
     const typeText = urlType === 'product' ? 'Store Product' : 
-                     urlType === 'agent-knowledge' ? 'Agent Knowledge' : 
-                     'Store Policy';
+                    urlType === 'agent-knowledge' ? 'Agent Knowledge' : 
+                    'Store Policy';
 
     // Show processing toast
     toast.loading(`Processing ${typeText} URL: ${url}`, {
       id: 'url-upload'
     });
 
-    // Simulate processing
-    setTimeout(() => {
+    try {
+      // Prepare URL data
+      const urlData = [{
+        source: url,
+        description: `${typeText} content from ${url}`,
+        type: urlType === 'product' ? 'RECOMMEND' : 
+              urlType === 'agent-knowledge' ? 'EXPERT_KNOWLEDGE' : 
+              'RAG',
+        is_active: true
+      }];
+
+      // Use real API based on URL type
+      if (urlType === 'product') {
+        await preprocessAPI.processRecommendUrls(urlData);
+      } else if (urlType === 'agent-knowledge') {
+        await preprocessAPI.processExpertUrls(urlData);
+      } else {
+        await preprocessAPI.processRagUrls(urlData);
+      }
+
       toast.success(`${typeText} URL successfully processed and content added to knowledge base!`, {
         id: 'url-upload',
         icon: <CheckCircle className="h-4 w-4" />,
         duration: 4000
       });
-    }, 2000);
+    } catch (error: any) {
+      console.error('URL processing error:', error);
+      toast.error(`Failed to process ${typeText} URL: ${error?.message || 'Unknown error'}`, {
+        id: 'url-upload',
+        duration: 5000
+      });
+    }
 
     setUrl('');
   };

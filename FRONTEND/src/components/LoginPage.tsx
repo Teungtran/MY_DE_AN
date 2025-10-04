@@ -6,10 +6,9 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
-import { setAuthToken, setUserData } from '../utils/api';
+import { toast } from 'sonner';
+import { authAPI, setAuthToken, setUserData, mapBackendRoleToFrontend, mapFrontendRoleToBackend } from '../utils/api';
 
 interface LoginPageProps {
   onLogin: (userData: { email: string; role: 'customer' | 'employee' | 'admin' }) => void;
@@ -27,8 +26,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
   // Sign In form state
   const [signInData, setSignInData] = useState({
     email: '',
-    password: '',
-    role: 'customer' as 'customer' | 'employee' | 'admin'
+    password: ''
   });
   
   // Sign Up form state
@@ -62,31 +60,31 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
     
     try {
-      // TODO: Replace with actual API integration
-      // const response = await authAPI.login({
-      //   customer_name_or_email: signInData.email,
-      //   password: signInData.password,
-      // });
+      const response = await authAPI.login({
+        customer_name_or_email: signInData.email,
+        password: signInData.password,
+      });
 
-      // Mock authentication for development
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      // Store auth token and user data
+      setAuthToken(response.access_token);
       
-      // Mock successful login
-      const mockToken = 'mock_jwt_token_' + Math.random().toString(36).substr(2, 9);
+      // Map backend role to frontend role
+      const frontendRole = mapBackendRoleToFrontend(response.role);
+      
       const userData = {
-        id: Math.random().toString(36).substr(2, 9),
-        email: signInData.email,
-        role: signInData.role
+        id: response.user_id,
+        email: response.email,
+        role: frontendRole
       };
       
-      setAuthToken(mockToken);
       setUserData(userData);
       onLogin(userData);
       
       toast.success('Successfully signed in!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign in error:', error);
-      toast.error('Sign in failed. Please check your credentials.');
+      const errorMessage = error?.message || 'Sign in failed. Please check your credentials.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -101,19 +99,15 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
     
     try {
-      // TODO: Replace with actual API integration
-      // await authAPI.register({
-      //   customer_name: signUpData.username,
-      //   address: signUpData.address,
-      //   age: parseInt(signUpData.age) || 18,
-      //   customer_phone: signUpData.phone,
-      //   password: signUpData.password,
-      //   email: signUpData.email,
-      //   role: mapFrontendRoleToBackend(signUpData.role),
-      // });
-
-      // Mock successful registration
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
+      await authAPI.register({
+        customer_name: signUpData.username,
+        address: signUpData.address,
+        age: parseInt(signUpData.age) || 18,
+        customer_phone: signUpData.phone,
+        password: signUpData.password,
+        email: signUpData.email,
+        role: mapFrontendRoleToBackend(signUpData.role),
+      });
       
       toast.success('Account created successfully! Please sign in.');
       setViewState('signin');
@@ -128,9 +122,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         password: '',
         confirmPassword: ''
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign up error:', error);
-      toast.error('Account creation failed. Please try again.');
+      const errorMessage = error?.message || 'Account creation failed. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -141,14 +136,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
     
     try {
-      // TODO: Replace with actual API integration
-      // await authAPI.forgotPassword({
-      //   customer_name: forgotData.customer_name,
-      //   email: forgotData.email,
-      // });
-
-      // Mock password reset
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      await authAPI.forgotPassword({
+        customer_name: forgotData.customer_name,
+        email: forgotData.email,
+      });
       
       toast.success('A new temp password has been sent to your email. Please get the temp password and change it in Change password option.');
       setForgotPasswordClicked(true);
@@ -158,9 +149,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         temp_password: '',
         new_password: ''
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Forgot password error:', error);
-      toast.error('Failed to send password reset email. Please try again.');
+      const errorMessage = error?.message || 'Failed to send password reset email. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -171,15 +163,11 @@ export function LoginPage({ onLogin }: LoginPageProps) {
     setIsLoading(true);
     
     try {
-      // TODO: Replace with actual API integration
-      // await authAPI.changePassword({
-      //   customer_name: changeData.customer_name,
-      //   email: changeData.email,
-      //   new_password: changeData.new_password,
-      // });
-      
-      // Mock password change
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      await authAPI.changePassword({
+        customer_name: changeData.customer_name,
+        email: changeData.email,
+        new_password: changeData.new_password,
+      });
       
       toast.success('Password changed successfully! Please sign in with your new password.');
       setViewState('signin');
@@ -191,9 +179,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
         temp_password: '',
         new_password: ''
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Change password error:', error);
-      toast.error('Failed to change password. Please try again.');
+      const errorMessage = error?.message || 'Failed to change password. Please try again.';
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -267,20 +256,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </button>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="role" className="text-black">Role</Label>
-                  <Select value={signInData.role} onValueChange={(value: 'customer' | 'employee' | 'admin') => setSignInData({...signInData, role: value})}>
-                    <SelectTrigger className="bg-white border-gray-300 text-black">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-gray-300">
-                      <SelectItem value="customer">Customer</SelectItem>
-                      <SelectItem value="employee">Employee</SelectItem>
-                      <SelectItem value="admin">Administrator</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 <div className="flex justify-between items-center">

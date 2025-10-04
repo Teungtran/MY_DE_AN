@@ -110,23 +110,22 @@ services:
       - de_an_network
     restart: unless-stopped
     
-  # Frontend placeholder - uncomment and configure when ready
-  # frontend:
-  #   build:
-  #     context: ./FRONTEND
-  #     dockerfile: Dockerfile
-  #   container_name: de_an_frontend
-  #   ports:
-  #     - "3000:3000"  # Typical React/Next.js port
-  #   volumes:
-  #     - ./FRONTEND:/app
-  #     - /app/node_modules
-  #   environment:
-  #     - NODE_ENV=development
-  #     - REACT_APP_API_URL=http://localhost:8090  # Points to the API gateway
-  #   networks:
-  #     - de_an_network
-  #   restart: unless-stopped
+  # Frontend service
+  frontend:
+    build:
+      context: ./FRONTEND
+      dockerfile: Dockerfile
+    container_name: de_an_frontend
+    ports:
+      - "3000:80"  # Map host port 3000 to container port 80 (nginx)
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://localhost:8090  # Points to the API gateway
+    networks:
+      - de_an_network
+    depends_on:
+      - nginx
+    restart: unless-stopped
 
 networks:
   de_an_network:

@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { FPTLogo } from './FPTLogo';
+import { adminAPI } from '../utils/api';
+import { toast } from 'sonner';
 
 interface User {
   id: string;
@@ -73,9 +75,16 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
     scrollToBottom();
   }, [messages]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    // Validate file type
+    const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please upload a CSV, XLS, or XLSX file');
+      return;
+    }
 
     const newReport: Report = {
       id: Date.now().toString(),
@@ -86,30 +95,77 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
 
     setReports(prev => [newReport, ...prev]);
 
-    // Simulate processing and AI analysis
-    setTimeout(() => {
+    try {
+      // Use real API to upload report
+      const response = await adminAPI.uploadReport(file);
+      
+      // Update report status
       setReports(prev => prev.map(r => 
         r.id === newReport.id ? { ...r, status: 'ready' } : r
       ));
 
+      // Store uploaded data for display
+      setUploadedData(response);
+
       const aiMessage: Message = {
         id: Date.now().toString(),
-        content: `I've successfully processed ${file.name}. Here's what I found:\n\n• ${Math.floor(Math.random() * 1000 + 500)} total records analyzed\n• ${Math.floor(Math.random() * 50 + 20)}% increase in key metrics\n• Identified ${Math.floor(Math.random() * 5 + 3)} significant trends\n• Generated ${Math.floor(Math.random() * 10 + 15)} actionable insights\n\nWhat specific aspect would you like to explore?`,
+        content: `I've successfully processed **${file.name}**! 📊
+
+**File Details:**
+• **Records**: ${response.data.length} rows processed
+• **Columns**: ${Object.keys(response.data[0] || {}).length} data fields
+• **Status**: Ready for analysis
+
+The data is now loaded and ready for analysis. You can ask me questions about:
+- Trends and patterns in the data
+- Statistical summaries
+- Comparisons between different segments
+- Insights and recommendations
+
+What would you like to analyze first?`,
         sender: 'ai',
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, aiMessage]);
-    }, 3000);
+      toast.success('File uploaded and processed successfully!');
+    } catch (error: any) {
+      console.error('File upload error:', error);
+      
+      // Update report status to failed
+      setReports(prev => prev.map(r => 
+        r.id === newReport.id ? { ...r, status: 'ready' } : r
+      ));
+
+      const errorMessage: Message = {
+        id: Date.now().toString(),
+        content: `Sorry, I encountered an error processing **${file.name}**. 
+
+**Error**: ${error?.message || 'Upload failed'}
+
+Please try:
+- Checking the file format (CSV, XLS, XLSX)
+- Ensuring the file isn't corrupted
+- Uploading a smaller file if it's very large
+
+Would you like to try uploading the file again?`,
+        sender: 'ai',
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, errorMessage]);
+      toast.error('File upload failed. Please try again.');
+    }
   };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
 
+    const userMessage = message;
     const newMessage: Message = {
       id: Date.now().toString(),
-      content: message,
+      content: userMessage,
       sender: 'user',
       senderName: user.email.split('@')[0],
       timestamp: new Date()
@@ -119,30 +175,84 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
     setMessage('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: generateAIResponse(message),
-        sender: 'ai',
-        timestamp: new Date()
-      };
+    // Create AI response message that will be updated with streaming chunks
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiResponse: Message = {
+      id: aiMessageId,
+      content: '',
+      sender: 'ai',
+      timestamp: new Date()
+    };
 
-      setMessages(prev => [...prev, aiResponse]);
+    // Add empty AI message
+    setMessages(prev => [...prev, aiResponse]);
+
+    try {
+      // Check if we have uploaded data to analyze
+      if (!uploadedData) {
+        // No data uploaded, provide general response
+        setMessages(prev => prev.map(msg => 
+          msg.id === aiMessageId 
+            ? { 
+                ...msg, 
+                content: `I'd be happy to help analyze your data! However, I don't see any uploaded files yet.
+
+Please upload a CSV, XLS, or XLSX file using the upload button above, and then I can provide detailed analysis of your data.
+
+Once you upload a file, I can help you with:
+- Statistical summaries and trends
+- Data visualization insights  
+- Comparative analysis
+- Business recommendations
+- Pattern identification
+
+What type of data are you planning to analyze?`
+              }
+            : msg
+        ));
+        setIsTyping(false);
+        return;
+      }
+
+      // Use real streaming API for report analysis
+      await adminAPI.analyzeReport(
+        userMessage,
+        (chunk) => {
+          // Update AI message with streaming chunks
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { ...msg, content: msg.content + chunk }
+              : msg
+          ));
+        }
+      );
       setIsTyping(false);
-    }, 1500);
+    } catch (error: any) {
+      console.error('Report analysis error:', error);
+      // Update AI message with error
+      setMessages(prev => prev.map(msg => 
+        msg.id === aiMessageId 
+          ? { 
+              ...msg, 
+              content: `Sorry, I encountered an error analyzing your question: "${userMessage}"
+
+**Error**: ${error?.message || 'Analysis failed'}
+
+Please try:
+- Rephrasing your question
+- Being more specific about what you want to analyze
+- Checking if the uploaded data is in the correct format
+
+I'm here to help once you're ready to try again!`
+            }
+          : msg
+      ));
+      setIsTyping(false);
+      toast.error('Analysis failed. Please try again.');
+    }
   };
 
-  const generateAIResponse = (userMessage: string): string => {
-    const responses = [
-      "Based on the data analysis, I can see some interesting patterns. Let me break down the key findings for you...",
-      "That's a great question! Looking at the report data, here's what the numbers show...",
-      "I've identified several correlations in the data that might be relevant to your question...",
-      "The data suggests some actionable insights. Here are my recommendations based on the analysis...",
-      "Let me generate a detailed breakdown of that metric for you with supporting visualizations...",
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
+  // Note: generateAIResponse function removed - now using real streaming API via adminAPI.analyzeReport()
 
 
 

@@ -1,5 +1,8 @@
 // API Configuration and Utilities
-export const API_BASE_URL = 'http://localhost:8090';
+// In production (Docker), use relative URL since frontend is served by nginx
+// In development, use localhost for direct API access
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (import.meta.env.MODE === 'production' ? '' : 'http://localhost:8090');
 
 // Auth token management
 export const getAuthToken = (): string | null => {
@@ -232,12 +235,60 @@ export const mlAPI = {
 
 // Chat API functions
 export const chatAPI = {
-  sendMessage: async (conversationId: string, message: string, onChunk: (chunk: string) => void) => {
-    return handleStreamingResponse(
-      '/chat/v1/chat/streaming-answer',
-      { conversation_id: conversationId, message },
-      onChunk
-    );
+  sendMessage: async (
+    conversationId: string, 
+    message: string, 
+    onChunk: (chunk: string, data?: any) => void,
+    onComplete?: (data: any) => void
+  ) => {
+    try {
+      const response = await apiRequest('/chat/v1/chat/streaming-answer', {
+        method: 'POST',
+        body: JSON.stringify({ conversation_id: conversationId, message }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No reader available');
+      }
+
+      let lastData: any = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              lastData = data;
+              if (data.response) {
+                onChunk(data.response, data);
+              }
+            } catch (e) {
+              // Ignore parsing errors for incomplete chunks
+            }
+          }
+        }
+      }
+
+      if (onComplete && lastData) {
+        onComplete(lastData);
+      }
+    } catch (error) {
+      console.error('Streaming error:', error);
+      throw error;
+    }
   },
 
   getChatHistory: async (conversationId: string) => {
@@ -377,7 +428,12 @@ export const preprocessAPI = {
 
 // Utility functions
 export const generateConversationId = (): string => {
-  return 'conv_' + Math.random().toString(36).substr(2, 9);
+  // Generate UUID v4 format
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 };
 
 export const mapBackendRoleToFrontend = (backendRole: string): 'customer' | 'employee' | 'admin' => {

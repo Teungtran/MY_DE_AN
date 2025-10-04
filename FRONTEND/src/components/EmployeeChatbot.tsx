@@ -9,6 +9,7 @@ import { Badge } from './ui/badge';
 import { Send, Plus, Search, Menu, LogOut, Users, MessageCircle, Brain, FileText, Database, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { FPTLogo } from './FPTLogo';
+import { adminAPI, generateConversationId } from '../utils/api';
 
 interface User {
   id: string;
@@ -91,9 +92,10 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
     e.preventDefault();
     if (!message.trim()) return;
 
+    const userMessage = message;
     const newMessage: Message = {
       id: Date.now().toString(),
-      content: message,
+      content: userMessage,
       sender: 'user',
       senderName: user.email.split('@')[0],
       timestamp: new Date()
@@ -102,45 +104,77 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
     // Add user message
     setSessions(prev => prev.map(session => 
       session.id === activeSession 
-        ? { ...session, messages: [...session.messages, newMessage], lastMessage: message }
+        ? { ...session, messages: [...session.messages, newMessage], lastMessage: userMessage }
         : session
     ));
 
     setMessage('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        content: generateAIResponse(message),
-        sender: 'ai',
-        timestamp: new Date()
-      };
+    // Create AI response message that will be updated with streaming chunks
+    const aiMessageId = (Date.now() + 1).toString();
+    const aiResponse: Message = {
+      id: aiMessageId,
+      content: '',
+      sender: 'ai',
+      timestamp: new Date()
+    };
 
+    // Add empty AI message
+    setSessions(prev => prev.map(session => 
+      session.id === activeSession 
+        ? { ...session, messages: [...session.messages, aiResponse] }
+        : session
+    ));
+
+    try {
+      // Use real admin team chat streaming API
+      await adminAPI.teamChatStream(
+        userMessage,
+        activeSession, // Use session ID
+        (chunk) => {
+          // Update AI message with streaming chunks
+          setSessions(prev => prev.map(session => 
+            session.id === activeSession 
+              ? { 
+                  ...session, 
+                  messages: session.messages.map(msg => 
+                    msg.id === aiMessageId 
+                      ? { ...msg, content: msg.content + chunk }
+                      : msg
+                  ),
+                  lastMessage: chunk
+                }
+              : session
+          ));
+        }
+      );
+      setIsTyping(false);
+    } catch (error) {
+      console.error('Team chat error:', error);
+      // Update AI message with error
       setSessions(prev => prev.map(session => 
         session.id === activeSession 
-          ? { ...session, messages: [...session.messages, aiResponse], lastMessage: aiResponse.content }
+          ? { 
+              ...session, 
+              messages: session.messages.map(msg => 
+                msg.id === aiMessageId 
+                  ? { ...msg, content: 'Sorry, I encountered an error. Please try again.' }
+                  : msg
+              )
+            }
           : session
       ));
-      
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
-  const generateAIResponse = (userMessage: string): string => {
-    const responses = [
-      "Based on our company policies, here's the recommended approach for this situation...",
-      "I've checked our knowledge base and found relevant procedures. Let me walk you through them:",
-      "That's an excellent question. According to our latest guidelines, you should:",
-      "I can help you with that. Here are the step-by-step instructions:",
-      "This is covered in our training materials. The best practice is to:",
-      "Let me provide you with the most current information on this topic...",
-    ];
-    return responses[Math.floor(Math.random() * responses.length)];
-  };
+  // Note: generateAIResponse function removed - now using real streaming API via adminAPI.teamChatStream()
 
   const createNewSession = () => {
+    // Generate UUID for new session
+    const sessionId = generateConversationId();
+    
     const welcomeMessage: Message = {
       id: 'welcome',
       content: `Hello, ${user.email.split('@')[0]}!
@@ -148,7 +182,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
 I'm SAGE – your smart business assistant at FPT
 
 Ready to assist you with:
-
+      
 Competitor insights & market analysis
 Strategic planning & decision support  
 Business intelligence & data insights
@@ -162,7 +196,7 @@ What can I help you explore today?`,
     };
 
     const newSession: Session = {
-      id: Date.now().toString(),
+      id: sessionId,
       title: 'New Session',
       lastMessage: 'Welcome to SAGE!',
       timestamp: new Date(),
@@ -175,7 +209,7 @@ What can I help you explore today?`,
     setSidebarOpen(false);
   };
 
-  const deleteSession = (sessionId: string, e: React.MouseEvent) => {
+  const deleteSession = (sessionId: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     if (sessions.length <= 1) {
       alert('Cannot delete the last session. At least one session must remain.');
@@ -307,7 +341,7 @@ What can I help you explore today?`,
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={(e) => deleteSession(session.id, e)}
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteSession(session.id, e)}
                           className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6"
                           title="Delete session"
                         >
