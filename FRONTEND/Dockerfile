@@ -22,8 +22,8 @@ FROM nginx:alpine AS production
 # Copy custom nginx configuration if needed
 # COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy built application from builder stage (Vite builds to dist)
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy built application from builder stage (Vite builds to 'build' per vite.config.ts)
+COPY --from=builder /app/build /usr/share/nginx/html
 
 # Copy a simple nginx configuration for SPA
 RUN echo 'server { \

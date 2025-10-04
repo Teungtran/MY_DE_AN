@@ -9,23 +9,11 @@ import structlog
 from structlog.stdlib import BoundLogger
 from structlog.types import EventDict, Processor
 
-from utils.tracing import get_current_trace_ids
 
 # Mkdir logs dir
 os.makedirs("../logs", exist_ok=True)
 
 
-def add_opentelemetry_ids(_, __, event_dict: EventDict) -> EventDict:
-    """
-    Fetches trace_id and span_id from the current OpenTelemetry span
-    and adds them to the log event dictionary.
-    """
-    trace_id, span_id = get_current_trace_ids()
-    if trace_id:
-        event_dict["trace_id"] = trace_id
-    if span_id:
-        event_dict["span_id"] = span_id
-    return event_dict
 
 
 def add_custom_fields(_, __, event_dict: EventDict) -> EventDict:
@@ -70,7 +58,6 @@ def setup_logging(json_logs: bool = False, log_level: str = "INFO"):
     """
 
     shared_processors: list[Processor] = [
-        add_opentelemetry_ids,
         structlog.contextvars.merge_contextvars,
         structlog.processors.TimeStamper(fmt="iso", key="@timestamp"),
         structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S,%f", key="time"),

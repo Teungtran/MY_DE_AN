@@ -13,10 +13,9 @@ from config.base_config import APP_CONFIG
 import asyncio
 import re
 from ..support_funcs.get_id import generate_short_id
-from services.inmemory_store import create_temporary_faiss_store
+from services.inmemory_store import create_temporary_faiss_store,store_recommended_devices, clear_expired_recommendations,get_recommended_devices
 from .send_email import send_order_confirmation,send_order_update,send_order_cancel
 from utils.email import send_email
-from services.setup_caching import store_recommended_devices, clear_expired_recommendations,get_recommended_devices
 from models.database import  Order as OrderModel, Item, SessionLocal
 from utils.logging.logger import get_logger
 from concurrent.futures import ThreadPoolExecutor, as_completed

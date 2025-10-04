@@ -15,7 +15,7 @@ from utils.email import send_email
 import string
 from random import choices
 from sqlalchemy.orm import Session
-from ...utils.db import CustomerInfo, get_db
+from utils.db import CustomerInfo, get_db
 
 auth_config = AuthenConfig()
 SECRET_KEY = auth_config.key

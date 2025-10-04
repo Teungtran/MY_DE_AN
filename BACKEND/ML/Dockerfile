@@ -23,6 +23,7 @@ COPY ./config /app/config
 COPY ./utils /app/utils
 COPY ./main.py /app/main.py
 COPY ./dvc.yaml /app/dvc.yaml
+COPY .env /app/.env
 
 
 FROM python:3.11-slim-bookworm AS runtime
@@ -37,6 +38,7 @@ COPY --from=builder /app/config /app/config
 COPY --from=builder /app/utils /app/utils
 COPY --from=builder /app/main.py /app/main.py
 COPY --from=builder /app/dvc.yaml /app/dvc.yaml
+COPY --from=builder /app/.env /app/.env
 
 # Ensure venv is used by default
 ENV PATH="/app/.venv/bin:$PATH"

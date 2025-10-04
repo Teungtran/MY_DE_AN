@@ -12,20 +12,35 @@ RUN uv sync --no-cache-dir
 
 # Copy app code (includes utils and config subdirectories)
 COPY app/ ./app/
+# Copy environment file
+COPY .env ./
 
 FROM python:3.11-slim-bookworm AS runtime
 
 WORKDIR /app
 
+# Install ODBC libraries
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        unixodbc \
+        unixodbc-dev \
+        gcc \
+        g++ \
+        build-essential \
+        curl && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy venv + app from builder stage
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/app /app/app
+COPY --from=builder /app/.env /app/.env
+
 # Ensure venv is used by default
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app:/app/app"
+
 # Expose FastAPI default port
 EXPOSE 8888
 
 # Run FastAPI using uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8888"]
-

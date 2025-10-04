@@ -13,8 +13,8 @@ logger = get_logger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
-    title="Orchestrator Service",
-    description="API for handling and orchestrating chatbot requests.",
+    title="Authenticator Service",
+    description="API for authen.",
     version="0.1.0",
     docs_url=None,  # Disable /docs endpoint (we'll create a custom one)
     redoc_url=None,  # Disable /redoc endpoint (we'll create a custom one)
