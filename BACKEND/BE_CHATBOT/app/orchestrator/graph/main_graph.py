@@ -8,6 +8,7 @@ from ..appointment_graph.appointment_agent import appointment_sensitive_tools,ap
 from ..rag_tool.tools.policy_tool import RAG_Agent
 from ..web_crawler.tool import url_extraction, url_followup
 from langgraph_dynamodb_checkpoint import DynamoDBSaver
+import os
 
 from utils.logging.logger import get_logger
 
@@ -17,14 +18,27 @@ def initiate_dynamodb_checkpointer() -> DynamoDBSaver:
     """
     Initialize and return a DynamoDBSaver checkpointer.
     """
+    # Get AWS configuration from environment variables
+    aws_region = os.getenv("AWS_REGION", "ap-southeast-2")
+    table_name = os.getenv("TABLE_NAME", "dynamodb-checkpoint")
+    aws_access_key_id = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    
+    if aws_access_key_id and aws_secret_access_key:
+        os.environ["AWS_ACCESS_KEY_ID"] = aws_access_key_id
+        os.environ["AWS_SECRET_ACCESS_KEY"] = aws_secret_access_key
+    os.environ["AWS_DEFAULT_REGION"] = aws_region
+    
     saver = DynamoDBSaver(
-        table_name="dynamodb-checkpoint",
+        table_name=table_name,
         ttl_seconds=86400,
         max_read_request_units=1000,
         max_write_request_units=1000,
     )
+    logger.infor(f"Initialized DynamoDBSaver with table: {table_name} in region: {aws_region}")
     return saver
 saver = initiate_dynamodb_checkpointer()
+
 def setup_agentic_graph():
     """Create the main agent graph with all nodes and edges."""
     builder = StateGraph(AgenticState)

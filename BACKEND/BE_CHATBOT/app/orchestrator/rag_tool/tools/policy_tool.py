@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient
 from config.base_config import APP_CONFIG
 from factories.vector_store_factory import create_policy_store
 from factories.embedding_factory import create_embedding_model
-from .llm import extend_query,translate_language
+from .llm import translate_language
 from .reranking import  most_relevant
 from factories.chat_factory import create_chat_model
 chat_config = APP_CONFIG.chat_model_config
