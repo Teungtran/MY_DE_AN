@@ -1,5 +1,5 @@
 from sqlalchemy import text
-from config.base_config import AuthenConfig
+from app.config.base_config import AuthenConfig
 import json
 import uuid
 import base64
@@ -10,12 +10,12 @@ from typing import List, Optional
 import jwt
 from datetime import datetime, timedelta, timezone
 import bcrypt
-from ..schema.login_schema import RegisterRequest, LoginRequest, AuthResponse, PasswordChangeRequest
-from utils.email import send_email
+from app.schema.login_schema import RegisterRequest, LoginRequest, AuthResponse, PasswordChangeRequest
+from app.utils.email import send_email
 import string
 from random import choices
 from sqlalchemy.orm import Session
-from utils.db import CustomerInfo, get_db
+from app.utils.db import CustomerInfo, get_db
 
 auth_config = AuthenConfig()
 SECRET_KEY = auth_config.key

@@ -1,12 +1,12 @@
 from agno.agent import Agent
 from agno.models.openai import OpenAIChat
-from config.base_config import OpenAIConfig
-from .get_db import db_url
+from app.config.base_config import OpenAIConfig
+from app.workflow.SQLAgent.get_db import db_url
 from agno.tools.sql import SQLTools
 from typing import Callable
 from pydantic import SecretStr
 from textwrap import dedent
-from .prompt import PROMPT
+from app.workflow.SQLAgent.prompt import PROMPT
 chat_config = OpenAIConfig()
 api_key = chat_config.api_key
 if isinstance(api_key, Callable):

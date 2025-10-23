@@ -1,10 +1,10 @@
-from .supports import normalize_type
+from app.orchestrator.shop_graph.support_funcs.supports import normalize_type
 from qdrant_client import QdrantClient
 import time
 from qdrant_client.http import models
 
-from config.base_config import APP_CONFIG
-from utils.logging.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 QDRANT_URL = APP_CONFIG.recommend_config.url

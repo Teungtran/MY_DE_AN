@@ -1,8 +1,8 @@
 from langchain.prompts import PromptTemplate
 from langchain_core.runnables import Runnable
 from langchain_openai import ChatOpenAI
-from config.base_config import APP_CONFIG
-from factories.chat_factory import create_chat_model
+from app.config.base_config import APP_CONFIG
+from app.factories.chat_factory import create_chat_model
 import os
 
 # Load chat config

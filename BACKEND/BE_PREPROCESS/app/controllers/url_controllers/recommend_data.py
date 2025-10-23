@@ -7,12 +7,12 @@ from typing import List
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, status
-from config.base_config import APP_CONFIG
-from schemas.urls import DocumentMetadata, UrlsRequest, UrlsResponse
-from services.data_pipeline.store.recommend_preprocessing_pipeline import RecommendProcessingPipeline
-from services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
-from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
-from utils.logger.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.schemas.urls import DocumentMetadata, UrlsRequest, UrlsResponse
+from app.services.data_pipeline.store.recommend_preprocessing_pipeline import RecommendProcessingPipeline
+from app.services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
+from app.utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
+from app.utils.logger.logger import get_logger
 
 logger = get_logger(__name__)
 recommend_router = APIRouter(prefix="/url")

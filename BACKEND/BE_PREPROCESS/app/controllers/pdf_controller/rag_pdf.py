@@ -7,13 +7,13 @@ from typing import List
 
 from fastapi import APIRouter, Depends, status, UploadFile, File
 
-from config.base_config import APP_CONFIG
-from schemas.document_metadata import DocumentMetadata
-from schemas.pdf import PDFResponse
-from services.data_pipeline.store.pdf_rag_preprocessing_pipeline import PDFRAGPreprocessingPipeline
-from services.storage.s3 import AsyncS3Client, get_s3_client
-from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
-from utils.logger.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.schemas.document_metadata import DocumentMetadata
+from app.schemas.pdf import PDFResponse
+from app.services.data_pipeline.store.pdf_rag_preprocessing_pipeline import PDFRAGPreprocessingPipeline
+from app.services.storage.s3 import AsyncS3Client, get_s3_client
+from app.utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
+from app.utils.logger.logger import get_logger
 
 logger = get_logger(__name__)
 pdf_router = APIRouter(prefix="/pdf")

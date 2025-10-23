@@ -8,8 +8,8 @@ warnings.filterwarnings('ignore')
 from langchain_core.tools import tool
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
-from config.base_config import APP_CONFIG
-from factories.chat_factory import create_chat_model
+from app.config.base_config import APP_CONFIG
+from app.factories.chat_factory import create_chat_model
 import os
 chat_config = APP_CONFIG.chat_model_config
 search_config = APP_CONFIG.search_config

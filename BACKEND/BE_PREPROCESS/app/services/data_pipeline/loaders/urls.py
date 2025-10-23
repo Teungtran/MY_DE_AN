@@ -9,8 +9,8 @@ import re
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 import asyncio
-from config.base_config import APP_CONFIG
-from utils.logger.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.utils.logger.logger import get_logger
 logger = get_logger(__name__)
 DOCINTEL_ENDPOINT = APP_CONFIG.crawl_config.docintel_endpoint
 BASE_URL = APP_CONFIG.crawl_config.base_url

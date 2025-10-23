@@ -1,8 +1,8 @@
 from langchain.prompts.chat import ChatPromptTemplate
-from .prompts import APPOINTMENT_SYSTEM_PROMPT
+from app.prompts import APPOINTMENT_SYSTEM_PROMPT
 from .tools.appointment_tool import book_appointment,track_appointment,cancel_appointment,update_appointment
-from schemas.device_schemas import CompleteOrEscalate
-from utils.logging.logger import get_logger
+from app.schemas.device_schemas import CompleteOrEscalate
+from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 

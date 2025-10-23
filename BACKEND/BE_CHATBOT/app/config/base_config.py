@@ -10,7 +10,7 @@ from langchain_core.utils import from_env, secret_from_env
 from pydantic import BaseModel, Field, SecretStr, model_validator
 from typing_extensions import Self
 
-from utils.utils import get_value_from_dict
+from app.utils.utils import get_value_from_dict
 
 from .config_loader import CONFIG
 

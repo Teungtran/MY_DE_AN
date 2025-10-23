@@ -2,8 +2,8 @@ from agno.agent import Agent
 from agno.models.openai import OpenAIChat
 
 from agno.tools.tavily import TavilyTools
-from config.base_config import OpenAIConfig, APP_CONFIG
-from .prompt import PROMPT
+from app.config.base_config import OpenAIConfig, APP_CONFIG
+from app.workflow.prompt import PROMPT
 from typing import Callable
 from textwrap import dedent
 from pydantic import SecretStr

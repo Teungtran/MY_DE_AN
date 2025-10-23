@@ -10,7 +10,7 @@ from ..web_crawler.tool import url_extraction, url_followup
 from langgraph_dynamodb_checkpoint import DynamoDBSaver
 import os
 
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -35,7 +35,7 @@ def initiate_dynamodb_checkpointer() -> DynamoDBSaver:
         max_read_request_units=1000,
         max_write_request_units=1000,
     )
-    logger.infor(f"Initialized DynamoDBSaver with table: {table_name} in region: {aws_region}")
+    logger.info(f"Initialized DynamoDBSaver with table: {table_name} in region: {aws_region}")
     return saver
 saver = initiate_dynamodb_checkpointer()
 

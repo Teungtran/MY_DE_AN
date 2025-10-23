@@ -4,12 +4,16 @@ from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
 
 Base = declarative_base()
+
 def get_db_uri():
     """Get database URI from config"""
-    server="DESKTOP-LU731VP\\SQLEXPRESS"
-    database="CUSTOMER_SERVICE"
-    return f"mssql+pyodbc://{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
-
+    server = "host.docker.internal"  # points to host SQL Server from Docker
+    database = "CUSTOMER_SERVICE"
+    username = "admin"
+    password = "Lilchong2504@"
+    
+    # Use SQL Server Authentication and trust server certificate
+    return f"mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
 
 # Create engine
 engine = create_engine(get_db_uri())
@@ -24,6 +28,10 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# -------------------------
+# Models
+# -------------------------
 
 class CustomerInfo(Base):
     """Customer information model"""
@@ -42,6 +50,7 @@ class CustomerInfo(Base):
     bookings = relationship("Booking", back_populates="customer")
     tickets = relationship("Ticket", back_populates="customer")
 
+
 class Item(Base):
     """Item/product model"""
     __tablename__ = "Item"
@@ -54,6 +63,7 @@ class Item(Base):
     
     # Relationships
     orders = relationship("Order", back_populates="item")
+
 
 class Order(Base):
     """Order model"""
@@ -81,6 +91,7 @@ class Order(Base):
     customer = relationship("CustomerInfo", back_populates="orders")
     item = relationship("Item", back_populates="orders")
 
+
 class Booking(Base):
     """Booking appointment model"""
     __tablename__ = "Booking"
@@ -101,6 +112,7 @@ class Booking(Base):
     # Relationship
     customer = relationship("CustomerInfo", back_populates="bookings")
 
+
 class Ticket(Base):
     """IT support ticket model"""
     __tablename__ = "ticket"
@@ -119,4 +131,4 @@ class Ticket(Base):
     )
     
     # Relationship
-    customer = relationship("CustomerInfo", back_populates="tickets") 
+    customer = relationship("CustomerInfo", back_populates="tickets")

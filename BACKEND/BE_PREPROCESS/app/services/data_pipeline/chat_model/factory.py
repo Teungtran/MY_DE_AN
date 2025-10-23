@@ -2,7 +2,7 @@ from typing import Union
 
 from langchain_core.language_models import BaseChatModel
 
-from config.base_config import OpenAIConfig
+from app.config.base_config import OpenAIConfig
 
 
 def create_openai_chat_model(chat_config: OpenAIConfig) -> BaseChatModel:

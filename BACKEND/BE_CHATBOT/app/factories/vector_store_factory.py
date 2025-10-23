@@ -4,10 +4,10 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
-from config.base_config import BaseConfiguration, PolicyConfig, RecommendConfig
+from app.config.base_config import BaseConfiguration, PolicyConfig, RecommendConfig
 
-from .embedding_factory import create_embedding_model
-from utils.logging.logger import get_logger
+from app.factories.embedding_factory import create_embedding_model
+from app.utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 

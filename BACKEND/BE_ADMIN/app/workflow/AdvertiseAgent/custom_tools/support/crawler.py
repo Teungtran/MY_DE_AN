@@ -7,7 +7,7 @@ from typing import Optional, Tuple,List
 from markitdown import MarkItDown 
 from bs4 import BeautifulSoup
 import asyncio
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 DOCINTEL_ENDPOINT = "<document_intelligence_endpoint>"
 

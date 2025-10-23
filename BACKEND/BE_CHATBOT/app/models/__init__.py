@@ -1,4 +1,4 @@
-from .database import (
+from app.models.database import (
     Base,
     engine,
     SessionLocal,

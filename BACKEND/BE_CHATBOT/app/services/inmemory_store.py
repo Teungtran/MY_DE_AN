@@ -1,10 +1,10 @@
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-from utils.cleaning import count_words
-from config.base_config import APP_CONFIG
+from app.utils.cleaning import count_words
+from app.config.base_config import APP_CONFIG
 import time
 from typing import Dict, List, Optional, Tuple
-from factories.embedding_factory import create_embedding_model
+from app.factories.embedding_factory import create_embedding_model
 embedding_model = create_embedding_model(APP_CONFIG.embedding_model_config)
 def merge_small_chunks(chunks, min_words=150):
     if not chunks:

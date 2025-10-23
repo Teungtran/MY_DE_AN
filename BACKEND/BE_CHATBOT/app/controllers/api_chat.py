@@ -3,25 +3,25 @@ import asyncio
 from typing_extensions import AsyncGenerator
 import json
 from decimal import Decimal
-from schemas.chunk_message import ChunkMessage
+from app.schemas.chunk_message import ChunkMessage
 from typing import Dict
 from fastapi import APIRouter, HTTPException,Request,Depends
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 from langdetect import detect
-from orchestrator.graph.main_graph import setup_agentic_graph
-from orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
+from app.orchestrator.graph.main_graph import setup_agentic_graph
+from app.orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
 from sse_starlette.sse import EventSourceResponse
-from utils.logging.logger import get_logger
-from utils.token_counter import tiktoken_counter
-from config.base_config import APP_CONFIG
-from services.dynamodb import DynamoHistory
-from services.redis_caching import redis_caching
-from schemas.user_inputs import UserInputs,AuthenticatedUserInputs
-from .login_page import require_user_role
+from app.utils.logging.logger import get_logger
+from app.utils.token_counter import tiktoken_counter
+from app.config.base_config import APP_CONFIG
+from app.services.dynamodb import DynamoHistory
+from app.services.redis_caching import redis_caching
+from app.schemas.user_inputs import UserInputs,AuthenticatedUserInputs
+from app.controllers.login_page import require_user_role
 from pydantic import EmailStr
-from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
+from app.utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 logger = get_logger(__name__)
-from factories.chat_factory import create_chat_model
+from app.factories.chat_factory import create_chat_model
 
 router = APIRouter()
 chat_config = APP_CONFIG.chat_model_config

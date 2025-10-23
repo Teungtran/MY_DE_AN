@@ -3,9 +3,9 @@ from asgi_correlation_id import CorrelationIdMiddleware
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
-from .controller.login_page import auth
-from utils.helpers import LoggingMiddleware
-from utils.logging.logger import get_logger, setup_logging
+from app.controller.login_page import auth
+from app.utils.helpers import LoggingMiddleware
+from app.utils.logging.logger import get_logger, setup_logging
 from typing_extensions import cast
 setup_logging(json_logs=True)
 logger = get_logger(__name__)

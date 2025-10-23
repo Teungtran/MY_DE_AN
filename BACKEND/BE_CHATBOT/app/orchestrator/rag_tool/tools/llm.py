@@ -1,7 +1,7 @@
 from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from config.base_config import APP_CONFIG
-from factories.chat_factory import create_chat_model
+from app.config.base_config import APP_CONFIG
+from app.factories.chat_factory import create_chat_model
 from typing import Union
 import os
 chat_config = APP_CONFIG.chat_model_config

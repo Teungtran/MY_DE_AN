@@ -7,15 +7,15 @@ from typing import List, Optional, cast, Dict, Any
 from langchain.schema import Document
 from fastapi import UploadFile
 
-from config.base_config import APP_CONFIG, BaseConfiguration
-from schemas.document_metadata import DocumentMetadata
-from services.data_pipeline.embeddings import create_embedding_model
-from services.data_pipeline.loaders.pdf import FPTPDFLoader
+from app.config.base_config import APP_CONFIG, BaseConfiguration
+from app.schemas.document_metadata import DocumentMetadata
+from app.services.data_pipeline.embeddings import create_embedding_model
+from app.services.data_pipeline.loaders.pdf import FPTPDFLoader
 
-from services.data_pipeline.splitter import DocumentSplitter
-from services.data_pipeline.vector_store import create_policy_store
-from services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
-from utils.logger.logger import get_logger
+from app.services.data_pipeline.splitter import DocumentSplitter
+from app.services.data_pipeline.vector_store import create_policy_store
+from app.services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
+from app.utils.logger.logger import get_logger
 
 logger = get_logger(__name__)
 

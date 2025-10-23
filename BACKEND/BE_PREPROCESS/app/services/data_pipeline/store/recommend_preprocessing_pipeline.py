@@ -7,13 +7,13 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance
-from config.base_config import APP_CONFIG, BaseConfiguration
-from utils.logger.logger import get_logger
-from services.data_pipeline.loaders.urls import FPTCrawler
-from schemas.urls import FPTData
-from services.data_pipeline.embeddings import create_embedding_model
-from services.data_pipeline.chat_model.factory import create_chat_model
-from services.data_pipeline.vector_store import create_recommend_store
+from app.config.base_config import APP_CONFIG, BaseConfiguration
+from app.utils.logger.logger import get_logger
+from app.services.data_pipeline.loaders.urls import FPTCrawler
+from app.schemas.urls import FPTData
+from app.services.data_pipeline.embeddings import create_embedding_model
+from app.services.data_pipeline.chat_model.factory import create_chat_model
+from app.services.data_pipeline.vector_store import create_recommend_store
 
 logger = get_logger(__name__)
 

@@ -6,10 +6,13 @@ from sqlalchemy import create_engine
 Base = declarative_base()
 def get_db_uri():
     """Get database URI from config"""
-    server="DESKTOP-LU731VP\\SQLEXPRESS"
-    database="CUSTOMER_SERVICE"
-    return f"mssql+pyodbc://{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
-
+    server = "host.docker.internal"  # points to host SQL Server from Docker
+    database = "CUSTOMER_SERVICE"
+    username = "admin"
+    password = "Lilchong2504@"
+    
+    # Use SQL Server Authentication and trust server certificate
+    return f"mssql+pyodbc://{username}:{password}@{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&Encrypt=yes&TrustServerCertificate=yes"
 
 # Create engine
 engine = create_engine(get_db_uri())

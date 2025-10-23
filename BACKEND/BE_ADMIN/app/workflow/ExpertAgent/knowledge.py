@@ -4,7 +4,7 @@ from agno.embedder.openai import OpenAIEmbedder
 from typing import Callable
 from pydantic import SecretStr
 
-from config.base_config import EmbeddingConfig,APP_CONFIG
+from app.config.base_config import EmbeddingConfig,APP_CONFIG
 embedding_config = EmbeddingConfig()
 api_key = embedding_config.api_key
 if isinstance(api_key, Callable):

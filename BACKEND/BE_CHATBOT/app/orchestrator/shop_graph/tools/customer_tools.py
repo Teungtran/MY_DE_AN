@@ -2,22 +2,22 @@ from langchain_core.tools import tool
 from rapidfuzz.fuzz import token_set_ratio 
 from pydantic import EmailStr
 from typing import Optional, Tuple
-from schemas.device_schemas import CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder, DeviceDetailSchema
+from app.schemas.device_schemas import CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder, DeviceDetailSchema
 from ..support_funcs.get_candidates import get_all_points
-from .hybrid_search import get_best_candidate, suggest_similar_candidate
+from app.orchestrator.shop_graph.tools.hybrid_search import get_best_candidate, suggest_similar_candidate
 from ..support_funcs.supports import get_metadata, extract_all_text_from_field,parse_structured_input
 from langchain.retrievers import BM25Retriever
-from services.get_retriever import get_device_retriever
+from app.services.get_retriever import get_device_retriever
 from functools import lru_cache
-from config.base_config import APP_CONFIG
+from app.config.base_config import APP_CONFIG
 import asyncio
 import re
 from ..support_funcs.get_id import generate_short_id
-from services.inmemory_store import create_temporary_faiss_store,store_recommended_devices, clear_expired_recommendations,get_recommended_devices
-from .send_email import send_order_confirmation,send_order_update,send_order_cancel
-from utils.email import send_email
-from models.database import  Order as OrderModel, Item, SessionLocal
-from utils.logging.logger import get_logger
+from app.services.inmemory_store import create_temporary_faiss_store,store_recommended_devices, clear_expired_recommendations,get_recommended_devices
+from app.orchestrator.shop_graph.tools.send_email import send_order_confirmation,send_order_update,send_order_cancel
+from app.utils.email import send_email
+from app.models.database import  Order as OrderModel, Item, SessionLocal
+from app.utils.logging.logger import get_logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Tuple, Set
 from threading import Lock

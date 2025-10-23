@@ -1,12 +1,12 @@
-from config.base_config import APP_CONFIG
+from app.config.base_config import APP_CONFIG
 from ...appointment_graph.tools.get_id import generate_short_id
 from datetime import datetime
 from langchain_core.tools import tool
 from typing import Optional
-from schemas.device_schemas import TrackTicket, CancelTicket, SendTicket, UpdateTicket
-from utils.email import send_email
+from app.schemas.device_schemas import TrackTicket, CancelTicket, SendTicket, UpdateTicket
+from app.utils.email import send_email
 from pydantic import EmailStr
-from models.database import Ticket, SessionLocal
+from app.models.database import Ticket, SessionLocal
 from .send_email import send_ticket_cancel,send_ticket_confirmation,send_ticket_update
 sql_config = APP_CONFIG.sql_config
 

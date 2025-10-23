@@ -6,8 +6,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from pydantic import BaseModel
 
-from config.base_config import APP_CONFIG
-from utils.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

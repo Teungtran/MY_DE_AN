@@ -2,7 +2,7 @@ from agno.models.openai import OpenAIChat
 from agno.memory.v2.db.mongodb import MongoMemoryDb    
 from agno.memory.v2.memory import Memory
 from agno.storage.agent.mongodb import MongoDbAgentStorage
-from config.base_config import APP_CONFIG
+from app.config.base_config import APP_CONFIG
 
 DB_URL = APP_CONFIG.mongo_config.url
 DB_NAME = APP_CONFIG.mongo_config.db_name

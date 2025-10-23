@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 
 
-from controllers import api_chat
+from app.controllers import api_chat
 
 
 

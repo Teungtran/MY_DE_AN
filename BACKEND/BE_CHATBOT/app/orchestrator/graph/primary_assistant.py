@@ -3,12 +3,12 @@ from langchain_core.runnables import RunnableLambda
 from .state import AgenticState
 from langgraph.graph import END
 from langgraph.prebuilt import tools_condition
-from config.base_config import APP_CONFIG
+from app.config.base_config import APP_CONFIG
 from langchain_openai import ChatOpenAI
-from schemas.device_schemas import CompleteOrEscalate
+from app.schemas.device_schemas import CompleteOrEscalate
 from langchain.prompts.chat import ChatPromptTemplate
-from .prompts import MAIN_SYSTEM_PROMPT
-from factories.chat_factory import create_chat_model
+from app.orchestrator.graph.prompts import MAIN_SYSTEM_PROMPT
+from app.factories.chat_factory import create_chat_model
 from ..shop_graph.shop_agent import create_shop_tool, shop_safe_tools
 from ..shop_graph.state import ToShopAssistant
 from ..rag_tool.tools.policy_tool import RAG_Agent
@@ -21,7 +21,7 @@ from ..it_graph.it_agent import create_it_tool, it_safe_tools
 from .tools.support_nodes import inject_user_info
 chat_config = APP_CONFIG.chat_model_config
 import os
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 if not chat_config:

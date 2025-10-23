@@ -2,7 +2,7 @@ from typing import Union
 
 from langchain_core.embeddings import Embeddings
 
-from config.base_config import EmbeddingConfig
+from app.config.base_config import EmbeddingConfig
 
 
 def create_openai_embedding_model(embedding_config: EmbeddingConfig) -> Embeddings:

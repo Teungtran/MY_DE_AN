@@ -9,7 +9,7 @@ import structlog
 from structlog.stdlib import BoundLogger
 from structlog.types import EventDict, Processor
 
-from utils.tracing import get_current_trace_ids
+from app.utils.tracing import get_current_trace_ids
 
 # Mkdir logs dir
 os.makedirs("../logs", exist_ok=True)

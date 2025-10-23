@@ -4,14 +4,14 @@ from typing import List, Optional, cast
 
 from langchain.schema import Document
 
-from config.base_config import APP_CONFIG, BaseConfiguration
-from schemas.urls import DocumentMetadata
-from services.data_pipeline.embeddings import create_embedding_model
-from services.data_pipeline.loaders.urls import FPTCrawler
+from app.config.base_config import APP_CONFIG, BaseConfiguration
+from app.schemas.urls import DocumentMetadata
+from app.services.data_pipeline.embeddings import create_embedding_model
+from app.services.data_pipeline.loaders.urls import FPTCrawler
 
-from services.data_pipeline.splitter import DocumentSplitter
-from services.data_pipeline.vector_store import create_expert_store
-from utils.logger import get_logger
+from app.services.data_pipeline.splitter import DocumentSplitter
+from app.services.data_pipeline.vector_store import create_expert_store
+from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

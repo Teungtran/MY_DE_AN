@@ -7,7 +7,7 @@ from fastapi import status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from utils.tracing import get_current_trace_ids
+from app.utils.tracing import get_current_trace_ids
 
 
 class ServiceName(str, Enum):

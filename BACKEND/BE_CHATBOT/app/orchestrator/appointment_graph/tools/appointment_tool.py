@@ -1,11 +1,11 @@
 from langchain_core.tools import tool
 from typing import Optional
-from schemas.device_schemas import BookAppointment, TrackAppointment, CancelAppointment, UpdateAppointment
-from config.base_config import APP_CONFIG
+from app.schemas.device_schemas import BookAppointment, TrackAppointment, CancelAppointment, UpdateAppointment
+from app.config.base_config import APP_CONFIG
 from .get_id import generate_short_id
-from utils.email import send_email
+from app.utils.email import send_email
 from pydantic import EmailStr
-from models.database import Booking, SessionLocal
+from app.models.database import Booking, SessionLocal
 from .send_email import send_appointment_cancel,send_appointment_confirmation,send_appointment_update
 sql_config = APP_CONFIG.sql_config
 

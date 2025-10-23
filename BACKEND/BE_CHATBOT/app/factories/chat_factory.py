@@ -3,7 +3,7 @@ from typing import Union, Callable
 from langchain_core.language_models import BaseChatModel
 from pydantic import SecretStr
 
-from config.base_config import OpenAIConfig
+from app.config.base_config import OpenAIConfig
 
 
 def create_openai_chat_model(chat_config: OpenAIConfig) -> BaseChatModel:

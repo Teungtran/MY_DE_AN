@@ -1,12 +1,12 @@
 from langchain_openai import ChatOpenAI
 from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
-from config.base_config import OpenAIConfig
+from app.config.base_config import OpenAIConfig
 from typing import Callable
 from textwrap import dedent
 from langchain.agents.agent_types import AgentType
 import pandas as pd
-from .prompt import ANALYSE_PROMPT
-from .parse_file import import_data
+from app.workflow.prompt import ANALYSE_PROMPT
+from app.report_agent.parse_file import import_data
 from pydantic import SecretStr
 chat_config = OpenAIConfig()
 api_key = chat_config.api_key

@@ -1,10 +1,10 @@
 from langchain.prompts.chat import ChatPromptTemplate
-from .prompts import IT_SYSTEM_PROMPT
+from app.prompts import IT_SYSTEM_PROMPT
 from textwrap import dedent
 from .tools.message import track_ticket,send_ticket,cancel_ticket,update_ticket
-from schemas.device_schemas import CompleteOrEscalate
+from app.schemas.device_schemas import CompleteOrEscalate
 from .tools.it_support import it_support_agent
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 

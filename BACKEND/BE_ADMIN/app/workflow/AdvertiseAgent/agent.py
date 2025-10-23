@@ -5,8 +5,8 @@ from agno.models.openai import OpenAIChat
 from typing import Callable
 from pydantic import SecretStr
 from textwrap import dedent
-from config.base_config import OpenAIConfig
-from .prompt import ADVERTISE_PROMPT,ROLE,GOAL
+from app.config.base_config import OpenAIConfig
+from app.workflow.prompt import ADVERTISE_PROMPT,ROLE,GOAL
 
 chat_config = OpenAIConfig()
 api_key = chat_config.api_key

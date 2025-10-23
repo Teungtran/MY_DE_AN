@@ -8,15 +8,15 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from opentelemetry import context
 from opentelemetry.trace import SpanKind, StatusCode, Tracer
 import structlog
-from controllers.url_controllers.rag_url import url_router as rag_url_router
-from controllers.pdf_controller.rag_pdf import pdf_router as rag_pdf_router
-from controllers.url_controllers.expert_url import url_router as expert_url_router
-from controllers.pdf_controller.expert_pdf import pdf_router as expert_pdf_router
-from controllers.url_controllers.recommend_data import recommend_router
-from utils.helpers import LoggingMiddleware
-from utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
-from utils.logger import get_logger, setup_logging
-from utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
+from app.controllers.url_controllers.rag_url import url_router as rag_url_router
+from app.controllers.pdf_controller.rag_pdf import pdf_router as rag_pdf_router
+from app.controllers.url_controllers.expert_url import url_router as expert_url_router
+from app.controllers.pdf_controller.expert_pdf import pdf_router as expert_pdf_router
+from app.controllers.url_controllers.recommend_data import recommend_router
+from app.utils.helpers import LoggingMiddleware
+from app.utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
+from app.utils.logger import get_logger, setup_logging
+from app.utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
 
 setup_logging(json_logs=True)
 logger = get_logger(__name__)

@@ -10,7 +10,7 @@ from langchain.text_splitter import (
 from langchain_core.embeddings import Embeddings
 from langchain_experimental.text_splitter import SemanticChunker
 
-from .custom_splitter import TableSplitter
+from app.services.data_pipeline.splitter.custom_splitter import TableSplitter
 
 
 class DocumentSplitter:

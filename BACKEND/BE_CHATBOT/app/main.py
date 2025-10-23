@@ -8,10 +8,10 @@ from opentelemetry import context
 from opentelemetry.trace import SpanKind, StatusCode, Tracer
 import structlog
 
-from controllers import api_chat
-from utils.helpers import LoggingMiddleware
-from utils.logging.logger import get_logger, setup_logging
-from utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
+from app.controllers import api_chat
+from app.utils.helpers import LoggingMiddleware
+from app.utils.logging.logger import get_logger, setup_logging
+from app.utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
 
 setup_logging(json_logs=True)
 logger = get_logger(__name__)

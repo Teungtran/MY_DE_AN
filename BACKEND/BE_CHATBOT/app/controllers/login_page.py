@@ -2,7 +2,7 @@ import jwt
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import EmailStr
-from config.base_config import APP_CONFIG
+from app.config.base_config import APP_CONFIG
 
 security = HTTPBearer()
 SECRET_KEY = APP_CONFIG.auth_config.key

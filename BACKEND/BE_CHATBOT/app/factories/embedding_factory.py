@@ -3,7 +3,7 @@ from typing import Union, Callable
 from langchain_core.embeddings import Embeddings
 from pydantic import SecretStr
 
-from config.base_config import EmbeddingConfig, OpenAIConfig
+from app.config.base_config import EmbeddingConfig, OpenAIConfig
 
 
 def create_openai_embedding_model(embedding_config: Union[EmbeddingConfig, OpenAIConfig]) -> Embeddings:

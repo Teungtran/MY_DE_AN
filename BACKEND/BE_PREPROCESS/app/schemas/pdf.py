@@ -3,7 +3,7 @@ from typing import Dict, List, Optional,Literal, Annotated
 from pydantic import BaseModel, Field
 from pydantic import BaseModel, ConfigDict
 from typing import Annotated, List,Literal
-from schemas.document_metadata import DocumentMetadata
+from app.schemas.document_metadata import DocumentMetadata
 
 class PDFRequest(BaseModel):
     pdfs: List[DocumentMetadata]

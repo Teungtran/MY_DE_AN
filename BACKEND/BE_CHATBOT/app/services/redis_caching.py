@@ -1,6 +1,6 @@
 import redis
-from config.base_config import APP_CONFIG
-from utils.logging.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.utils.logging.logger import get_logger
 from typing import Optional
 
 logger = get_logger(__name__)

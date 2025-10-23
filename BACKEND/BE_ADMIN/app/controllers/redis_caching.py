@@ -1,6 +1,6 @@
 import redis
-from config.base_config import APP_CONFIG
-from utils.logging.logger import get_logger
+from app.config.base_config import APP_CONFIG
+from app.utils.logging.logger import get_logger
 from typing import Optional
 
 logger = get_logger(__name__)
@@ -30,7 +30,7 @@ def redis_caching() -> Optional[redis.Redis]:
         # Create connection pool with proper settings
         pool = redis.ConnectionPool(
             host=REDIS_HOST,
-            port=15632,
+            port=16594,
             password=REDIS_PASS,
             max_connections=50,
             decode_responses=True,

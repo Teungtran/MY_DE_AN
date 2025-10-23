@@ -2,12 +2,12 @@ import datetime
 import time
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Callable
-from .snowflake_id import SnowflakeGenerator
+from app.services.snowflake_id import SnowflakeGenerator
 import boto3
 from boto3.dynamodb.conditions import Key
 from boto3.dynamodb.types import DYNAMODB_CONTEXT
 
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 
 logger = get_logger(__name__)
 class DynamoHistory:

@@ -1,10 +1,10 @@
 from langchain.prompts.chat import ChatPromptTemplate
-from .prompts import SHOP_SYSTEM_PROMPT
+from app.prompts import SHOP_SYSTEM_PROMPT
 import datetime
 from textwrap import dedent
 from .tools.customer_tools import recommend_system, get_device_details, order_purchase, cancel_order, track_order,update_order
-from schemas.device_schemas import CompleteOrEscalate
-from utils.logging.logger import get_logger
+from app.schemas.device_schemas import CompleteOrEscalate
+from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 
 

@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # API Gateway
   nginx:
@@ -32,7 +30,7 @@ services:
       - ./BACKEND/AUTH/config:/code/config
       - ./BACKEND/AUTH/logs:/code/logs
     environment:
-      - PYTHONPATH=/code
+      - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
@@ -50,7 +48,7 @@ services:
       - ./BACKEND/BE_ADMIN/config:/code/config
       - ./BACKEND/BE_ADMIN/logs:/code/logs
     environment:
-      - PYTHONPATH=/code
+      - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
@@ -68,7 +66,7 @@ services:
       - ./BACKEND/BE_CHATBOT/config:/code/config
       - ./BACKEND/BE_CHATBOT/logs:/code/logs
     environment:
-      - PYTHONPATH=/code
+      - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
     networks:
       - de_an_network
@@ -86,7 +84,7 @@ services:
       - ./BACKEND/BE_PREPROCESS/config:/code/config
       - ./BACKEND/BE_PREPROCESS/logs:/code/logs
     environment:
-      - PYTHONPATH=/code
+      - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
     networks:
       - de_an_network

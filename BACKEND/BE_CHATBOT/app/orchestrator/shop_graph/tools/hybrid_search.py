@@ -2,7 +2,7 @@ from typing_extensions import List, Dict, Optional, Set, Tuple
 from ..support_funcs.supports import get_metadata,extract_all_text_from_field
 from rapidfuzz.fuzz import token_set_ratio
 from sklearn.feature_extraction.text import TfidfVectorizer
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 from sklearn.neighbors import NearestNeighbors
 
 logger = get_logger(__name__)
