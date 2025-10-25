@@ -1,5 +1,10 @@
 from langchain_community.utilities import SQLDatabase
+from app.config.base_config import SQLConfig
+
 def connect_to_db(server: str, database: str) -> SQLDatabase:
-    """Connect to SQL Server database"""
-    db_uri = f"mssql+pyodbc://{server}/{database}?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes"
-    return SQLDatabase.from_uri(db_uri)
+    """Connect to PostgreSQL database"""
+    config = SQLConfig()
+    
+    DATABASE_URL = f"postgresql+psycopg2://{config.user}:{config.password}@{config.host}:{config.port}/{config.database}?sslmode=require"
+    
+    return SQLDatabase.from_uri(DATABASE_URL)

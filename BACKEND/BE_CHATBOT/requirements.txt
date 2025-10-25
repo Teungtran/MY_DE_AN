@@ -43,6 +43,7 @@ pypdf
 pymongo
 redis
 SQLAlchemy
+psycopg2-binary
 qdrant-client
 
 

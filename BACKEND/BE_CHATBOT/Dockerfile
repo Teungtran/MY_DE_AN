@@ -20,15 +20,13 @@ COPY .env /app/.env
 FROM python:3.11-slim-bookworm AS runtime
 
 WORKDIR /app
-# Install ODBC libraries
+# Install PostgreSQL libraries
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        unixodbc \
-        unixodbc-dev \
+        libpq-dev \
         gcc \
         g++ \
-        build-essential \
-        curl && \
+        build-essential && \
     rm -rf /var/lib/apt/lists/*
 # Copy venv + app from builder stage
 COPY --from=builder /app/.venv /app/.venv

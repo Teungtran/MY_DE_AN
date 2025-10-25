@@ -8,6 +8,7 @@ passlib[bcrypt]
 # Database
 pymongo
 SQLAlchemy
+psycopg2-binary
 redis
 
 # Utilities

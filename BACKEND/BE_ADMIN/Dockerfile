@@ -19,24 +19,7 @@ COPY .env /app/.env
 FROM python:3.11-slim-bookworm AS runtime
 
 WORKDIR /app
-# Install system dependencies and Microsoft SQL Server ODBC driver
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl \
-        gnupg2 \
-        software-properties-common && \
-    # Add Microsoft repository
-    curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - && \
-    curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list && \
-    apt-get update && \
-    # Install Microsoft SQL Server ODBC driver (this will install unixodbc as dependency)
-    ACCEPT_EULA=Y apt-get install -y msodbcsql17 && \
-    # Install additional build tools if needed
-    apt-get install -y --no-install-recommends \
-        gcc \
-        g++ \
-        build-essential && \
-    rm -rf /var/lib/apt/lists/*
+
 # Copy venv + app from builder stage
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/app /app/app

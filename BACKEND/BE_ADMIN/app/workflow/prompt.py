@@ -22,15 +22,8 @@ TEAM_PROMPT =    """
 
         CAUTION (READ CAREFULLY BEFORE DELEGATING):
         - Do NOT confuse `tavily_agent` with `expert_agent`
-        - Always PRESERVE all links and all SQL Query from any agent responses
 
         **Agent Delegation Guide**
-
-        • `sql_agent` ➜ Handles queries about:
-            - Customer data
-            - Order data
-            - Store data
-            - Any other structured database-related questions
 
         • `tavily_agent` ➜ Handles queries about:
             - Information on OTHER retail chains (not FPT Shop)

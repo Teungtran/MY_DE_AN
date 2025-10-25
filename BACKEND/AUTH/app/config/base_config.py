@@ -15,8 +15,11 @@ def ensure_env_loaded():
         _env_loaded = True
 
 class SQLConfig(BaseModel):
-    server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_SERVER")())[1])
-    database: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SQL_DATABASE")())[1])
+    host: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POSTGRES_HOST", default="db.qwuepayeumnefnspnjmg.supabase.co")())[1])
+    port: int = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POSTGRES_PORT", default="5432")())[1])
+    database: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POSTGRES_DB", default="postgres")())[1])
+    user: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POSTGRES_USER", default="postgres")())[1])
+    password: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("POSTGRES_PASSWORD", default="lilchong2504")())[1])
 
 class EmailConfig(BaseModel):
     server: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("SMTP_SERVER")())[1])
