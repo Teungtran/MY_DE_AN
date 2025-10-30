@@ -184,3 +184,10 @@ pythonhosted.crt
 assets/sample_data/
 
 BACKEND/DATA/
+
+# SQLite databases
+*.db
+*.db-journal
+BACKEND/shared_data/
+BACKEND/AUTH/auth.db
+BACKEND/BE_CHATBOT/auth.db

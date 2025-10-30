@@ -20,14 +20,8 @@ COPY .env /app/.env
 FROM python:3.11-slim-bookworm AS runtime
 
 WORKDIR /app
-# Install PostgreSQL libraries
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-        libpq-dev \
-        gcc \
-        g++ \
-        build-essential && \
-    rm -rf /var/lib/apt/lists/*
+# Create data directory for SQLite database
+RUN mkdir -p /app/data
 # Copy venv + app from builder stage
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/app /app/app
@@ -36,6 +30,8 @@ COPY --from=builder /app/.env /app/.env
 # Ensure venv is used by default
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app:/app/app"
+# Set SQLite database path to shared volume
+ENV SQLITE_DB_PATH="/app/data/auth.db"
 # Expose FastAPI default port
 EXPOSE 8888
 

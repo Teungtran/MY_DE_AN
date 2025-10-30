@@ -28,6 +28,8 @@ services:
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
+    volumes:
+      - sqlite_data:/app/data  # Shared SQLite volume
     networks:
       - de_an_network
     restart: unless-stopped
@@ -56,6 +58,8 @@ services:
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"
+    volumes:
+      - sqlite_data:/app/data  # Shared SQLite volume
     networks:
       - de_an_network
     restart: unless-stopped
@@ -91,3 +95,7 @@ services:
 networks:
   de_an_network:
     driver: bridge
+
+volumes:
+  sqlite_data:
+    driver: local

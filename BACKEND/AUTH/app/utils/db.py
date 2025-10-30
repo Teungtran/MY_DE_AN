@@ -2,17 +2,33 @@ from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Text, DateT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-from app.config.base_config import SQLConfig
 
 Base = declarative_base()
 
 def get_db_uri():
-    config = SQLConfig()
-    DATABASE_URL = f"postgresql+psycopg2://{config.user}:{config.password}@{config.host}:{config.port}/{config.database}?sslmode=require"
-    return DATABASE_URL
+    # Use a local SQLite database file
+    # In Docker, this will be on a shared volume at /app/data
+    # Locally, use a shared path in BACKEND directory
+    import os
+    from pathlib import Path
+    
+    # Get the database path from environment variable
+    db_path = os.getenv("SQLITE_DB_PATH")
+    
+    if db_path:
+        # Use environment variable (Docker or custom path)
+        return f"sqlite:///{db_path}"
+    else:
+        # Default: Use shared location in BACKEND directory for local development
+        backend_dir = Path(__file__).parent.parent.parent.parent  # Navigate to BACKEND/
+        shared_db = backend_dir / "shared_data" / "auth.db"
+        shared_db.parent.mkdir(parents=True, exist_ok=True)  # Create directory if needed
+        return f"sqlite:///{shared_db}"
 
-engine = create_engine(get_db_uri(), poolclass=NullPool)
+engine = create_engine(
+    get_db_uri(),
+    connect_args={"check_same_thread": False},  # Needed for SQLite with threaded apps like FastAPI/Uvicorn
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -35,8 +51,8 @@ class CustomerInfo(Base):
     age = Column(Integer)
     customer_phone = Column(String(20), unique=True)
     password = Column(String(255), nullable=False)
-    email = Column(String(100))
-    role = Column(String(50))
+    email = Column(Text, nullable=False)
+    role = Column(Text, nullable=False)
     # Relationships
     orders = relationship("Order", back_populates="customer")
     bookings = relationship("Booking", back_populates="customer")
@@ -127,3 +143,7 @@ class Ticket(Base):
     )
 
     customer = relationship("CustomerInfo", back_populates="tickets")
+
+    
+# Ensure tables are created when the module is imported
+Base.metadata.create_all(bind=engine)

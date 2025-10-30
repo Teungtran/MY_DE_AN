@@ -1,23 +1,39 @@
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Text, DateTime, Numeric, Enum
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Text, DateTime, Numeric, CheckConstraint
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool
-from app.config.base_config import SQLConfig
 import enum
 
 Base = declarative_base()
 
 # -------------------------
-# Database connection
+# Database connection (SQLite)
 # -------------------------
 
 def get_db_uri():
-    config = SQLConfig()
-    DATABASE_URL = f"postgresql+psycopg2://{config.user}:{config.password}@{config.host}:{config.port}/{config.database}?sslmode=require"
-    return DATABASE_URL
+    # Use a local SQLite database file shared within BE_CHATBOT service
+    # In Docker, this will be on a shared volume at /app/data
+    # Locally, use a shared path in BACKEND directory
+    import os
+    from pathlib import Path
+    
+    # Get the database path from environment variable
+    db_path = os.getenv("SQLITE_DB_PATH")
+    
+    if db_path:
+        # Use environment variable (Docker or custom path)
+        return f"sqlite:///{db_path}"
+    else:
+        # Default: Use shared location in BACKEND directory for local development
+        backend_dir = Path(__file__).parent.parent.parent.parent  # Navigate to BACKEND/
+        shared_db = backend_dir / "shared_data" / "auth.db"
+        shared_db.parent.mkdir(parents=True, exist_ok=True)  # Create directory if needed
+        return f"sqlite:///{shared_db}"
 
-engine = create_engine(get_db_uri(), poolclass=NullPool)
+engine = create_engine(
+    get_db_uri(),
+    connect_args={"check_same_thread": False},
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -63,8 +79,8 @@ class CustomerInfo(Base):
     age = Column(Integer)
     customer_phone = Column(String(20), unique=True)
     password = Column(String(255), nullable=False)
-    email = Column(String(100))
-    role = Column(String(50))
+    email = Column(Text, nullable=False)
+    role = Column(Text, nullable=False)
     
     # Relationships
     orders = relationship("Order", back_populates="customer")
@@ -100,7 +116,13 @@ class Order(Base):
     address = Column(String(255))
     customer_name = Column(String(100))
     customer_phone = Column(String(20))
-    status = Column(Enum(OrderStatusEnum))
+    status = Column(String(20))
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('Processing', 'Shipped', 'Canceled', 'Returned', 'Received')",
+            name="check_order_status",
+        ),
+    )
     user_id = Column(String(50), ForeignKey("customer_info.user_id"))
     
     # Relationships
@@ -118,7 +140,13 @@ class Booking(Base):
     reason = Column(String(255), nullable=False)
     time = Column(DateTime, nullable=False)
     note = Column(String(255))
-    status = Column(Enum(BookingStatusEnum))
+    status = Column(String(20))
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('Scheduled', 'Canceled', 'Finished')",
+            name="check_booking_status",
+        ),
+    )
     user_id = Column(String(50), ForeignKey("customer_info.user_id"))
     
     # Relationship
@@ -135,8 +163,17 @@ class Ticket(Base):
     customer_name = Column(String(100))
     customer_phone = Column(String(20))
     time = Column(DateTime)
-    status = Column(Enum(TicketStatusEnum))
+    status = Column(String(20))
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('Pending', 'Resolving', 'Canceled', 'Finished')",
+            name="check_ticket_status",
+        ),
+    )
     user_id = Column(String(50), ForeignKey("customer_info.user_id"))
     
     # Relationship
     customer = relationship("CustomerInfo", back_populates="tickets")
+
+# Ensure tables exist on startup
+Base.metadata.create_all(bind=engine)
