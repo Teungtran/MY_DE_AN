@@ -123,9 +123,9 @@ export function LandingPage() {
                 whileTap={{ scale: 0.95 }}
               >
                 <Link to="/login">
-                  <Button className="bg-gray-800 text-white hover:bg-gray-900 px-6 py-3 rounded-md inline-flex items-center space-x-2 transition-all duration-200 transform hover:scale-105 hover:shadow-lg group">
-                    <span>Get Started</span>
-                    <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
+                  <Button className="bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 px-8 py-4 rounded-xl inline-flex items-center space-x-2 transition-all duration-300 transform hover:scale-105 hover:shadow-2xl shadow-lg group">
+                    <span className="text-lg font-semibold">Get Started</span>
+                    <ArrowRight className="h-5 w-5 group-hover:translate-x-2 transition-transform duration-300" />
                   </Button>
                 </Link>
               </motion.div>
@@ -175,11 +175,11 @@ export function LandingPage() {
               viewport={{ once: true }}
               whileHover={{ scale: 1.02, y: -5 }}
             >
-              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
+              <Card className="p-8 border-2 border-gray-100 hover:border-red-200 rounded-2xl shadow-md hover:shadow-2xl hover:bg-gradient-to-br hover:from-white hover:to-red-50 transition-all duration-300 h-full group">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <MessageCircle className="h-6 w-6 text-gray-700" />
+                  <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <MessageCircle className="h-7 w-7 text-white" />
                   </div>
                   <div className="flex-1">
                     <div className="text-sm text-gray-500 mb-1">Multi-Agentic Chatbot</div>
@@ -227,11 +227,11 @@ export function LandingPage() {
               viewport={{ once: true }}
               whileHover={{ scale: 1.02, y: -5 }}
             >
-              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
+              <Card className="p-8 border-2 border-gray-100 hover:border-blue-200 rounded-2xl shadow-md hover:shadow-2xl hover:bg-gradient-to-br hover:from-white hover:to-blue-50 transition-all duration-300 h-full group">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Users className="h-6 w-6 text-gray-700" />
+                  <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <Users className="h-7 w-7 text-white" />
                   </div>
                   <div className="flex-1">
                     <div className="text-sm text-gray-500 mb-1">Supervisor Multi-Agent</div>
@@ -279,11 +279,11 @@ export function LandingPage() {
               viewport={{ once: true }}
               whileHover={{ scale: 1.02, y: -5 }}
             >
-              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
+              <Card className="p-8 border-2 border-gray-100 hover:border-purple-200 rounded-2xl shadow-md hover:shadow-2xl hover:bg-gradient-to-br hover:from-white hover:to-purple-50 transition-all duration-300 h-full group">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Settings className="h-6 w-6 text-gray-700" />
+                  <div className="w-14 h-14 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <Settings className="h-7 w-7 text-white" />
                   </div>
                   <div className="flex-1">
                     <div className="text-sm text-gray-500 mb-1">MLOps System</div>
@@ -331,11 +331,11 @@ export function LandingPage() {
               viewport={{ once: true }}
               whileHover={{ scale: 1.02, y: -5 }}
             >
-              <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
+              <Card className="p-8 border-2 border-gray-100 hover:border-green-200 rounded-2xl shadow-md hover:shadow-2xl hover:bg-gradient-to-br hover:from-white hover:to-green-50 transition-all duration-300 h-full group">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <BarChart3 className="h-6 w-6 text-gray-700" />
+                  <div className="w-14 h-14 bg-gradient-to-br from-green-500 to-green-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <BarChart3 className="h-7 w-7 text-white" />
                   </div>
                   <div className="flex-1">
                     <div className="text-sm text-gray-500 mb-1">Report Analysis</div>
@@ -385,11 +385,11 @@ export function LandingPage() {
             viewport={{ once: true }}
             whileHover={{ scale: 1.02, y: -5 }}
           >
-            <Card className="p-8 border border-gray-200 hover:shadow-lg hover:bg-gray-50 transition-all duration-200 h-full">
+            <Card className="p-8 border-2 border-gray-100 hover:border-orange-200 rounded-2xl shadow-md hover:shadow-2xl hover:bg-gradient-to-br hover:from-white hover:to-orange-50 transition-all duration-300 h-full group">
               <CardContent className="p-0">
                 <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Database className="h-6 w-6 text-gray-700" />
+                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-300">
+                    <Database className="h-7 w-7 text-white" />
                   </div>
                   <div className="flex-1">
                     <div className="text-sm text-gray-500 mb-1">Data Management</div>
@@ -461,7 +461,7 @@ export function LandingPage() {
 
           <div className="max-w-4xl mx-auto">
             <Accordion type="single" collapsible className="space-y-4">
-              <AccordionItem value="item-1" className="bg-white border border-gray-200 rounded-lg px-6 hover:bg-gray-50 transition-colors duration-200">
+              <AccordionItem value="item-1" className="bg-white border-2 border-gray-100 rounded-2xl px-6 hover:border-red-200 hover:shadow-lg transition-all duration-300">
                 <AccordionTrigger className="text-left">
                   What is SAGE AI and how does it work?
                 </AccordionTrigger>
@@ -470,7 +470,7 @@ export function LandingPage() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-2" className="bg-white border border-gray-200 rounded-lg px-6 hover:bg-gray-50 transition-colors duration-200">
+              <AccordionItem value="item-2" className="bg-white border-2 border-gray-100 rounded-2xl px-6 hover:border-blue-200 hover:shadow-lg transition-all duration-300">
                 <AccordionTrigger className="text-left">
                   What are the different user roles and access levels?
                 </AccordionTrigger>
@@ -479,7 +479,7 @@ export function LandingPage() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-3" className="bg-white border border-gray-200 rounded-lg px-6 hover:bg-gray-50 transition-colors duration-200">
+              <AccordionItem value="item-3" className="bg-white border-2 border-gray-100 rounded-2xl px-6 hover:border-purple-200 hover:shadow-lg transition-all duration-300">
                 <AccordionTrigger className="text-left">
                   How does the AI Sales Assistant help customers?
                 </AccordionTrigger>
@@ -488,7 +488,7 @@ export function LandingPage() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-4" className="bg-white border border-gray-200 rounded-lg px-6 hover:bg-gray-50 transition-colors duration-200">
+              <AccordionItem value="item-4" className="bg-white border-2 border-gray-100 rounded-2xl px-6 hover:border-green-200 hover:shadow-lg transition-all duration-300">
                 <AccordionTrigger className="text-left">
                   What machine learning capabilities does SAGE offer?
                 </AccordionTrigger>
@@ -497,7 +497,7 @@ export function LandingPage() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-5" className="bg-white border border-gray-200 rounded-lg px-6 hover:bg-gray-50 transition-colors duration-200">
+              <AccordionItem value="item-5" className="bg-white border-2 border-gray-100 rounded-2xl px-6 hover:border-orange-200 hover:shadow-lg transition-all duration-300">
                 <AccordionTrigger className="text-left">
                   How does the Knowledge Base System work?
                 </AccordionTrigger>
@@ -506,7 +506,7 @@ export function LandingPage() {
                 </AccordionContent>
               </AccordionItem>
 
-              <AccordionItem value="item-6" className="bg-white border border-gray-200 rounded-lg px-6 hover:bg-gray-50 transition-colors duration-200">
+              <AccordionItem value="item-6" className="bg-white border-2 border-gray-100 rounded-2xl px-6 hover:border-indigo-200 hover:shadow-lg transition-all duration-300">
                 <AccordionTrigger className="text-left">
                   Is SAGE AI secure and compliant with data protection standards?
                 </AccordionTrigger>
@@ -555,15 +555,15 @@ export function LandingPage() {
           >
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Link to="/login">
-                <Button className="bg-gray-800 text-white hover:bg-gray-900 px-8 py-3 rounded-md inline-flex items-center space-x-2 transition-all duration-200 transform hover:scale-105 hover:shadow-lg group">
+                <Button className="bg-gradient-to-r from-red-600 to-red-700 text-white hover:from-red-700 hover:to-red-800 px-10 py-4 rounded-xl inline-flex items-center space-x-2 transition-all duration-300 transform hover:shadow-2xl shadow-lg group text-lg font-semibold">
                   <span>Get Started</span>
-                  <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform duration-200" />
+                  <ArrowRight className="h-5 w-5 group-hover:translate-x-2 transition-transform duration-300" />
                 </Button>
               </Link>
             </motion.div>
             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Link to="/login">
-                <Button variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100 px-8 py-3 rounded-md transition-all duration-200 transform hover:scale-105 hover:shadow-lg">
+                <Button variant="outline" className="border-2 border-gray-300 text-gray-700 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 hover:border-gray-400 px-10 py-4 rounded-xl transition-all duration-300 transform hover:shadow-xl shadow-md text-lg font-semibold">
                   Schedule Demo
                 </Button>
               </Link>

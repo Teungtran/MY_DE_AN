@@ -44,25 +44,11 @@ interface ReportAgentPageProps {
 
 export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
   const location = useLocation();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      content: 'Hello! I\'ve analyzed the uploaded sales report. Here are the key insights I found:\n\n• Total revenue increased by 15% compared to last quarter\n• Top performing product category: Electronics (32% of sales)\n• Customer acquisition rate improved by 8%\n• Peak sales hours: 2-4 PM on weekdays\n\nWould you like me to dive deeper into any specific metric?',
-      sender: 'ai',
-      timestamp: new Date(Date.now() - 1000 * 60 * 5)
-    }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [reports, setReports] = useState<Report[]>([
-    {
-      id: '1',
-      name: 'Q4_Sales_Report.csv',
-      uploadedAt: new Date(Date.now() - 1000 * 60 * 30),
-      status: 'ready'
-    }
-  ]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [uploadedData, setUploadedData] = useState<UploadResponse | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);

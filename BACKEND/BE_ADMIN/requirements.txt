@@ -53,3 +53,6 @@ opentelemetry-sdk
 langdetect
 sse-starlette
 typing-extensions
+
+# Authentication
+PyJWT

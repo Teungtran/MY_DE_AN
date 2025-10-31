@@ -19,7 +19,7 @@ url_router = APIRouter(prefix="/url")
 
 _BUCKET_NAME = APP_CONFIG.s3config.bucket_name
 if _BUCKET_NAME is None:
-    _BUCKET_NAME = "dataversion0205"  # Fallback to the value in test.py
+    _BUCKET_NAME = "dataversion0204"  # Fallback to the value in test.py
 BUCKET_NAME: str = _BUCKET_NAME
 
 

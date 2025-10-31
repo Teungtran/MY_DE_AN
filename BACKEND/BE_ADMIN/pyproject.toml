@@ -51,4 +51,5 @@ dependencies = [
     "tavily-python>=0.7.12",
     "pyodbc>=5.2.0",
     "jwt>=1.4.0",
+    "pyjwt>=2.10.1",
 ]

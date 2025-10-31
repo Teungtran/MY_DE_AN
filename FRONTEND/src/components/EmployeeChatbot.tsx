@@ -42,33 +42,9 @@ interface EmployeeChatbotProps {
 
 export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const location = useLocation();
-  const [sessions, setSessions] = useState<Session[]>([
-    {
-      id: '1',
-      title: 'Welcome to SAGE',
-      lastMessage: 'What can I help you explore today?',
-      timestamp: new Date(Date.now() - 1000 * 60 * 15),
-      status: 'active',
-      participants: [user.email.split('@')[0]],
-      messages: [
-        {
-          id: '1',
-          content: 'I need guidance on handling warranty disputes from customers.',
-          sender: 'user',
-          senderName: 'John D.',
-          timestamp: new Date(Date.now() - 1000 * 60 * 16)
-        },
-        {
-          id: '2',
-          content: 'For warranty disputes, please follow these steps:\\n\\n1. Verify the purchase date and warranty period\\n2. Check if the issue is covered under warranty terms\\n3. Request photos or documentation of the problem\\n4. If valid, initiate the replacement/repair process\\n\\nWould you like me to elaborate on any of these steps?',
-          sender: 'ai',
-          timestamp: new Date(Date.now() - 1000 * 60 * 15)
-        }
-      ]
-    }
-  ]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   
-  const [activeSession, setActiveSession] = useState<string>('1');
+  const [activeSession, setActiveSession] = useState<string>('');
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -342,7 +318,7 @@ What can I help you explore today?`,
                           variant="ghost"
                           size="sm"
                           onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteSession(session.id, e)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6"
+                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 flex-shrink-0"
                           title="Delete session"
                         >
                           <Trash2 className="h-3 w-3" />

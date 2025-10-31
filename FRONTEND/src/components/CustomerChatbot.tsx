@@ -37,156 +37,9 @@ interface CustomerChatbotProps {
 }
 
 export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
-  const [conversations, setConversations] = useState<Conversation[]>([
-    {
-      id: '1',
-      title: 'iPhone 13 Features & Recommendations',
-      lastMessage: 'Would you like more details on any specific phone, or are you ready to place an order?',
-      timestamp: new Date(Date.now() - 1000 * 60 * 30),
-      messages: [
-        {
-          id: 'welcome',
-          content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart shopping assistant at FPT Shop
-
-I'm here to help you:
-
-Find the right products that fit your needs
-Recommend the best deals & promotions  
-Assist with order processing and tracking
-
-Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
-
-What can I help you with today?`,
-          sender: 'ai',
-          timestamp: new Date(Date.now() - 1000 * 60 * 35)
-        },
-        {
-          id: 'user1',
-          content: 'Can you tell me more about the iPhone 13 features?',
-          sender: 'user',
-          timestamp: new Date(Date.now() - 1000 * 60 * 30)
-        },
-        {
-          id: 'ai1',
-          content: `Here are the detailed features of the **iPhone 13**:
-
-### Design & Materials
-- **Luxurious Design:** The iPhone 13 features a flat design with a premium aluminum frame and super tough Ceramic Shield glass, ensuring both style and durability.
-- **Water Resistance:** Rated IP68, it offers protection against water damage during everyday use.
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   
-![iPhone 13 Design](https://cdn2.fptshop.com.vn/unsafe/564x0/filters:quality(80)/Uploads/images/2015/0511/iphone-13-new-2.JPG)
-
-### Performance
-- **Powerful Chip:** Powered by the Apple A15 Bionic chip, it boasts the fastest smartphone processor, with a CPU that is 50% faster than competitors and a GPU that is 30% faster.
-  
-![A15 Chip](https://cdn.fptshop.com.vn/Uploads/images/2015/Tin-Tuc/QuanLNH2/iphone-13-18.jpg)
-
-### Camera Features
-- **Dual-Camera System:** Equipped with large sensors and wide apertures for enhanced low-light performance.
-- **Advanced Features:** Includes Sensor-shift optical image stabilization (OIS) and Smart HDR 4 for optimized images.
-
-![iPhone 13 Camera](https://cdn2.fptshop.com.vn/unsafe/564x0/filters:quality(80)/Uploads/images/2015/Tin-Tuc/QuanLNH2/iphone-13-7.jpg)
-
-### Video Capabilities
-- **Cinematic Mode:** Allows for professional-quality video recording with depth-of-field effects and smooth focus transitions.
-
-![Cinematic Mode](https://cdn.fptshop.com.vn/Uploads/images/2015/Tin-Tuc/QuanLNH2/iphone-13-12.jpg)
-
-### Battery & Charging
-- **Longer Battery Life:** Features a larger battery providing 2.5 hours more usage time compared to its predecessor.
-- **Fast Charging:** Supports 20W fast charging, achieving 50% charge in just 30 minutes, and is compatible with Qi and MagSafe wireless charging.
-
-![iPhone 13 Battery](https://cdn2.fptshop.com.vn/unsafe/564x0/filters:quality(80)/Uploads/images/2015/Tin-Tuc/QuanLNH2/iphone-13-3.jpg)
-
-### AI Features
-- **Enhanced Camera Quality:** The A15 chip includes an image signal processor (ISP) for improved camera performance and supports augmented reality (AR) applications.
-
-![5G Speed](https://cdn.fptshop.com.vn/Uploads/images/2015/Tin-Tuc/QuanLNH2/iphone-13-20.jpg)
-
-### Comparisons
-- **Upgrades:** Compared to the iPhone 12, it has a brighter display (up to 28% brighter), improved battery life, and enhanced camera capabilities.
-
-![iPhone 13 Display](https://cdn2.fptshop.com.vn/unsafe/564x0/filters:quality(80)/Uploads/images/2015/Tin-Tuc/QuanLNH2/iphone-13-17.jpg)
-
-### Sales Perks
-- **Discounts:** 
-  - Giảm ngay 7,200,000đ áp dụng đến 19/05
-  - AirPods giảm đến 500,000đ khi mua kèm iPhone
-  - Giảm thêm đến 2 triệu khi mua kèm SIM FPT FVIP150/F299 6-12 tháng
-
-Would you like to proceed with an order for the iPhone 13 or need more information?`,
-          sender: 'ai',
-          timestamp: new Date(Date.now() - 1000 * 60 * 25)
-        },
-        {
-          id: 'user2',
-          content: 'What other phone options do you recommend?',
-          sender: 'user',
-          timestamp: new Date(Date.now() - 1000 * 60 * 20)
-        },
-        {
-          id: 'ai2',
-          content: `Here are some phone recommendations for you:
-
-1. **iPhone 11 64GB**
-   - **Sale Price:** 9,190,000 VND (23% discount)
-   - **Installment Price:** 777,834 VND
-   - **Sales Perks:** 
-     - Giảm ngay 2,800,000đ áp dụng đến 19/05
-     - AirPods giảm đến 500,000đ khi mua kèm iPhone
-     - Trả góp 0%
-   - **[View More](https://fptshop.com.vn/dien-thoai/iphone-11-64gb)**
-   - ![iPhone 11](https://cdn2.fptshop.com.vn/unsafe/iphone_11_3d0cd738fd.png)
-
-2. **Samsung Galaxy A06 5G 4GB 128GB**
-   - **Sale Price:** 3,490,000 VND (13% discount)
-   - **Installment Price:** 910,000 VND
-   - **Sales Perks:** 
-     - Giảm ngay 500,000đ áp dụng đến 19/05
-     - Tặng củ sạc 25W chính hãng
-     - Trả góp 0%
-   - **[View More](https://fptshop.com.vn/dien-thoai/samsung-galaxy-a06)**
-   - ![Samsung Galaxy A06](https://cdn2.fptshop.com.vn/unsafe/800x0/samsung_galaxy_a06_5g_6_375f9f5c12.jpg)
-
-3. **iPhone 15 Pro Max 256GB**
-   - **Sale Price:** 29,990,000 VND (14% discount)
-   - **Installment Price:** 2,261,167 VND
-   - **Sales Perks:** 
-     - Giảm ngay 5,000,000đ áp dụng đến 19/05
-     - Tặng Combo bảo vệ toàn diện
-     - Trả góp 0%
-   - **[View More](https://fptshop.com.vn/dien-thoai/iphone-15-pro-max)**
-   - ![iPhone 15 Pro Max](https://cdn2.fptshop.com.vn/unsafe/800x0/iphone_15_pro_max_19_e4934e6e90.jpg)
-
-4. **iPhone 13 128GB**
-   - **Sale Price:** 11,790,000 VND (38% discount)
-   - **Installment Price:** 1,011,167 VND
-   - **Sales Perks:** 
-     - Giảm ngay 7,200,000đ áp dụng đến 19/05
-     - AirPods giảm đến 500,000đ khi mua kèm iPhone
-   - **[View More](https://fptshop.com.vn/dien-thoai/iphone-13)**
-   - ![iPhone 13](https://cdn2.fptshop.com.vn/unsafe/iphone_13_b06d633f18.png)
-
-5. **iPhone 15 Plus 128GB**
-   - **Sale Price:** 19,590,000 VND (25% discount)
-   - **Installment Price:** 1,661,167 VND
-   - **Sales Perks:** 
-     - Giảm ngay 6,400,000đ áp dụng đến 19/05
-     - AirPods giảm đến 500,000đ khi mua kèm iPhone
-   - **[View More](https://fptshop.com.vn/dien-thoai/iphone-15-plus)**
-   - ![iPhone 15 Plus](https://cdn2.fptshop.com.vn/unsafe/564x0/filters:quality(80)/Uploads/images/2015/Tin-Tuc/10/1/iphone-15-html-1.png)
-
-Would you like more details on any specific phone, or are you ready to place an order?`,
-          sender: 'ai',
-          timestamp: new Date(Date.now() - 1000 * 60 * 15)
-        }
-      ]
-    }
-  ]);
-  
-  const [activeConversation, setActiveConversation] = useState<string>('1');
+  const [activeConversation, setActiveConversation] = useState<string>('');
   const [message, setMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -460,7 +313,7 @@ What can I help you with today?`,
                         variant="ghost"
                         size="sm"
                         onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteConversation(conv.id, e)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6"
+                        className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 ml-2 flex-shrink-0"
                         title="Delete conversation"
                       >
                         <Trash2 className="h-3 w-3" />

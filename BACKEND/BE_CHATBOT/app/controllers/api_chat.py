@@ -40,7 +40,7 @@ def initialize_dynamo():
             try:
                 table_name = TABLE_NAME()
             except:
-                table_name = "HISTORY_CONVO"
+                table_name = "CHAT_HISTORY"
                 logger.warning(f"Could not call table name function, using default: {table_name}")
         
         logger.info(f"DynamoDB config - TABLE: {table_name}, REGION: {REGION_NAME}")
