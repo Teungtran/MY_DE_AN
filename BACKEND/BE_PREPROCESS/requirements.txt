@@ -39,6 +39,4 @@ python-dotenv
 
 # Utilities
 pydantic
-opentelemetry-api
-opentelemetry-sdk
 typing-extensions

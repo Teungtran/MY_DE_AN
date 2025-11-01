@@ -4,7 +4,7 @@ import tempfile
 import os
 import traceback
 from typing import Optional, Tuple,List
-from markitdown import MarkItDown 
+from markitdown import MarkItDown
 import re
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
@@ -12,7 +12,14 @@ import asyncio
 from app.config.base_config import APP_CONFIG
 from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
-DOCINTEL_ENDPOINT = APP_CONFIG.url_config.docintel_endpoint
+
+DOCINTEL_ENDPOINT ="<document_intelligence_endpoint>"
+try:
+    from markitdown._exceptions import MissingDependencyException
+except ImportError:
+    # If the exception class is not available, use a generic exception
+    MissingDependencyException = Exception
+
 
 class URLCrawler:
     def __init__(self):
@@ -213,7 +220,21 @@ class URLCrawler:
                 temp_f.write(cleaned_html)
                 temp_html_file_path = temp_f.name
 
-            md = MarkItDown(docintel_endpoint=self.docintel_endpoint)
+            # Try to use MarkItDown with docintel_endpoint if available, otherwise use without it
+            try:
+                if self.docintel_endpoint:
+                    md = MarkItDown(docintel_endpoint=self.docintel_endpoint)
+                else:
+                    md = MarkItDown()
+            except MissingDependencyException as e:
+                # If Azure dependency is missing, use default converter without docintel
+                logger.warning(f"Azure Document Intelligence dependency not available: {e}. Using default MarkItDown converter.")
+                md = MarkItDown()
+            except Exception as e:
+                # Catch any other initialization errors and fallback to default
+                logger.warning(f"Failed to initialize MarkItDown with docintel_endpoint: {e}. Using default converter.")
+                md = MarkItDown()
+            
             result = md.convert(temp_html_file_path)
 
             formatted_markdown = self.format_markdown_content(result.markdown, extracted_images)
