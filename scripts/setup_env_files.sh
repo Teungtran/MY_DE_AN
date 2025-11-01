@@ -46,8 +46,8 @@ MONGO_DB_NAME=Store_agent_memory
 AWS_ACCESS_KEY_ID=<your_aws_access_key_id>
 AWS_SECRET_ACCESS_KEY=<your_aws_secret_access_key>
 AWS_REGION=<your_aws_region>
-TABLE_NAME=HISTORY_CONVO
-PREPROCESS_BUCKET_NAME=dataversion0205
+TABLE_NAME=CHAT_HISTORY
+PREPROCESS_BUCKET_NAME=dataversion0204
 ML_BUCKET_NAME=ml-dataversion
 
 # redis

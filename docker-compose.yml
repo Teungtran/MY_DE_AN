@@ -29,6 +29,7 @@ services:
       - ./BACKEND/AUTH/app:/code/app
       - ./BACKEND/AUTH/config:/code/config
       - ./BACKEND/AUTH/logs:/code/logs
+      - ./BACKEND/shared_data:/code/shared_data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -47,6 +48,7 @@ services:
       - ./BACKEND/BE_ADMIN/app:/code/app
       - ./BACKEND/BE_ADMIN/config:/code/config
       - ./BACKEND/BE_ADMIN/logs:/code/logs
+      - ./BACKEND/shared_data:/code/shared_data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -65,6 +67,7 @@ services:
       - ./BACKEND/BE_CHATBOT/app:/code/app
       - ./BACKEND/BE_CHATBOT/config:/code/config
       - ./BACKEND/BE_CHATBOT/logs:/code/logs
+      - ./BACKEND/shared_data:/code/shared_data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -83,6 +86,7 @@ services:
       - ./BACKEND/BE_PREPROCESS/app:/code/app
       - ./BACKEND/BE_PREPROCESS/config:/code/config
       - ./BACKEND/BE_PREPROCESS/logs:/code/logs
+      - ./BACKEND/shared_data:/code/shared_data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -101,6 +105,7 @@ services:
       - ./BACKEND/ML/artifacts:/app/artifacts
       - ./BACKEND/ML/logs:/app/logs
       - ./BACKEND/ML/plots:/app/plots
+      - ./BACKEND/shared_data:/app/shared_data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
@@ -136,4 +141,5 @@ volumes:
   preprocess_logs:
   ml_artifacts:
   ml_logs:
-  ml_plots: 
+  ml_plots:
+  shared_data:  # Persistent shared database volume 
