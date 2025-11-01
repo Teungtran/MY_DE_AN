@@ -75,12 +75,13 @@ prompt = """
 give the intention of the given message in less than 5 words
 """
 
-
 def _get_ui_title_for_session(session_id: str, message: str) -> str:
     """Return cached ui title for session, computing once if missing."""
     if session_id in _ui_title_cache:
         return _ui_title_cache[session_id]
-    title = llm.invoke(prompt + message)
+    title_response = llm.invoke(prompt + message)
+    # Extract content from AIMessage object
+    title = title_response.content if hasattr(title_response, 'content') else str(title_response)
     _ui_title_cache[session_id] = title
     return title
 
@@ -167,12 +168,22 @@ async def save_message_to_redis(conversation_id: str, role: str, message: str):
 
 
 @router.get("/{conversation_id}/messages")
-async def get_chat_history(conversation_id: str):
+async def get_chat_history(
+    conversation_id: str,
+    current_user: dict = Depends(require_user_role)
+):
+    """Get chat history for a conversation with authentication"""
+    # Mock user for testing (commented out - use for future tests if needed)
+    # mock_user_id = "test_user_123"
+    
     try:
         if not redis_connect:
             logger.warning("Redis not available, returning empty history")
             return []
-            
+        
+        # TODO: Add verification that conversation_id belongs to current_user['user_id']
+        # This ensures users can only access their own conversations
+        
         exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conversation_id}")
         if exists:
             history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conversation_id}", 0, -1)
@@ -187,7 +198,7 @@ async def get_chat_history(conversation_id: str):
             return messages
         return []
     except Exception as e:
-        logger.error(f"Error retrieving chat history: {str(e)}")
+        logger.error(f"Error retrieving chat history: {str(e)}, user_id={current_user['user_id']}")
         raise HTTPException(status_code=500, detail=f"Error retrieving chat history: {str(e)}")
 
 
@@ -447,6 +458,10 @@ async def stream(
         service_name=ServiceName.ORCHESTRATOR,
         function_name=FunctionName.WORKFLOWs,
     )
+    # Mock user for testing (commented out - use for future tests if needed)
+    # mock_user_id = "test_user_123"
+    # mock_email = "test@example.com"
+    
     try:
         logger.info(f"Received /stream request: conversation_id={user_inputs.conversation_id}, user_id={current_user['user_id']}")
         

@@ -26,13 +26,14 @@ services:
     expose:
       - "8888"  # Only exposed to internal network
     volumes:
-      - ./BACKEND/AUTH/app:/code/app
-      - ./BACKEND/AUTH/config:/code/config
-      - ./BACKEND/AUTH/logs:/code/logs
-      - ./BACKEND/shared_data:/code/shared_data  # Shared database
+      - ./BACKEND/AUTH/app:/app/app
+      - ./BACKEND/AUTH/config:/app/config
+      - ./BACKEND/AUTH/logs:/app/logs
+      - ./BACKEND/shared_data:/app/data  # Shared database (SQLite)
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - SQLITE_DB_PATH=/app/data/auth.db  # SQLite database path (maps to C:\Users\Admin\Desktop\DE_AN\BACKEND\shared_data\auth.db on host)
     networks:
       - de_an_network
     restart: unless-stopped
@@ -45,13 +46,14 @@ services:
     expose:
       - "8888"  # Only exposed to internal network
     volumes:
-      - ./BACKEND/BE_ADMIN/app:/code/app
-      - ./BACKEND/BE_ADMIN/config:/code/config
-      - ./BACKEND/BE_ADMIN/logs:/code/logs
-      - ./BACKEND/shared_data:/code/shared_data  # Shared database
+      - ./BACKEND/BE_ADMIN/app:/app/app
+      - ./BACKEND/BE_ADMIN/config:/app/config
+      - ./BACKEND/BE_ADMIN/logs:/app/logs
+      - ./BACKEND/shared_data:/app/data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - SQLITE_DB_PATH=/app/data/auth.db  # SQLite database path (maps to C:\Users\Admin\Desktop\DE_AN\BACKEND\shared_data\auth.db on host)
     networks:
       - de_an_network
     restart: unless-stopped
@@ -64,13 +66,14 @@ services:
     expose:
       - "8888"  # Only exposed to internal network
     volumes:
-      - ./BACKEND/BE_CHATBOT/app:/code/app
-      - ./BACKEND/BE_CHATBOT/config:/code/config
-      - ./BACKEND/BE_CHATBOT/logs:/code/logs
-      - ./BACKEND/shared_data:/code/shared_data  # Shared database
+      - ./BACKEND/BE_CHATBOT/app:/app/app
+      - ./BACKEND/BE_CHATBOT/config:/app/config
+      - ./BACKEND/BE_CHATBOT/logs:/app/logs
+      - ./BACKEND/shared_data:/app/data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - SQLITE_DB_PATH=/app/data/auth.db  # SQLite database path (maps to C:\Users\Admin\Desktop\DE_AN\BACKEND\shared_data\auth.db on host)
     networks:
       - de_an_network
     restart: unless-stopped
@@ -83,13 +86,14 @@ services:
     expose:
       - "8888"  # Only exposed to internal network
     volumes:
-      - ./BACKEND/BE_PREPROCESS/app:/code/app
-      - ./BACKEND/BE_PREPROCESS/config:/code/config
-      - ./BACKEND/BE_PREPROCESS/logs:/code/logs
-      - ./BACKEND/shared_data:/code/shared_data  # Shared database
+      - ./BACKEND/BE_PREPROCESS/app:/app/app
+      - ./BACKEND/BE_PREPROCESS/config:/app/config
+      - ./BACKEND/BE_PREPROCESS/logs:/app/logs
+      - ./BACKEND/shared_data:/app/data  # Shared database
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - SQLITE_DB_PATH=/app/data/auth.db  # SQLite database path (maps to C:\Users\Admin\Desktop\DE_AN\BACKEND\shared_data\auth.db on host)
     networks:
       - de_an_network
     restart: unless-stopped
@@ -105,10 +109,11 @@ services:
       - ./BACKEND/ML/artifacts:/app/artifacts
       - ./BACKEND/ML/logs:/app/logs
       - ./BACKEND/ML/plots:/app/plots
-      - ./BACKEND/shared_data:/app/shared_data  # Shared database
+      - ./BACKEND/shared_data:/app/data  # Shared database (maps to SQLITE_DB_PATH)
     environment:
       - PYTHONPATH=/app
       - PYTHONUNBUFFERED=1
+      - SQLITE_DB_PATH=/app/data/auth.db  # SQLite database path (maps to C:\Users\Admin\Desktop\DE_AN\BACKEND\shared_data\auth.db on host)
     networks:
       - de_an_network
     restart: unless-stopped

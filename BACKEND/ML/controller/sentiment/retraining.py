@@ -33,6 +33,10 @@ async def train_model(
     - Model versioning and artifact storage
     - Performance metrics calculation
     """
+    # Mock user for testing (commented out - use for future tests if needed)
+    # mock_user_id = "test_user"
+    # mock_email = "test@example.com"
+    
     try:
         # Log the admin user who initiated training
         logger.info(f"Sentiment model training initiated by admin user: {current_user['user_id']} ({current_user['email']})")

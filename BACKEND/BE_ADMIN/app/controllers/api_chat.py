@@ -36,7 +36,9 @@ def _get_ui_title_for_session(session_id: str, message: str) -> str:
     """Return cached ui title for session, computing once if missing."""
     if session_id in _ui_title_cache:
         return _ui_title_cache[session_id]
-    title = llm.invoke(prompt + message)
+    title_response = llm.invoke(prompt + message)
+    # Extract content from AIMessage object
+    title = title_response.content if hasattr(title_response, 'content') else str(title_response)
     _ui_title_cache[session_id] = title
     return title
 
@@ -98,6 +100,9 @@ async def stream_team_chat(
     """
     Stream chat responses from the store team (requires admin/staff role)
     """
+    # Mock user for testing (commented out - use for future tests if needed)
+    # mock_user_id = "test_user"
+    
     try:
         if id is None:
             id = str(uuid.uuid4())
@@ -205,8 +210,10 @@ async def stream_team_chat(
 async def upload_file(
     file: UploadFile = File(...),
     current_user: dict = Depends(require_store_role)
-
 ):
+    """Upload report file for analysis (requires admin/staff role)"""
+    # Mock user for testing (commented out - use for future tests if needed)
+    # mock_user_id = "test_user"
     allowed_extensions = {'.csv', '.xlsx', '.xls'}
     file_extension = Path(file.filename).suffix.lower()
     
@@ -249,11 +256,10 @@ async def upload_file(
 async def report_agent(
     question: str,
     current_user: dict = Depends(require_store_role)
-
 ):
-    """
-    Analyze uploaded data file with a natural language question
-    """
+    """Analyze uploaded data file with a natural language question (requires admin/staff role)"""
+    # Mock user for testing (commented out - use for future tests if needed)
+    # mock_user_id = "test_user"
     try:
         async def event_stream():
             try:

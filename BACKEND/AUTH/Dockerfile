@@ -12,8 +12,9 @@ RUN uv sync --no-cache-dir
 
 # Copy app code (includes utils and config subdirectories)
 COPY app/ ./app/
-# Copy environment file
-COPY .env ./
+# Copy environment file for Docker - prefer .env.docker, fallback to .env
+COPY .env.docker ./.env
+COPY .env ./.env.local
 
 FROM python:3.11-slim-bookworm AS runtime
 

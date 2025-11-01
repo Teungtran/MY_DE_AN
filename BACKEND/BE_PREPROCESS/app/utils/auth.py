@@ -5,14 +5,14 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Dict, Any
 from dotenv import load_dotenv
-from .config_auth import AuthenConfig
-from .db import get_db, CustomerInfo
+from app.utils.db import get_db, CustomerInfo
+
 load_dotenv()
 
 security = HTTPBearer()
 
-SECRET_KEY = AuthenConfig().key
-ALGORITHM = AuthenConfig().algorithm
+SECRET_KEY = os.getenv("SECRET_KEY", "Lilchong2504")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -54,23 +54,10 @@ def get_current_user(
     except jwt.PyJWTError as e:
         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
 
-def require_staff_or_admin(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
-    """
-    A dependency that ensures the current user has 'staff' or 'admin' role.
-    Used for prediction APIs that require elevated access.
-    """
-    user_role = current_user.get("role")
-    if user_role not in ["staff", "admin"]:
-        raise HTTPException(
-            status_code=403, 
-            detail="Forbidden: Access is restricted to staff and admin users only."
-        )
-    return current_user
-
 def require_admin_role(current_user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
     """
     A dependency that ensures the current user has the 'admin' role.
-    Used for training APIs that require admin access only.
+    Only admin users can access BE_PREPROCESS endpoints.
     """
     user_role = current_user.get("role")
     if user_role != "admin":

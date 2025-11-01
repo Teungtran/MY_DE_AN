@@ -57,7 +57,22 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     """Verify password against hash"""
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Strip whitespace from hash in case it has trailing spaces
+    hashed = hashed.strip()
+    
+    # Debug logging
+    logger.info(f"Verifying password - Hash length: {len(hashed)}, Hash prefix: {hashed[:20]}")
+    
+    try:
+        result = bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+        logger.info(f"Password verification result: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Password verification error: {str(e)}, Hash type: {type(hashed)}, Hash repr: {repr(hashed[:50])}")
+        return False
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """Create JWT access token"""
@@ -100,26 +115,63 @@ def check_email_exists(email: str, db: Session) -> bool:
 
 def login(identifier: str, password: str, db: Session):
     """Login user with password verification"""
-
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Debug: Count total users in database
+    total_users = db.query(CustomerInfo).count()
+    logger.info(f"Total users in database: {total_users}")
+    
     if '@' in identifier:
         # Treat identifier as email and validate
         if not is_valid_email(identifier):
+            logger.warning(f"Invalid email format: {identifier}")
             raise HTTPException(
                 status_code=400,
                 detail="Invalid email format"
             )
+        logger.info(f"Searching for user with email: {identifier}")
         user = db.query(CustomerInfo).filter(CustomerInfo.email == identifier).first()
+        
+        if user:
+            logger.info(f"User found: {user.user_id}, email: {user.email}")
+        else:
+            logger.warning(f"No user found with email: {identifier}")
+            # Debug: List all emails in database
+            all_emails = [u.email for u in db.query(CustomerInfo).all()]
+            logger.info(f"Available emails in database: {all_emails}")
     else:
         # Treat identifier as username
+        logger.info(f"Searching for user with username: {identifier}")
         user = db.query(CustomerInfo).filter(CustomerInfo.customer_name == identifier).first()
+        
+        if user:
+            logger.info(f"User found: {user.user_id}, username: {user.customer_name}")
+        else:
+            logger.warning(f"No user found with username: {identifier}")
 
-    if user and verify_password(password, user.password):
-        return {
-            "user_id": user.user_id,
-            "email": user.email,
-            "role": user.role
-            
-        }
+    if user:
+        logger.info(f"Verifying password for user: {user.user_id}")
+        # Debug: Log password hash details before verification
+        stored_hash = user.password
+        logger.info(f"Stored hash type: {type(stored_hash)}, length: {len(stored_hash) if stored_hash else 0}")
+        logger.info(f"Stored hash repr (first 60): {repr(stored_hash[:60]) if stored_hash else 'None'}")
+        logger.info(f"Password being checked: {repr(password[:10])}... (length: {len(password)})")
+        
+        password_match = verify_password(password, stored_hash)
+        logger.info(f"Password verification result: {password_match}")
+        
+        if password_match:
+            logger.info(f"Login successful for user: {user.user_id}")
+            return {
+                "user_id": user.user_id,
+                "email": user.email,
+                "role": user.role
+            }
+        else:
+            logger.warning(f"Password verification failed for user: {user.user_id}")
+    else:
+        logger.warning(f"User not found for identifier: {identifier}")
 
     return None
 
@@ -219,6 +271,11 @@ def get_current_user(
 @auth.post("/register", response_model=AuthResponse)
 async def register(request: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Registration request received for email: {request.email}, name: {request.customer_name}")
+    
     try:
         user = register_new_user(
             customer_name=request.customer_name,
@@ -231,6 +288,8 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             role=request.role  
 
         )
+        
+        logger.info(f"User registered successfully: {user['user_id']}")
         
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
@@ -246,9 +305,11 @@ async def register(request: RegisterRequest, db: Session = Depends(get_db)):
             role=user["role"]  
         )
         
-    except HTTPException:
+    except HTTPException as e:
+        logger.warning(f"Registration failed (HTTP {e.status_code}): {e.detail}")
         raise
     except Exception as e:
+        logger.error(f"Registration failed with exception: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @auth.post("/login", response_model=AuthResponse)

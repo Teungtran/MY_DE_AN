@@ -7,7 +7,7 @@ from fastapi import status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.utils.tracing import get_current_trace_ids
+# OpenTelemetry removed - trace_id always empty
 
 
 class ServiceName(str, Enum):
@@ -113,13 +113,11 @@ class ExceptionHandler(CustomBaseModel):
         Returns:
             JSONResponse: The JSON response object.
         """
-        current_trace_id, _ = get_current_trace_ids()
-
         response_data = {
             "errorCode": error_code,
             "httpStatus": status_code,
             "message": message,
-            "traceId": current_trace_id or "",
+            "traceId": "",
             "success": success,
             "data": extra or {},
         }

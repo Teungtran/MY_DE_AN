@@ -36,9 +36,22 @@ def create_tool_node_with_fallback(tools: list) -> dict:
     This implementation allows tools to run independently with their internal logic,
     while providing proper error handling and logging.
     """
-    tool_node = ToolNode(tools)
+    from app.utils.logging.logger import get_logger
+    logger = get_logger(__name__)
     
-    return tool_node.with_fallbacks(
+    def log_tool_result(state):
+        """Wrapper to log tool execution results"""
+        result = ToolNode(tools).invoke(state)
+        if "messages" in result:
+            for msg in result["messages"]:
+                if hasattr(msg, "content"):
+                    content_preview = str(msg.content)[:200] if msg.content else "None"
+                    logger.info(f"[TOOL NODE] Tool returned message: {content_preview}...")
+        return result
+    
+    tool_node_with_logging = RunnableLambda(log_tool_result)
+    
+    return tool_node_with_logging.with_fallbacks(
         [RunnableLambda(lambda state: {
             "messages": [
                 ToolMessage(

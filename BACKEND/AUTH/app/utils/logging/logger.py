@@ -20,14 +20,14 @@ def add_custom_fields(_, __, event_dict: EventDict) -> EventDict:
     """
     Add the service name to the event dict
     """
-    event_dict["service_name"] = "ORCHESTRATOR"
+    event_dict["service_name"] = "AUTH"
     event_dict["level"] = event_dict.get("level", "")
-    event_dict["trace_id"] = event_dict.get("trace_id", "")
+    event_dict["trace_id"] = ""
+    event_dict["span_id"] = ""
 
     event_dict["client_ip"] = event_dict.get("http", {}).get("client_ip", "")
     event_dict["uri"] = event_dict.get("http", {}).get("uri", "")
     event_dict["status_code"] = event_dict.get("http", {}).get("status_code", "")
-    event_dict["span_id"] = event_dict.get("span_id", "")
 
     # event_dict["span_id"] = uuid.uuid4().hex  # TODO: Each function has its own ID. How can we trace or track these IDs?
     event_dict["method"] = event_dict.get("http", {}).get("method", "")

@@ -5,11 +5,10 @@ from typing import Optional, Tuple
 from app.schemas.device_schemas import CancelOrder, Order, TrackOrder, RecommendSystem, UpdateOrder, DeviceDetailSchema
 from ..support_funcs.get_candidates import get_all_points
 from app.orchestrator.shop_graph.tools.hybrid_search import get_best_candidate, suggest_similar_candidate
-from ..support_funcs.supports import get_metadata, extract_all_text_from_field,parse_structured_input
+from ..support_funcs.supports import get_metadata, extract_all_text_from_field
 from langchain.retrievers import BM25Retriever
 from app.services.get_retriever import get_device_retriever
 from functools import lru_cache
-from app.config.base_config import APP_CONFIG
 import asyncio
 import re
 from ..support_funcs.get_id import generate_short_id
@@ -22,8 +21,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Tuple, Set
 from threading import Lock
 
+
 logger = get_logger(__name__)
-sql_config = APP_CONFIG.sql_config
 
 def get_shop_db():
     db = SessionLocal()
@@ -32,149 +31,134 @@ def get_shop_db():
     finally:
         db.close()
 
-recommended_devices_cache = []
 current_device_faiss = None
-def process_single_chunk(
-    chunk: str,
-    candidates: List[Dict],
-    all_fields: List[str],
-    excluded_fields: Set[str],
-    excluded_fields_lock: Lock,
-    strong_matches: List[Dict],
-    high_score_candidates: List[Dict],
-    chunk_results_lock: Lock,
-    total_candidates_lock: Lock,
-    total_candidates_count: int,
-    early_stop_flag: Dict,
-    all_candidate_scores: List[Tuple],
-    all_scores_lock: Lock,
-):
-    if early_stop_flag["stop"]:
-        logger.info(f"[DEBUG] Early stop triggered, skipping chunk: {chunk}")
-        return total_candidates_count
-
-    with excluded_fields_lock:
-        available_fields = [f for f in all_fields if f not in excluded_fields]
-    if not available_fields:
-        logger.info(f"[DEBUG] All fields excluded. Skipping chunk: {chunk}")
-        return total_candidates_count
-
-    results = get_best_candidate(
-        chunk=chunk,
-        candidates=candidates,
-        fields=available_fields,
-        excluded_fields=excluded_fields,
-    )
-
-    if not results:
-        logger.info(f"[DEBUG] No results from get_best_candidate, collecting fallback scores for chunk '{chunk}'")
-        chunk_fallback_scores = []
-        for candidate in candidates:
-            candidate_best_score = 0.0
-            candidate_best_field = None
-
-            for field in available_fields:
-                field_value = get_metadata(candidate["doc"], field)
-                if not field_value:
-                    continue
-
-                all_texts = extract_all_text_from_field(field_value, field)
-                if not all_texts:
-                    continue
-
-                field_max_score = 0.0
-                for text in all_texts:
-                    score = token_set_ratio(chunk.lower(), text.lower())
-                    field_max_score = max(field_max_score, score)
-
-                if field_max_score > candidate_best_score:
-                    candidate_best_score = field_max_score
-                    candidate_best_field = field
-
-            if candidate_best_score > 0:
-                chunk_fallback_scores.append((candidate, candidate_best_score, candidate_best_field, chunk))
-
-        with all_scores_lock:
-            all_candidate_scores.extend(chunk_fallback_scores)
-
-        logger.info(f"[DEBUG] Chunk '{chunk}' found no candidates >= 70")
-        return total_candidates_count
-
-    logger.info(f"[DEBUG] get_best_candidate returned {len(results)} results, skipping fallback collection")
-
-    chunk_results = []
-    for candidate, score, matched_field in results:
-        item = {
-            "chunk": chunk,
-            "candidate": candidate,
-            "score": score,
-            "matched_field": matched_field,
-        }
-        chunk_results.append(item)
-
-    with chunk_results_lock:
-        for item in chunk_results:
-            high_score_candidates.append(item)
-            if item["score"] >= 90:
-                strong_matches.append(item)
-
-    with total_candidates_lock:
-        total_candidates_count += len(chunk_results)
-        current_total = total_candidates_count
-
-    logger.info(f"[DEBUG] Chunk '{chunk}' returned {len(chunk_results)} results (Total: {current_total})")
-
-    if current_total >= 5:
-        logger.info(f"[DEBUG] Total candidates reached {current_total}, triggering early stop")
-        early_stop_flag["stop"] = True
-
-    return total_candidates_count
-
-
 def process_chunks_with_field_exclusion(
     chunks_to_process: List[str],
     candidates: List[Dict],
     all_fields: List[str],
-    chunk_count: int,
+    chunk_count: int
 ) -> Tuple[List[Dict], List[Dict], Set[str]]:
+    """
+    Process ALL chunks in parallel:
+    - Each chunk processes independently with get_best_candidate
+    - Each chunk can early stop at 90+ or return candidates with 70+
+    - Collect results from ALL chunks
+    - Stop when total candidates reach 5
+    - GLOBAL FALLBACK: Only if NO chunks find any candidates above 70, 
+      then return top 5 from all calculated scores across all chunks
+    Returns:
+        strong_matches (≥90),
+        high_score_candidates (≥70),
+        excluded_fields
+    """
     excluded_fields = set()
     excluded_fields_lock = Lock()
-    strong_matches = []
-    high_score_candidates = []
+    strong_matches = []          # All ≥90 matches
+    high_score_candidates = []   # All ≥70 matches (including ≥90)
     chunk_results_lock = Lock()
     total_candidates_lock = Lock()
     total_candidates_count = 0
     early_stop_flag = {"stop": False}
-
-    all_candidate_scores = []
+    
+    all_candidate_scores = []  # List of (candidate, score, field, chunk)
     all_scores_lock = Lock()
 
     logger.info(f"[DEBUG:process_chunks] Processing {chunk_count} chunks in parallel")
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        futures = [
-            executor.submit(
-                process_single_chunk,
-                chunk,
-                candidates,
-                all_fields,
-                excluded_fields,
-                excluded_fields_lock,
-                strong_matches,
-                high_score_candidates,
-                chunk_results_lock,
-                total_candidates_lock,
-                total_candidates_count,
-                early_stop_flag,
-                all_candidate_scores,
-                all_scores_lock,
-            )
-            for chunk in chunks_to_process
-        ]
+    def process_chunk(chunk: str):
+        nonlocal excluded_fields, strong_matches, high_score_candidates, total_candidates_count, early_stop_flag, all_candidate_scores
 
+        # Check if we should stop early
+        if early_stop_flag["stop"]:
+            logger.info(f"[DEBUG] Early stop triggered, skipping chunk: {chunk}")
+            return
+
+        # Get available fields (consider exclusions)
+        with excluded_fields_lock:
+            available_fields = [f for f in all_fields if f not in excluded_fields]
+        if not available_fields:
+            logger.info(f"[DEBUG] All fields excluded. Skipping chunk: {chunk}")
+            return
+
+        # Process this chunk independently
+        results = get_best_candidate(
+            chunk=chunk,
+            candidates=candidates,
+            fields=available_fields,
+            excluded_fields=excluded_fields
+        )
+        
+        if not results:
+            logger.info(f"[DEBUG] No results from get_best_candidate, collecting fallback scores for chunk '{chunk}'")
+            chunk_fallback_scores = []
+            for candidate in candidates:
+                candidate_best_score = 0.0
+                candidate_best_field = None
+                
+                for field in available_fields:
+                    field_value = get_metadata(candidate["doc"], field)
+                    if not field_value:
+                        continue
+
+                    all_texts = extract_all_text_from_field(field_value, field)
+                    if not all_texts:
+                        continue
+
+                    field_max_score = 0.0
+                    for text in all_texts:
+                        score = token_set_ratio(chunk.lower(), text.lower())
+                        field_max_score = max(field_max_score, score)
+
+                    if field_max_score > candidate_best_score:
+                        candidate_best_score = field_max_score
+                        candidate_best_field = field
+                
+                if candidate_best_score > 0:  # Only add if there's some score
+                    chunk_fallback_scores.append((candidate, candidate_best_score, candidate_best_field, chunk))
+            
+            with all_scores_lock:
+                all_candidate_scores.extend(chunk_fallback_scores)
+        else:
+            logger.info(f"[DEBUG] get_best_candidate returned {len(results)} results, skipping fallback collection")
+
+        if not results:
+            logger.info(f"[DEBUG] Chunk '{chunk}' found no candidates >= 70")
+            return
+
+        chunk_results = []
+        for candidate, score, matched_field in results:
+            item = {
+                "chunk": chunk,
+                "candidate": candidate,
+                "score": score,
+                "matched_field": matched_field
+            }
+            chunk_results.append(item)
+
+        # Add to global results
+        with chunk_results_lock:
+            for item in chunk_results:
+                high_score_candidates.append(item)
+                if item["score"] >= 90:
+                    strong_matches.append(item)
+
+        with total_candidates_lock:
+            total_candidates_count += len(chunk_results)
+            current_total = total_candidates_count
+
+        logger.info(f"[DEBUG] Chunk '{chunk}' returned {len(chunk_results)} results (Total: {current_total})")
+
+        if current_total >= 5:
+            logger.info(f"[DEBUG] Total candidates reached {current_total}, triggering early stop")
+            early_stop_flag["stop"] = True
+
+    logger.info("[DEBUG] Processing all chunks in parallel")
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(process_chunk, chunk) for chunk in chunks_to_process]
+        
         for future in as_completed(futures):
             try:
-                total_candidates_count = future.result()
+                future.result()
                 if early_stop_flag["stop"]:
                     logger.info("[DEBUG] Early stop triggered, canceling remaining futures")
                     for f in futures:
@@ -184,27 +168,30 @@ def process_chunks_with_field_exclusion(
                 logger.info(f"[DEBUG] Error processing chunk: {e}")
 
     logger.info(f"[DEBUG] All chunks processed. Found {len(strong_matches)} strong matches, {len(high_score_candidates)} total high-score matches")
-
+    
+    # GLOBAL FALLBACK: Only if NO chunks found candidates above 70, select top 5 from all scores
     if len(high_score_candidates) == 0 and all_candidate_scores:
         logger.info("[DEBUG] GLOBAL FALLBACK TRIGGERED: No chunks found candidates >= 70. Selecting top 5 from all calculated scores.")
-
+        
+        # Sort all candidate scores by score (descending) and take top 5
         all_candidate_scores.sort(key=lambda x: x[1], reverse=True)
         top_5_fallback = all_candidate_scores[:5]
-
+        
         logger.info(f"[DEBUG] Global fallback - Top 5 candidates from {len(all_candidate_scores)} total scores:")
-
+        
+        # Convert to the expected format
         for i, (candidate, score, matched_field, chunk) in enumerate(top_5_fallback, 1):
             fallback_item = {
                 "chunk": chunk,
                 "candidate": candidate,
                 "score": score,
-                "matched_field": matched_field,
+                "matched_field": matched_field
             }
             high_score_candidates.append(fallback_item)
-
+            
             device_name = get_metadata(candidate["doc"], "device_name", "Unknown")
             logger.info(f"[DEBUG]   {i}. {device_name}: {score:.2f} (field: {matched_field}, chunk: {chunk})")
-
+        
         logger.info(f"[DEBUG] Global fallback applied: {len(high_score_candidates)} candidates selected")
     elif len(high_score_candidates) > 0:
         logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates >= 70. No global fallback needed.")
@@ -229,6 +216,7 @@ async def scoring_logic(
 ):
     logger.info(f"[DEBUG] Processing type: {type_key}, Devices: {len(points_list)}")
 
+    # === Filtering: suitable_for and price ===
     filtered_points = points_list
 
     if suitable_for and suitable_for != "general":
@@ -263,6 +251,7 @@ async def scoring_logic(
     text_fields = text_fields[:3]
     logger.info(f"[DEBUG] Processing fields: {text_fields}")
 
+    # === Process chunks ===
     strong_matches, high_score_candidates, excluded_fields = process_chunks_with_field_exclusion(
         input_chunks, candidates, text_fields, len(input_chunks)
     )
@@ -271,10 +260,12 @@ async def scoring_logic(
     logger.info(f"[DEBUG] Found {len(strong_matches)} strong matches (>90)")
     logger.info(f"[DEBUG] Found {len(high_score_candidates)} total high-score matches (≥70)")
 
+    # Deduplicate by device_name
     device_scores = {}
     device_candidates = {}
     seen_names = set()
 
+    # Add ALL high-score candidates, sorted by score
     all_relevant = sorted(high_score_candidates, key=lambda x: x["score"], reverse=True)
 
     for item in all_relevant:
@@ -287,6 +278,7 @@ async def scoring_logic(
 
     logger.info(f"[DEBUG] Found {len(seen_names)} unique devices")
 
+    # === Build final candidates list ===
     sorted_devices = sorted(device_scores.items(), key=lambda x: x[1], reverse=True)
     final_candidates = []
     top_candidates = []  # Keep track of actual candidate objects for FAISS
@@ -340,10 +332,35 @@ async def scoring_logic(
                 content += f"- {field}: {value}\n"
             products_info.append(content)
         product_info_block = "\n".join(products_info)
+        logger.info(f"[DEBUG] Generated product_info_block with {len(products_info)} products")
 
     return type_key, top_device_names, product_info_block, top_candidates
 
+def parse_structured_input(structured_input):
+    """
+    Parse structured input:
+    1. First split by commas.
+    2. If fewer than 2 chunks are found, fallback to 4-word chunks.
+    3. Shuffle the resulting chunks randomly.
+    """
+    comma_chunks = [chunk.strip() for chunk in structured_input.split(',') if chunk.strip()]
+    
+    if len(comma_chunks) >= 1:
+        return comma_chunks
 
+    chunks = []
+    words = structured_input.split()
+    chunk = []
+
+    for word in words:
+        chunk.append(word)
+        if len(chunk) == 3:
+            chunks.append(' '.join(chunk))
+            chunk = []
+
+    if chunk:
+        chunks.append(' '.join(chunk))
+    return chunks  
 
 async def recommend_system_async(
     user_input: List[str],
@@ -406,6 +423,9 @@ async def recommend_system_async(
         final_results[type_key] = device_names
         if info_block:
             final_text_blocks.append(info_block)
+            logger.info(f"[DEBUG] Added info_block for {type_key}: {len(info_block)} chars")
+        else:
+            logger.warning(f"[WARNING] Empty info_block for {type_key} despite having {len(device_names)} devices!")
 
     if not any(final_results.values()):
         return "I couldn't find any products matching your criteria.", []
@@ -414,13 +434,24 @@ async def recommend_system_async(
     store_recommended_devices(recommended_devices, user_input)    
     
     if all_top_candidates:
-        faiss_store = create_temporary_faiss_store(top_matches=all_top_candidates)
-        global current_device_faiss
-        current_device_faiss = faiss_store
+        try:
+            faiss_store = create_temporary_faiss_store(top_matches=all_top_candidates)
+            global current_device_faiss
+            current_device_faiss = faiss_store
+            logger.info(f"[DEBUG] Created FAISS store with {len(all_top_candidates)} candidates")
+        except ImportError as e:
+            logger.warning(f"[WARNING] FAISS not available: {e}. Device details feature will be limited.")
+            current_device_faiss = None
+        except Exception as e:
+            logger.error(f"[ERROR] Failed to create FAISS store: {e}")
+            current_device_faiss = None
     else:
         logger.info("[DEBUG] No top candidates available for FAISS store creation")
-        
-    return "\n\n".join(final_text_blocks), recommended_devices
+    
+    final_response = "\n\n".join(final_text_blocks)
+    logger.info(f"[DEBUG] Returning response with {len(final_text_blocks)} text blocks, total length: {len(final_response)}")
+    logger.info(f"[DEBUG] Recommended devices: {recommended_devices}")
+    return final_response, recommended_devices
 
 @tool("recommend_system",args_schema=RecommendSystem)
 def recommend_system(user_input: str, device_name:bool,has_features:bool, device_type: str = None, price: str = None, suitable_for: str = None):
@@ -428,6 +459,7 @@ def recommend_system(user_input: str, device_name:bool,has_features:bool, device
     Recommend products based on user input, type , and suitable_for use cases.
     THIS tool is a preset tool, you should always call this tool when you need to recommend products and before you call device_details tool.
     """
+    logger.info(f"[TOOL ENTRY] recommend_system called with: user_input={user_input[:100]}, device_type={device_type}, price={price}, suitable_for={suitable_for}")
     if not price:
         match = re.search(r"price:\s*([0-9]+)", user_input)
         if match:
@@ -440,7 +472,7 @@ def recommend_system(user_input: str, device_name:bool,has_features:bool, device
         else:
             suitable_for = "general"
     
-    response_text, _ = asyncio.run(recommend_system_async(
+    response_text, device_list = asyncio.run(recommend_system_async(
         user_input=user_input,
         suitable_for=suitable_for,
         device_name=device_name,
@@ -448,12 +480,14 @@ def recommend_system(user_input: str, device_name:bool,has_features:bool, device
         device_type=device_type,
         price=price
     ))
+    logger.info(f"[TOOL EXIT] recommend_system returning: response_length={len(response_text)}, devices={device_list}")
     return response_text
-
+    
 @lru_cache(maxsize=1000)
 def cached_faiss_retrieve(query: str,faiss_store):
     retriever = get_device_retriever(faiss_store)
     return retriever.get_relevant_documents(query)
+
 
 @tool("get_device_details", args_schema=DeviceDetailSchema)
 def get_device_details(user_input: str, device_name, count_devices: int) -> str:
@@ -469,7 +503,7 @@ def get_device_details(user_input: str, device_name, count_devices: int) -> str:
             return "No recent recommendations found. Please use the recommend_system tool first."
 
         device_names, _, _ = cached_result
-        print(f"Available devices: {device_names}")
+        logger.info(f"Available devices: {device_names}")
 
         if device_name:
             scored_devices = [
@@ -480,10 +514,10 @@ def get_device_details(user_input: str, device_name, count_devices: int) -> str:
                 return "No matching devices found. Try using the full device name."
             scored_devices.sort(key=lambda x: x[1], reverse=True)
             top_device, top_score = scored_devices[0]
-            print(f"Top matched device: {top_device} (score: {top_score})")
+            logger.info(f"Top matched device: {top_device} (score: {top_score})")
         else:
             top_device = device_names[0]
-            print(f"Using first device from cache: {top_device}")
+            logger.info(f"Using first device from cache: {top_device}")
 
         global current_device_faiss
         if current_device_faiss is None:
@@ -535,6 +569,7 @@ def get_device_details(user_input: str, device_name, count_devices: int) -> str:
 
     except Exception as e:
         return f"An error occurred: {str(e)}"
+
 
 
 

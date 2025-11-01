@@ -6,6 +6,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 from app.factories.embedding_factory import create_embedding_model
 embedding_model = create_embedding_model(APP_CONFIG.embedding_model_config)
+
 def merge_small_chunks(chunks, min_words=150):
     if not chunks:
         return []
@@ -20,13 +21,12 @@ def merge_small_chunks(chunks, min_words=150):
             merged_chunks.append(chunk)
 
     return merged_chunks
-
 def create_temporary_faiss_store(top_matches):
     """
     Always create a completely fresh FAISS store (guaranteed clean)
     """
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=512,
+        chunk_size=500,
         chunk_overlap=100
     )
     

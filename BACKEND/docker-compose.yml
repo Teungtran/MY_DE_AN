@@ -24,7 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: de_an_auth
     env_file:
-      - ./AUTH/.env.docker.docker
+      - ./AUTH/.env.docker
     # No public port mapping - only accessible through nginx
     expose:
       - "8888"

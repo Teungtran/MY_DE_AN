@@ -9,7 +9,7 @@ from qdrant_client import QdrantClient
 from app.config.base_config import APP_CONFIG
 from app.factories.vector_store_factory import create_policy_store
 from app.factories.embedding_factory import create_embedding_model
-from app.orchestrator.rag_tool.tools.llm import translate_language
+from app.orchestrator.rag_tool.tools.llm import extend_query
 from app.orchestrator.rag_tool.tools.reranking import  most_relevant
 from app.factories.chat_factory import create_chat_model
 chat_config = APP_CONFIG.chat_model_config
@@ -28,16 +28,13 @@ LLM = None
 QDRANT_URL = APP_CONFIG.vector_store_config.url
 QDRANT_API_KEY = APP_CONFIG.vector_store_config.api_key
 COLLECTION = APP_CONFIG.vector_store_config.collection_name
+
 def setup_multi_retrieval(semantic_retriever, llm):
     """Set up multi-query retrieval with caching."""
+        
     multi_retriever = MultiQueryRetriever.from_llm(
         retriever=semantic_retriever,
-        llm=llm,
-        prompt="""You are an AI language model assistant, understand both Vietnamese and English. You only support answering questions about FPT Shop.
-        Your task is to generate four different versions of the given user question to retrieve relevant documents from a vector database.
-        Provide these alternative questions separated by newlines.
-        Always generate questions that refer back to FPT Shop, all the questions must be related to FPT Shop.""",
-        include_original=True
+        llm=llm
     )
     return multi_retriever
 
@@ -81,13 +78,11 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
         
         # Get extended queries and translated language in parallel operations
         try:
-            extended_queries = extend_query(user_input)
-            language = translate_language(user_input)
+            extended_queries = extend_query(user_input,llm=llm)
             print(f"Extended queries: {extended_queries}")
         except Exception as e:
             print(f"Error in query processing: {e}")
             extended_queries = [user_input]
-            language = user_input
         
         # Set up retriever once
         semantic_retriever = vector_db.as_retriever(
@@ -110,8 +105,7 @@ def RAG_Agent(user_input: str = None,conversation_id: Optional[str] = None) -> s
                 extended_queries=extended_queries,
                 multi_retriever=multi_retriever,
                 vectorstore=vector_db,
-                translate_language=language,
-                llm=llm
+                original_query=user_input
             )
             print(f"Found {len(relevant_docs)} relevant documents")
         except Exception as e:

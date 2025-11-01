@@ -2,16 +2,13 @@ from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Text, DateT
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy import create_engine
+import os
+from pathlib import Path
 
 Base = declarative_base()
 
 def get_db_uri():
-    # Use a local SQLite database file
-    # In Docker, this will be on a shared volume at /app/data
-    # Locally, use a shared path in BACKEND directory
-    import os
-    from pathlib import Path
-    
+    """Get SQLite database connection string"""
     # Get the database path from environment variable
     db_path = os.getenv("SQLITE_DB_PATH")
     
@@ -27,7 +24,12 @@ def get_db_uri():
 
 engine = create_engine(
     get_db_uri(),
-    connect_args={"check_same_thread": False},  # Needed for SQLite with threaded apps like FastAPI/Uvicorn
+    connect_args={
+        "check_same_thread": False,  # Needed for SQLite with threaded apps like FastAPI/Uvicorn
+        "timeout": 20.0,  # Increase timeout for Docker volume mounts
+    },
+    pool_pre_ping=True,  # Verify connections before using
+    echo=False,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -50,7 +52,7 @@ class CustomerInfo(Base):
     address = Column(String(255))
     age = Column(Integer)
     customer_phone = Column(String(20), unique=True)
-    password = Column(String(255), nullable=False)
+    password = Column(Text, nullable=False)  # Use Text for bcrypt hashes to avoid encoding issues
     email = Column(Text, nullable=False)
     role = Column(Text, nullable=False)
     # Relationships

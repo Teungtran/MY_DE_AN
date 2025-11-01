@@ -47,15 +47,14 @@ class URLCrawler:
                     result, method = task.result()
                     if result is not None:
                         html_content = result
-                        logger.info(f"[Success] Got content using {method}")
                         for pending_task in pending_tasks:
                             pending_task.cancel()
                         break
                 except Exception as e:
-                    logger.warning(f"[Error] Task failed: {e}")
+                    logger.warning(f"Task failed: {e}")
         
         if html_content is None:
-            logger.info("[Error] Unable to fetch content from URL using any method.")
+            logger.error("Unable to fetch content from URL using any method.")
             
         return html_content
     
@@ -204,7 +203,7 @@ class URLCrawler:
             html_content = await self.fetch_html(url)
             
             if html_content is None:
-                logger.info("[Error] Unable to fetch content from URL.")
+                logger.error("Unable to fetch content from URL.")
                 return None
 
             self.base_url = url  
@@ -213,25 +212,22 @@ class URLCrawler:
             with tempfile.NamedTemporaryFile(mode='w+', suffix='.html', delete=False, encoding='utf-8') as temp_f:
                 temp_f.write(cleaned_html)
                 temp_html_file_path = temp_f.name
-                logger.info(f"Saved cleaned HTML to temporary file: {temp_html_file_path}")
 
             md = MarkItDown(docintel_endpoint=self.docintel_endpoint)
             result = md.convert(temp_html_file_path)
 
             formatted_markdown = self.format_markdown_content(result.markdown, extracted_images)
 
-            logger.info(f"Successfully converted to Markdown for: {url}")
             return formatted_markdown, url
 
         except Exception as e:
-            logger.warning(f"An error occurred during conversion: {e}")
-            traceback.logger.info_exc()
+            logger.error(f"An error occurred during conversion: {e}")
+            traceback.print_exc()
             return None
 
         finally:
             if temp_html_file_path and os.path.exists(temp_html_file_path):
                 try:
                     os.remove(temp_html_file_path)
-                    logger.info(f"Deleted temporary file: {temp_html_file_path}")
                 except OSError as e:
-                    logger.warning(f"Error when deleting temporary file {temp_html_file_path}: {e}")
+                    logger.warning(f"Error deleting temporary file: {e}")

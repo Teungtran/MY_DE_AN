@@ -2,7 +2,6 @@ from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from app.config.base_config import APP_CONFIG
 from app.factories.chat_factory import create_chat_model
-from typing import Union
 import os
 chat_config = APP_CONFIG.chat_model_config
 
@@ -16,16 +15,20 @@ if not chat_config:
 else:
     llm = create_chat_model(chat_config)
 
+def get_llm():
+    """Get the initialized LLM instance."""
+    return llm
 
-def translate_language(question: str) -> str:
-    """Translate user question to Vietnamese with caching."""
-    LANGUAGE_PROMPT = PromptTemplate(
+def extend_query(question: str, llm) -> str:
+    """Generate multiple query variations for a question using cached results."""
+    QUERY_PROMPT = PromptTemplate(
         input_variables=["question"],
-        template="""You are an Vietnamese interpreter, understand many languages.
-        Your task is to translate user question in to Vienamese, DO NOT add anything else to the question
-        if user's questions are in Vietnamese, just return the question
+        template="""You are an AI language model assistant, understand both Vietnamese and English. You only support answering questions about FPT Shop.
+        Your task is to generate four different versions of the given user question to retrieve relevant documents from a vector database.
+        Provide these alternative questions separated by newlines.
+        Always generate questions that refer back to FPT Shop, all the questions must be related to FPT Shop.
         Original question: {question}"""
     )
-    llm_chain = LANGUAGE_PROMPT | llm
+    llm_chain = QUERY_PROMPT | llm
     response = llm_chain.invoke({"question": question})
     return response.content if hasattr(response, 'content') else response

@@ -6,99 +6,6 @@ from app.utils.logging.logger import get_logger
 from sklearn.neighbors import NearestNeighbors
 
 logger = get_logger(__name__)
-def get_best_candidate(
-    chunk: str,
-    candidates: List[Dict],
-    fields: List[str],
-    excluded_fields: Set[str] = None,
-) -> Optional[List[Tuple[Dict, float, str]]]:
-    """
-    Full-scan version: returns ALL candidates that score >= 60,
-    or the top 5 highest scoring candidates if none score >= 60.
-
-    Enhanced:
-    - Immediately return if any individual field value scores > 90
-    - Return all candidates when 5 candidates score >= 60
-    - Skip excluded fields
-    - If no candidate meets min_score_threshold, return top 5 highest-scoring candidates (REUSING calculated scores)
-
-    Returns: List of (candidate, score, matched_field) or None
-    """
-    if not candidates or not chunk.strip():
-        return None
-
-    if excluded_fields is None:
-        excluded_fields = set()
-    
-    # Filter out excluded fields
-    active_fields = [field for field in fields if field not in excluded_fields]
-    
-    if not active_fields:
-        logger.info(f"[DEBUG] All fields excluded for chunk '{chunk}'. Skipping.")
-        return None
-
-    logger.info(f"\n[DEBUG] === FULL-SCAN Processing chunk: '{chunk}' ===")
-    logger.info(f"[DEBUG] Active fields: {active_fields}")
-    logger.info(f"[DEBUG] Excluded fields: {excluded_fields}")
-    
-    high_score_candidates = []  # List of (candidate, score, field) for score >= 60
-
-    for candidate_idx, candidate in enumerate(candidates):
-        device_name = get_metadata(candidate["doc"], "device_name", "Unknown")
-        logger.info(f"\n[DEBUG] --- Checking Candidate {candidate_idx + 1}: {device_name} ---")
-
-        candidate_best_score = 0.0
-        candidate_best_field = None
-
-        for field in active_fields:
-            field_value = get_metadata(candidate["doc"], field)
-            if not field_value:
-                continue
-
-            all_texts = extract_all_text_from_field(field_value, field)
-            if not all_texts:
-                continue
-
-            field_max_score = 0.0
-            for text in all_texts:
-                score = token_set_ratio(chunk.lower(), text.lower())
-                field_max_score = max(field_max_score, score)
-
-                # IMMEDIATE RETURN -
-                if score > 90.0:
-                    logger.info(f"[DEBUG] *** EARLY RETURN TRIGGERED *** Score {score} > 90 in field '{field}' for candidate {candidate_idx + 1}")
-                    early_result = [(candidate, score, field)]
-                    return early_result
-
-            if field_max_score > candidate_best_score:
-                candidate_best_score = field_max_score
-                candidate_best_field = field
-
-        logger.info(f"[DEBUG] Candidate total score: {candidate_best_score} (best field: {candidate_best_field})")
-
-        # Record for high-score tracking (>= 60)
-        if candidate_best_score >= 60:
-            high_score_candidates.append((candidate, candidate_best_score, candidate_best_field))
-            logger.info(f"[DEBUG] Candidate score >= 60 (count: {len(high_score_candidates)})")
-
-        # Early return if we have 5 high-scoring candidates
-        if len(high_score_candidates) >= 5:
-            logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates with score >= 60. Returning all.")
-            high_score_candidates.sort(key=lambda x: x[1], reverse=True)
-            return high_score_candidates
-
-    # Case 1: Return high-score candidates if any found (>= 60)
-    if high_score_candidates:
-        logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates with score >= 60. Returning all.")
-        high_score_candidates.sort(key=lambda x: x[1], reverse=True)
-        return high_score_candidates
-    
-    logger.info(f"[DEBUG] No candidates >= 60 found for chunk '{chunk}'. Returning None (global fallback will handle this).")
-    return None
-
-
-
-
 
 def extract_features(device_doc):
     """
@@ -139,7 +46,89 @@ def extract_features(device_doc):
 
     return features
 
+def get_best_candidate(
+    chunk: str,
+    candidates: List[Dict],
+    fields: List[str],
+    excluded_fields: Set[str] = None,
+) -> Optional[List[Tuple[Dict, float, str]]]:
+    """
+    Full-scan version: returns ALL candidates that score >= 60,
+    or the top 5 highest scoring candidates if none score >= 60.
 
+    Enhanced:
+    - Immediately return if any individual field value scores > 90
+    - Return all candidates when 5 candidates score >= 60
+    - Skip excluded fields
+    - If no candidate meets min_score_threshold, return top 5 highest-scoring candidates (REUSING calculated scores)
+
+    Returns: List of (candidate, score, matched_field) or None
+    """
+    if not candidates or not chunk.strip():
+        return None
+
+    if excluded_fields is None:
+        excluded_fields = set()
+    
+    # Filter out excluded fields
+    active_fields = [field for field in fields if field not in excluded_fields]
+    
+    if not active_fields:
+        logger.info(f"[DEBUG] All fields excluded for chunk '{chunk}'. Skipping.")
+        return None
+
+    logger.info(f"\n[DEBUG] === FULL-SCAN Processing chunk: '{chunk}' ===")
+    logger.info(f"[DEBUG] Active fields: {active_fields}")
+    logger.info(f"[DEBUG] Excluded fields: {excluded_fields}")
+    
+    high_score_candidates = []  # List of (candidate, score, field) for score >= 60
+
+    for candidate_idx, candidate in enumerate(candidates):
+        candidate_best_score = 0.0
+        candidate_best_field = None
+
+        for field in active_fields:
+            field_value = get_metadata(candidate["doc"], field)
+            if not field_value:
+                continue
+
+            all_texts = extract_all_text_from_field(field_value, field)
+            if not all_texts:
+                continue
+
+            field_max_score = 0.0
+            for text in all_texts:
+                score = token_set_ratio(chunk.lower(), text.lower())
+                field_max_score = max(field_max_score, score)
+
+                # IMMEDIATE RETURN - Early exit on high score
+                if score > 90.0:
+                    logger.info(f"[DEBUG] *** EARLY RETURN *** Score {score:.1f} > 90 in field '{field}'")
+                    early_result = [(candidate, score, field)]
+                    return early_result
+
+            if field_max_score > candidate_best_score:
+                candidate_best_score = field_max_score
+                candidate_best_field = field
+
+        # Record for high-score tracking (>= 60)
+        if candidate_best_score >= 60:
+            high_score_candidates.append((candidate, candidate_best_score, candidate_best_field))
+
+        # Early return if we have 5 high-scoring candidates
+        if len(high_score_candidates) >= 5:
+            logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates with score >= 60. Returning all.")
+            high_score_candidates.sort(key=lambda x: x[1], reverse=True)
+            return high_score_candidates
+
+    # Case 1: Return high-score candidates if any found (>= 60)
+    if high_score_candidates:
+        logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates with score >= 60. Returning all.")
+        high_score_candidates.sort(key=lambda x: x[1], reverse=True)
+        return high_score_candidates
+    
+    logger.info(f"[DEBUG] No candidates >= 60 found for chunk '{chunk}'. Returning None (global fallback will handle this).")
+    return None
 
 
 def suggest_similar_candidate(
@@ -216,5 +205,10 @@ def suggest_similar_candidate(
 
     return top_candidates
 
+def convert_to_string(value) -> str:
+    """Convert any value to a string in a standardized way."""
+    if isinstance(value, list):
+        return " ".join(str(item) for item in value)
+    return str(value)
 
 

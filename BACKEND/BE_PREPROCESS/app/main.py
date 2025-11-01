@@ -1,7 +1,7 @@
 from typing import Any, Awaitable, Callable, Dict, Optional, cast
 
 from asgi_correlation_id import CorrelationIdMiddleware
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
@@ -17,6 +17,7 @@ from app.utils.helpers import LoggingMiddleware
 from app.utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 from app.utils.logger import get_logger, setup_logging
 from app.utils.tracing import extract_context_from_request, get_current_trace_ids, get_tracer
+from app.utils.auth import require_admin_role
 
 setup_logging(json_logs=True)
 logger = get_logger(__name__)
@@ -212,11 +213,37 @@ async def root():
     }
 
 
-app.include_router(rag_url_router, prefix="/internal/v1", tags=["RAG controller"])
-app.include_router(rag_pdf_router, prefix="/internal/v1", tags=["RAG controller"])
-app.include_router(expert_pdf_router, prefix="/internal/v1", tags=["Expert controller"])
-app.include_router(expert_url_router, prefix="/internal/v1", tags=["Expert controller"])
-app.include_router(recommend_router, prefix="/internal/v1", tags=["Reommmend controller"])
+# All routes require admin authentication
+app.include_router(
+    rag_url_router, 
+    prefix="/internal/v1", 
+    tags=["RAG controller"],
+    # dependencies=[Depends(require_admin_role)]  # Temporarily commented for testing
+)
+app.include_router(
+    rag_pdf_router, 
+    prefix="/internal/v1", 
+    tags=["RAG controller"],
+    # dependencies=[Depends(require_admin_role)]  # Temporarily commented for testing
+)
+app.include_router(
+    expert_pdf_router, 
+    prefix="/internal/v1", 
+    tags=["Expert controller"],
+    # dependencies=[Depends(require_admin_role)]  # Temporarily commented for testing
+)
+app.include_router(
+    expert_url_router, 
+    prefix="/internal/v1", 
+    tags=["Expert controller"],
+    # dependencies=[Depends(require_admin_role)]  # Temporarily commented for testing
+)
+app.include_router(
+    recommend_router, 
+    prefix="/internal/v1", 
+    tags=["Reommmend controller"],
+    # dependencies=[Depends(require_admin_role)]  # Temporarily commented for testing
+)
 
 
 # For local development

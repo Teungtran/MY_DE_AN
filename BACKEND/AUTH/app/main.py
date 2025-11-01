@@ -6,6 +6,9 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from app.controller.login_page import auth
 from app.utils.helpers import LoggingMiddleware
 from app.utils.logging.logger import get_logger, setup_logging
+from app.utils.db import get_db
+from sqlalchemy.orm import Session
+from fastapi import Depends
 from typing_extensions import cast
 setup_logging(json_logs=True)
 logger = get_logger(__name__)
@@ -58,6 +61,44 @@ async def root():
         "version": app.version,
         "status": "healthy",
     }
+
+# Diagnostic endpoint to check database
+@app.get("/v1/auth/debug/db", tags=["debug"])
+async def debug_database(db: Session = Depends(get_db)):
+    """Debug endpoint to check database connection and list users"""
+    from app.utils.db import CustomerInfo, get_db_uri
+    import os
+    
+    db_path = os.getenv("SQLITE_DB_PATH", "Not set")
+    db_uri = get_db_uri()
+    
+    try:
+        total_users = db.query(CustomerInfo).count()
+        users = db.query(CustomerInfo).all()
+        user_list = [
+            {
+                "user_id": u.user_id,
+                "email": u.email,
+                "customer_name": u.customer_name,
+                "role": u.role
+            }
+            for u in users
+        ]
+        
+        return {
+            "status": "connected",
+            "db_path_env": db_path,
+            "db_uri": db_uri,
+            "total_users": total_users,
+            "users": user_list
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "db_path_env": db_path,
+            "db_uri": db_uri,
+            "error": str(e)
+        }
 
 app.include_router(auth, prefix="/v1/auth", tags=["Login controller"])
 

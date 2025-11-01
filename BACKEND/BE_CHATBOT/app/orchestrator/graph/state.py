@@ -5,6 +5,7 @@ from typing_extensions import TypedDict, Literal
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.messages import ToolMessage
 from pydantic import EmailStr
+from app.services.inmemory_store import recommended_devices_cache
 
 
 def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[str]]) -> Optional[List[str]]:
@@ -54,7 +55,6 @@ class AgenticState(InputState):
     conversation_id: Annotated[str, "The unique identifier for the conversation"]
     user_id: Annotated[str, "The unique identifier for the user"]
     email: Annotated[EmailStr,"The email of the customer ordering"]
-    
 class Assistant:
     def __init__(self, runnable: Runnable):
         self.runnable = runnable
@@ -72,20 +72,10 @@ class Assistant:
                 state = {**state, "messages": messages}
             else:
                 break
-        if hasattr(result, "tool_calls") and result.tool_calls:
-            for tool_call in result.tool_calls:
-                if tool_call.get("name") == "recommend_system" and tool_call.get("return_value"):
-                    return_value = tool_call.get("return_value")
-                    if isinstance(return_value, tuple) and len(return_value) > 1:
-                        response, device_names = return_value
-                        global recommended_devices_cache
-                        recommended_devices_cache = device_names
-                        if isinstance(state, dict):
-                            state["recommended_devices"] = device_names
         return {"messages": result}
     
     
-def to_main_state(state: AgenticState) -> dict:
+def pop_dialog_state(state: AgenticState) -> dict:
     """Pop the dialog stack and return to the main assistant."""
     messages = []
     if state["messages"][-1].tool_calls:
@@ -98,4 +88,4 @@ def to_main_state(state: AgenticState) -> dict:
     return {
         "dialog_state": "pop",
         "messages": messages,
-    } 
+    }
