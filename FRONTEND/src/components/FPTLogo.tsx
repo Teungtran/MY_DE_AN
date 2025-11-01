@@ -1,31 +1,15 @@
-import React from 'react';
+import fptShopLogo from '../assets/fpt-shop-logo.png';
 
 export function FPTLogo() {
   return (
     <div className="flex items-center">
-      {/* FPT Shop Logo */}
-      {/* 
-        SETUP INSTRUCTIONS:
-        1. Save the FPT Shop logo image to: FRONTEND/src/assets/fpt-shop-logo.png
-        2. The logo will automatically be imported and displayed
-        
-        Alternatively, you can use the official FPT Shop logo URL or keep the SVG version below
-      */}
-      
-      {/* Option 1: Use local image (recommended - uncomment after adding image) */}
-      {/* <img 
-        src="/src/assets/fpt-shop-logo.png" 
-        alt="FPT Shop" 
-        className="h-10 w-auto object-contain"
-      /> */}
-      
-      {/* Option 2: Use official FPT Shop logo from Wikia */}
+      {/* FPT Shop Logo - Using local image */}
       <img 
-        src="https://static.wikia.nocookie.net/logos/images/6/60/FPT_Shop.png/revision/latest/scale-to-width-down/985?cb=20211102105457&path-prefix=vi" 
+        src={fptShopLogo} 
         alt="FPT Shop" 
         className="h-12 w-auto object-contain"
         onError={(e) => {
-          // Fallback to SVG if external image fails
+          // Fallback to SVG if image fails to load
           const target = e.currentTarget;
           target.style.display = 'none';
           const fallback = target.nextElementSibling;
@@ -33,7 +17,7 @@ export function FPTLogo() {
         }}
       />
       
-      {/* Option 3: Fallback SVG version of FPT Shop logo */}
+      {/* Fallback SVG version of FPT Shop logo */}
       <svg 
         className="hidden h-10 w-auto"
         viewBox="0 0 500 100" 

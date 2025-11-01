@@ -45,6 +45,7 @@ export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -54,6 +55,230 @@ export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
   useEffect(() => {
     scrollToBottom();
   }, [conversations, activeConversation]);
+
+  // Load conversations from localStorage and fetch history from API on mount
+  useEffect(() => {
+    if (isInitialized) return; // Prevent multiple initializations
+
+    const loadConversationsFromStorage = async () => {
+      try {
+        const storedConversations = localStorage.getItem('customer_conversations');
+        if (storedConversations) {
+          const conversationMetadata = JSON.parse(storedConversations);
+          
+          if (conversationMetadata.length === 0) {
+            // Empty array in storage, create initial conversation
+            const conversationId = generateConversationId();
+            const welcomeMessage: Message = {
+              id: 'welcome',
+              content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart shopping assistant at FPT Shop
+
+
+I'm here to help you:
+
+Find the right products that fit your needs
+Recommend the best deals & promotions  
+Assist with order processing and tracking
+
+Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
+
+What can I help you with today?`,
+              sender: 'ai',
+              timestamp: new Date()
+            };
+
+            const newConv: Conversation = {
+              id: conversationId,
+              title: 'New Conversation',
+              lastMessage: 'Welcome to SAGE!',
+              timestamp: new Date(),
+              messages: [welcomeMessage]
+            };
+            
+            setConversations([newConv]);
+            setActiveConversation(newConv.id);
+            
+            localStorage.setItem('customer_conversations', JSON.stringify([{
+              id: conversationId,
+              title: 'New Conversation',
+              lastMessage: 'Welcome to SAGE!',
+              timestamp: newConv.timestamp.toISOString()
+            }]));
+            
+            setIsInitialized(true);
+            return;
+          }
+          
+          // Load history for each conversation
+          const loadedConversations = await Promise.all(
+            conversationMetadata.map(async (meta: { id: string; title: string; timestamp: string; lastMessage: string }) => {
+              try {
+                const history = await chatAPI.getChatHistory(meta.id);
+                const messages: Message[] = history.map((msg: any, idx: number) => ({
+                  id: `${meta.id}-${idx}`,
+                  content: msg.content,
+                  sender: msg.role === 'human' ? 'user' : 'ai',
+                  timestamp: new Date()
+                }));
+
+                return {
+                  id: meta.id,
+                  title: meta.title,
+                  lastMessage: meta.lastMessage,
+                  timestamp: new Date(meta.timestamp),
+                  messages: messages.length > 0 ? messages : [{
+                    id: 'welcome',
+                    content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart shopping assistant at FPT Shop
+
+
+I'm here to help you:
+
+Find the right products that fit your needs
+Recommend the best deals & promotions  
+Assist with order processing and tracking
+
+Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
+
+What can I help you with today?`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]
+                };
+              } catch (error) {
+                console.error(`Failed to load history for conversation ${meta.id}:`, error);
+                // Return conversation with just welcome message if history fails to load
+                return {
+                  id: meta.id,
+                  title: meta.title,
+                  lastMessage: meta.lastMessage,
+                  timestamp: new Date(meta.timestamp),
+                  messages: [{
+                    id: 'welcome',
+                    content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart shopping assistant at FPT Shop
+
+
+I'm here to help you:
+
+Find the right products that fit your needs
+Recommend the best deals & promotions  
+Assist with order processing and tracking
+
+Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
+
+What can I help you with today?`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]
+                };
+              }
+            })
+          );
+
+          setConversations(loadedConversations);
+          if (loadedConversations.length > 0) {
+            setActiveConversation(loadedConversations[0].id);
+          }
+        } else {
+          // No stored conversations, create initial one
+          const conversationId = generateConversationId();
+          const welcomeMessage: Message = {
+            id: 'welcome',
+            content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart shopping assistant at FPT Shop
+
+
+I'm here to help you:
+
+Find the right products that fit your needs
+Recommend the best deals & promotions  
+Assist with order processing and tracking
+
+Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
+
+What can I help you with today?`,
+            sender: 'ai',
+            timestamp: new Date()
+          };
+
+          const newConv: Conversation = {
+            id: conversationId,
+            title: 'New Conversation',
+            lastMessage: 'Welcome to SAGE!',
+            timestamp: new Date(),
+            messages: [welcomeMessage]
+          };
+          
+          setConversations([newConv]);
+          setActiveConversation(newConv.id);
+          
+          localStorage.setItem('customer_conversations', JSON.stringify([{
+            id: conversationId,
+            title: 'New Conversation',
+            lastMessage: 'Welcome to SAGE!',
+            timestamp: newConv.timestamp.toISOString()
+          }]));
+        }
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to load conversations from storage:', error);
+        // Create initial conversation on error
+        const conversationId = generateConversationId();
+        const welcomeMessage: Message = {
+          id: 'welcome',
+          content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart shopping assistant at FPT Shop
+
+
+I'm here to help you:
+
+Find the right products that fit your needs
+Recommend the best deals & promotions  
+Assist with order processing and tracking
+
+Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
+
+What can I help you with today?`,
+          sender: 'ai',
+          timestamp: new Date()
+        };
+
+        const newConv: Conversation = {
+          id: conversationId,
+          title: 'New Conversation',
+          lastMessage: 'Welcome to SAGE!',
+          timestamp: new Date(),
+          messages: [welcomeMessage]
+        };
+        
+        setConversations([newConv]);
+        setActiveConversation(newConv.id);
+        
+        try {
+          localStorage.setItem('customer_conversations', JSON.stringify([{
+            id: conversationId,
+            title: 'New Conversation',
+            lastMessage: 'Welcome to SAGE!',
+            timestamp: newConv.timestamp.toISOString()
+          }]));
+        } catch (e) {
+          console.error('Failed to save to localStorage:', e);
+        }
+        
+        setIsInitialized(true);
+      }
+    };
+
+    loadConversationsFromStorage();
+  }, [isInitialized, user.email]); // Only run on mount or when user changes
 
   const getCurrentConversation = () => {
     return conversations.find(conv => conv.id === activeConversation);
@@ -126,6 +351,22 @@ export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
                 ? { ...conv, title: finalData.title }
                 : conv
             ));
+
+            // Update localStorage with new title
+            try {
+              const storedConversations = localStorage.getItem('customer_conversations');
+              if (storedConversations) {
+                const conversationMetadata = JSON.parse(storedConversations);
+                const updatedMetadata = conversationMetadata.map((meta: any) => 
+                  meta.id === activeConversation 
+                    ? { ...meta, title: finalData.title }
+                    : meta
+                );
+                localStorage.setItem('customer_conversations', JSON.stringify(updatedMetadata));
+              }
+            } catch (error) {
+              console.error('Failed to update conversation title in localStorage:', error);
+            }
           }
           setIsTyping(false);
         }
@@ -185,6 +426,21 @@ What can I help you with today?`,
     setConversations(prev => [newConv, ...prev]);
     setActiveConversation(newConv.id);
     setSidebarOpen(false);
+
+    // Persist to localStorage
+    try {
+      const storedConversations = localStorage.getItem('customer_conversations');
+      const conversationMetadata = storedConversations ? JSON.parse(storedConversations) : [];
+      conversationMetadata.unshift({
+        id: conversationId,
+        title: 'New Conversation',
+        lastMessage: 'Welcome to SAGE!',
+        timestamp: newConv.timestamp.toISOString()
+      });
+      localStorage.setItem('customer_conversations', JSON.stringify(conversationMetadata));
+    } catch (error) {
+      console.error('Failed to save conversation to localStorage:', error);
+    }
   };
 
   const deleteConversation = (convId: string, e: React.MouseEvent<HTMLButtonElement>) => {
@@ -198,6 +454,18 @@ What can I help you with today?`,
     if (convToDelete && window.confirm(`Are you sure you want to delete "${convToDelete.title}"?`)) {
       setConversations(prev => prev.filter(conv => conv.id !== convId));
       
+      // Remove from localStorage
+      try {
+        const storedConversations = localStorage.getItem('customer_conversations');
+        if (storedConversations) {
+          const conversationMetadata = JSON.parse(storedConversations);
+          const updatedMetadata = conversationMetadata.filter((meta: any) => meta.id !== convId);
+          localStorage.setItem('customer_conversations', JSON.stringify(updatedMetadata));
+        }
+      } catch (error) {
+        console.error('Failed to remove conversation from localStorage:', error);
+      }
+      
       // If we're deleting the active conversation, switch to another one
       if (activeConversation === convId) {
         const remainingConvs = conversations.filter(conv => conv.id !== convId);
@@ -210,6 +478,13 @@ What can I help you with today?`,
 
   const clearAllHistory = () => {
     if (window.confirm('Are you sure you want to delete all chat history? This action cannot be undone.')) {
+      // Clear localStorage
+      try {
+        localStorage.removeItem('customer_conversations');
+      } catch (error) {
+        console.error('Failed to clear conversations from localStorage:', error);
+      }
+      
       createNewConversation(); // This will create a fresh conversation
       setConversations(prev => prev.slice(0, 1)); // Keep only the new conversation
     }

@@ -50,6 +50,7 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -59,6 +60,246 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   useEffect(() => {
     scrollToBottom();
   }, [sessions, activeSession]);
+
+  // Load sessions from localStorage and fetch history from API on mount
+  useEffect(() => {
+    if (isInitialized) return; // Prevent multiple initializations
+
+    const loadSessionsFromStorage = async () => {
+      try {
+        const storedSessions = localStorage.getItem('employee_sessions');
+        if (storedSessions) {
+          const sessionMetadata = JSON.parse(storedSessions);
+          
+          if (sessionMetadata.length === 0) {
+            // Empty array in storage, create initial session
+            const sessionId = generateConversationId();
+            const welcomeMessage: Message = {
+              id: 'welcome',
+              content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart business assistant at FPT
+
+Ready to assist you with:
+      
+Competitor insights & market analysis
+Strategic planning & decision support  
+Business intelligence & data insights
+Research & knowledge discovery
+
+Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
+
+What can I help you explore today?`,
+              sender: 'ai',
+              timestamp: new Date()
+            };
+
+            const newSession: Session = {
+              id: sessionId,
+              title: 'New Session',
+              lastMessage: 'Welcome to SAGE!',
+              timestamp: new Date(),
+              status: 'active',
+              participants: [user.email.split('@')[0]],
+              messages: [welcomeMessage]
+            };
+            
+            setSessions([newSession]);
+            setActiveSession(newSession.id);
+            
+            localStorage.setItem('employee_sessions', JSON.stringify([{
+              id: sessionId,
+              title: 'New Session',
+              lastMessage: 'Welcome to SAGE!',
+              timestamp: newSession.timestamp.toISOString(),
+              status: 'active',
+              participants: [user.email.split('@')[0]]
+            }]));
+            
+            setIsInitialized(true);
+            return;
+          }
+          
+          // Load history for each session
+          const loadedSessions = await Promise.all(
+            sessionMetadata.map(async (meta: { id: string; title: string; timestamp: string; lastMessage: string; status: 'active' | 'closed'; participants: string[] }) => {
+              try {
+                const history = await adminAPI.getChatHistory(meta.id);
+                const messages: Message[] = history.map((msg: any, idx: number) => ({
+                  id: `${meta.id}-${idx}`,
+                  content: msg.content,
+                  sender: msg.role === 'human' ? 'user' : 'ai',
+                  timestamp: new Date()
+                }));
+
+                return {
+                  id: meta.id,
+                  title: meta.title,
+                  lastMessage: meta.lastMessage,
+                  timestamp: new Date(meta.timestamp),
+                  status: meta.status,
+                  participants: meta.participants,
+                  messages: messages.length > 0 ? messages : [{
+                    id: 'welcome',
+                    content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart business assistant at FPT
+
+Ready to assist you with:
+      
+Competitor insights & market analysis
+Strategic planning & decision support  
+Business intelligence & data insights
+Research & knowledge discovery
+
+Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
+
+What can I help you explore today?`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]
+                };
+              } catch (error) {
+                console.error(`Failed to load history for session ${meta.id}:`, error);
+                // Return session with just welcome message if history fails to load
+                return {
+                  id: meta.id,
+                  title: meta.title,
+                  lastMessage: meta.lastMessage,
+                  timestamp: new Date(meta.timestamp),
+                  status: meta.status,
+                  participants: meta.participants,
+                  messages: [{
+                    id: 'welcome',
+                    content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart business assistant at FPT
+
+Ready to assist you with:
+      
+Competitor insights & market analysis
+Strategic planning & decision support  
+Business intelligence & data insights
+Research & knowledge discovery
+
+Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
+
+What can I help you explore today?`,
+                    sender: 'ai' as const,
+                    timestamp: new Date()
+                  }]
+                };
+              }
+            })
+          );
+
+          setSessions(loadedSessions);
+          if (loadedSessions.length > 0) {
+            setActiveSession(loadedSessions[0].id);
+          }
+        } else {
+          // No stored sessions, create initial one
+          const sessionId = generateConversationId();
+          const welcomeMessage: Message = {
+            id: 'welcome',
+            content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart business assistant at FPT
+
+Ready to assist you with:
+      
+Competitor insights & market analysis
+Strategic planning & decision support  
+Business intelligence & data insights
+Research & knowledge discovery
+
+Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
+
+What can I help you explore today?`,
+            sender: 'ai',
+            timestamp: new Date()
+          };
+
+          const newSession: Session = {
+            id: sessionId,
+            title: 'New Session',
+            lastMessage: 'Welcome to SAGE!',
+            timestamp: new Date(),
+            status: 'active',
+            participants: [user.email.split('@')[0]],
+            messages: [welcomeMessage]
+          };
+          
+          setSessions([newSession]);
+          setActiveSession(newSession.id);
+          
+          localStorage.setItem('employee_sessions', JSON.stringify([{
+            id: sessionId,
+            title: 'New Session',
+            lastMessage: 'Welcome to SAGE!',
+            timestamp: newSession.timestamp.toISOString(),
+            status: 'active',
+            participants: [user.email.split('@')[0]]
+          }]));
+        }
+        
+        setIsInitialized(true);
+      } catch (error) {
+        console.error('Failed to load sessions from storage:', error);
+        // Create initial session on error
+        const sessionId = generateConversationId();
+        const welcomeMessage: Message = {
+          id: 'welcome',
+          content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart business assistant at FPT
+
+Ready to assist you with:
+      
+Competitor insights & market analysis
+Strategic planning & decision support  
+Business intelligence & data insights
+Research & knowledge discovery
+
+Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
+
+What can I help you explore today?`,
+          sender: 'ai',
+          timestamp: new Date()
+        };
+
+        const newSession: Session = {
+          id: sessionId,
+          title: 'New Session',
+          lastMessage: 'Welcome to SAGE!',
+          timestamp: new Date(),
+          status: 'active',
+          participants: [user.email.split('@')[0]],
+          messages: [welcomeMessage]
+        };
+        
+        setSessions([newSession]);
+        setActiveSession(newSession.id);
+        
+        try {
+          localStorage.setItem('employee_sessions', JSON.stringify([{
+            id: sessionId,
+            title: 'New Session',
+            lastMessage: 'Welcome to SAGE!',
+            timestamp: newSession.timestamp.toISOString(),
+            status: 'active',
+            participants: [user.email.split('@')[0]]
+          }]));
+        } catch (e) {
+          console.error('Failed to save to localStorage:', e);
+        }
+        
+        setIsInitialized(true);
+      }
+    };
+
+    loadSessionsFromStorage();
+  }, [isInitialized, user.email]); // Only run on mount or when user changes
 
   const getCurrentSession = () => {
     return sessions.find(session => session.id === activeSession);
@@ -183,6 +424,23 @@ What can I help you explore today?`,
     setSessions(prev => [newSession, ...prev]);
     setActiveSession(newSession.id);
     setSidebarOpen(false);
+
+    // Persist to localStorage
+    try {
+      const storedSessions = localStorage.getItem('employee_sessions');
+      const sessionMetadata = storedSessions ? JSON.parse(storedSessions) : [];
+      sessionMetadata.unshift({
+        id: sessionId,
+        title: 'New Session',
+        lastMessage: 'Welcome to SAGE!',
+        timestamp: newSession.timestamp.toISOString(),
+        status: 'active',
+        participants: [user.email.split('@')[0]]
+      });
+      localStorage.setItem('employee_sessions', JSON.stringify(sessionMetadata));
+    } catch (error) {
+      console.error('Failed to save session to localStorage:', error);
+    }
   };
 
   const deleteSession = (sessionId: string, e: React.MouseEvent<HTMLButtonElement>) => {
@@ -196,6 +454,18 @@ What can I help you explore today?`,
     if (sessionToDelete && window.confirm(`Are you sure you want to delete "${sessionToDelete.title}"?`)) {
       setSessions(prev => prev.filter(session => session.id !== sessionId));
       
+      // Remove from localStorage
+      try {
+        const storedSessions = localStorage.getItem('employee_sessions');
+        if (storedSessions) {
+          const sessionMetadata = JSON.parse(storedSessions);
+          const updatedMetadata = sessionMetadata.filter((meta: any) => meta.id !== sessionId);
+          localStorage.setItem('employee_sessions', JSON.stringify(updatedMetadata));
+        }
+      } catch (error) {
+        console.error('Failed to remove session from localStorage:', error);
+      }
+      
       // If we're deleting the active session, switch to another one
       if (activeSession === sessionId) {
         const remainingSessions = sessions.filter(session => session.id !== sessionId);
@@ -208,6 +478,13 @@ What can I help you explore today?`,
 
   const clearAllHistory = () => {
     if (window.confirm('Are you sure you want to delete all chat history? This action cannot be undone.')) {
+      // Clear localStorage
+      try {
+        localStorage.removeItem('employee_sessions');
+      } catch (error) {
+        console.error('Failed to clear sessions from localStorage:', error);
+      }
+      
       createNewSession(); // This will create a fresh session
       setSessions(prev => prev.slice(0, 1)); // Keep only the new session
     }
