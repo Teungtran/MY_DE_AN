@@ -529,42 +529,46 @@ I'm here to help once you're ready to try again!`
                 </div>
               </CardHeader>
               {showDataTable && (
-                <CardContent>
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="max-h-96 overflow-auto">
-                      <Table>
-                        <TableHeader className="bg-gray-100 sticky top-0">
-                          <TableRow>
-                            <TableHead className="text-black font-semibold border-r w-16">#</TableHead>
-                            {uploadedData.data[0] && Object.keys(uploadedData.data[0]).map((key) => (
-                              <TableHead key={key} className="text-black font-semibold border-r min-w-[120px]">
-                                {key}
-                              </TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {uploadedData.data.slice(0, 100).map((row, index) => (
-                            <TableRow key={index} className="hover:bg-gray-50">
-                              <TableCell className="border-r font-medium text-gray-600">
-                                {index + 1}
-                              </TableCell>
-                              {Object.values(row).map((value, colIndex) => (
-                                <TableCell key={colIndex} className="border-r text-black">
-                                  {value !== null && value !== undefined ? String(value) : '-'}
-                                </TableCell>
+                <CardContent className="p-0">
+                  <div className="border-t border-gray-200">
+                    <div className="overflow-auto" style={{ maxHeight: '500px' }}>
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader className="bg-gray-100 sticky top-0 z-10">
+                            <TableRow>
+                              <TableHead className="text-black font-semibold border-r w-16 sticky left-0 bg-gray-100 z-20">#</TableHead>
+                              {uploadedData.data[0] && Object.keys(uploadedData.data[0]).map((key) => (
+                                <TableHead key={key} className="text-black font-semibold border-r min-w-[150px] whitespace-nowrap">
+                                  {key}
+                                </TableHead>
                               ))}
                             </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                          </TableHeader>
+                          <TableBody>
+                            {uploadedData.data.slice(0, 100).map((row, index) => (
+                              <TableRow key={index} className="hover:bg-gray-50">
+                                <TableCell className="border-r font-medium text-gray-600 sticky left-0 bg-white z-10">
+                                  {index + 1}
+                                </TableCell>
+                                {Object.values(row).map((value, colIndex) => (
+                                  <TableCell key={colIndex} className="border-r text-black whitespace-nowrap">
+                                    {value !== null && value !== undefined ? String(value) : '-'}
+                                  </TableCell>
+                                ))}
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
                     </div>
+                    {uploadedData.data.length > 100 && (
+                      <div className="p-3 bg-gray-50 border-t border-gray-200">
+                        <p className="text-sm text-gray-500 text-center">
+                          + {uploadedData.data.length - 100} more rows available for analysis
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  {uploadedData.data.length > 100 && (
-                    <p className="text-sm text-gray-500 mt-2 text-center">
-                      + {uploadedData.data.length - 100} more rows available for analysis
-                    </p>
-                  )}
                 </CardContent>
               )}
             </Card>

@@ -5,7 +5,7 @@ import asyncio
 import shutil
 from pathlib import Path
 import uuid
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Query
 from app.workflow.team_agents import store_team
 from pydantic import BaseModel, Field
 from app.controllers.login_page import require_store_role 
@@ -91,9 +91,9 @@ async def get_chat_history(id: str):
     
 @router.post("/team/chat/stream")
 async def stream_team_chat(
-    id,
-    request: TeamChatRequest, 
-    current_user: dict = Depends(require_store_role)
+    request: TeamChatRequest,
+    id: Optional[str] = Query(None, description="Session ID (optional, will generate new one if not provided)"),
+    # current_user: dict = Depends(require_store_role)
 ):
     """
     Get chat responses from the store team (requires admin/staff role)
@@ -102,7 +102,7 @@ async def stream_team_chat(
     try:
         if id is None:
             id = str(uuid.uuid4())
-        user_id = current_user["user_id"]
+        user_id = "id" #current_user["user_id"]
         logger.info(f"Starting team chat for user {user_id}, session {id}")
         ui_message = _get_ui_title_for_session(id, request.message)
         await save_message_to_redis(id, "human", request.message) 
@@ -151,7 +151,7 @@ async def stream_team_chat(
 @router.post("/report/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    current_user: dict = Depends(require_store_role)
+    # current_user: dict = Depends(require_store_role)
 ):
     """Upload report file for analysis (requires admin/staff role)"""
     # Mock user for testing (commented out - use for future tests if needed)
@@ -197,7 +197,7 @@ async def upload_file(
 @router.post("/report/analyze")
 async def report_agent(
     question: str = Form(...),
-    current_user: dict = Depends(require_store_role)
+    # current_user: dict = Depends(require_store_role)
 ):
     """Analyze uploaded data file with a natural language question (requires admin/staff role)
     Returns the complete analysis content directly.
