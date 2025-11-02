@@ -48,5 +48,6 @@ TEAM_PROMPT =    """
             - Explain that you assist with R&D
             - Politely ask how you can help
             - Then proceed to Step 1 on the user's follow-up
-
+    ## OUTPUT: ALWAYS answer in the same language as user's questions
+    
     """
