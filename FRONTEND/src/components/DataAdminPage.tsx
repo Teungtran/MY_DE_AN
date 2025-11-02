@@ -103,7 +103,7 @@ export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
       // Prepare URL data
       const urlData = [{
         source: url,
-        description: `${typeText} content from ${url}`,
+        description: "URL",
         type: urlType === 'product' ? 'RECOMMEND' : 
               urlType === 'agent-knowledge' ? 'EXPERT_KNOWLEDGE' : 
               'RAG',

@@ -36,34 +36,45 @@ def process_chunks_with_field_exclusion(
     chunks_to_process: List[str],
     candidates: List[Dict],
     all_fields: List[str],
-    chunk_count: int
+    chunk_count: int,
+    device_name_mode: bool = False  # NEW PARAMETER
 ) -> Tuple[List[Dict], List[Dict], Set[str]]:
     """
-    Process ALL chunks in parallel:
-    - Each chunk processes independently with get_best_candidate
-    - Each chunk can early stop at 90+ or return candidates with 70+
-    - Collect results from ALL chunks
-    - Stop when total candidates reach 5
-    - GLOBAL FALLBACK: Only if NO chunks find any candidates above 70, 
-      then return top 5 from all calculated scores across all chunks
+    Process ALL chunks in parallel with device_name priority support.
+    
+    DEVICE_NAME MODE (device_name_mode=True):
+    - Early stop at >95, otherwise return top 5 from full scan
+    - No global fallback needed (always returns results)
+    
+    NORMAL MODE (device_name_mode=False) - ORIGINAL BEHAVIOR:
+    - Early stop at >90
+    - Return candidates ≥60, stop when 5 found
+    - Global fallback if no candidates ≥60 found
+    
     Returns:
-        strong_matches (≥90),
-        high_score_candidates (≥70),
+        strong_matches (≥early_stop_threshold),
+        high_score_candidates (all returned candidates),
         excluded_fields
     """
     excluded_fields = set()
     excluded_fields_lock = Lock()
-    strong_matches = []          # All ≥90 matches
-    high_score_candidates = []   # All ≥70 matches (including ≥90)
+    strong_matches = []
+    high_score_candidates = []
     chunk_results_lock = Lock()
     total_candidates_lock = Lock()
     total_candidates_count = 0
     early_stop_flag = {"stop": False}
     
-    all_candidate_scores = []  # List of (candidate, score, field, chunk)
+    all_candidate_scores = []  # For global fallback in normal mode
     all_scores_lock = Lock()
 
-    logger.info(f"[DEBUG:process_chunks] Processing {chunk_count} chunks in parallel")
+    # Set thresholds based on mode
+    early_stop_threshold = 95.0 if device_name_mode else 90.0
+    min_score_threshold = 70.0 if device_name_mode else 60.0  # For logging only
+    
+    mode_label = "DEVICE_NAME" if device_name_mode else "NORMAL"
+    logger.info(f"[DEBUG:process_chunks] [{mode_label} MODE] Processing {chunk_count} chunks in parallel")
+    logger.info(f"[DEBUG:process_chunks] Early stop threshold: {early_stop_threshold}")
 
     def process_chunk(chunk: str):
         nonlocal excluded_fields, strong_matches, high_score_candidates, total_candidates_count, early_stop_flag, all_candidate_scores
@@ -80,15 +91,17 @@ def process_chunks_with_field_exclusion(
             logger.info(f"[DEBUG] All fields excluded. Skipping chunk: {chunk}")
             return
 
-        # Process this chunk independently
+        # Process this chunk independently with device_name_mode
         results = get_best_candidate(
             chunk=chunk,
             candidates=candidates,
             fields=available_fields,
-            excluded_fields=excluded_fields
+            excluded_fields=excluded_fields,
+            device_name_mode=device_name_mode  # Pass the mode
         )
         
-        if not results:
+        # NORMAL MODE: Collect fallback scores if no results (ORIGINAL BEHAVIOR)
+        if not device_name_mode and not results:
             logger.info(f"[DEBUG] No results from get_best_candidate, collecting fallback scores for chunk '{chunk}'")
             chunk_fallback_scores = []
             for candidate in candidates:
@@ -113,16 +126,16 @@ def process_chunks_with_field_exclusion(
                         candidate_best_score = field_max_score
                         candidate_best_field = field
                 
-                if candidate_best_score > 0:  # Only add if there's some score
+                if candidate_best_score > 0:
                     chunk_fallback_scores.append((candidate, candidate_best_score, candidate_best_field, chunk))
             
             with all_scores_lock:
                 all_candidate_scores.extend(chunk_fallback_scores)
-        else:
-            logger.info(f"[DEBUG] get_best_candidate returned {len(results)} results, skipping fallback collection")
+        elif results:
+            logger.info(f"[DEBUG] get_best_candidate returned {len(results)} results")
 
         if not results:
-            logger.info(f"[DEBUG] Chunk '{chunk}' found no candidates >= 70")
+            logger.info(f"[DEBUG] Chunk '{chunk}' found no candidates")
             return
 
         chunk_results = []
@@ -139,7 +152,7 @@ def process_chunks_with_field_exclusion(
         with chunk_results_lock:
             for item in chunk_results:
                 high_score_candidates.append(item)
-                if item["score"] >= 90:
+                if item["score"] >= early_stop_threshold:
                     strong_matches.append(item)
 
         with total_candidates_lock:
@@ -148,6 +161,7 @@ def process_chunks_with_field_exclusion(
 
         logger.info(f"[DEBUG] Chunk '{chunk}' returned {len(chunk_results)} results (Total: {current_total})")
 
+        # Stop when we have enough candidates
         if current_total >= 5:
             logger.info(f"[DEBUG] Total candidates reached {current_total}, triggering early stop")
             early_stop_flag["stop"] = True
@@ -167,19 +181,17 @@ def process_chunks_with_field_exclusion(
             except Exception as e:
                 logger.info(f"[DEBUG] Error processing chunk: {e}")
 
-    logger.info(f"[DEBUG] All chunks processed. Found {len(strong_matches)} strong matches, {len(high_score_candidates)} total high-score matches")
+    logger.info(f"[DEBUG] All chunks processed. Found {len(strong_matches)} strong matches (>={early_stop_threshold}), {len(high_score_candidates)} total candidates")
     
-    # GLOBAL FALLBACK: Only if NO chunks found candidates above 70, select top 5 from all scores
-    if len(high_score_candidates) == 0 and all_candidate_scores:
-        logger.info("[DEBUG] GLOBAL FALLBACK TRIGGERED: No chunks found candidates >= 70. Selecting top 5 from all calculated scores.")
+    # GLOBAL FALLBACK: ONLY for normal mode (ORIGINAL BEHAVIOR)
+    if not device_name_mode and len(high_score_candidates) == 0 and all_candidate_scores:
+        logger.info(f"[DEBUG] GLOBAL FALLBACK TRIGGERED: No chunks found candidates >= {min_score_threshold}. Selecting top 5 from all calculated scores.")
         
-        # Sort all candidate scores by score (descending) and take top 5
         all_candidate_scores.sort(key=lambda x: x[1], reverse=True)
         top_5_fallback = all_candidate_scores[:5]
         
         logger.info(f"[DEBUG] Global fallback - Top 5 candidates from {len(all_candidate_scores)} total scores:")
         
-        # Convert to the expected format
         for i, (candidate, score, matched_field, chunk) in enumerate(top_5_fallback, 1):
             fallback_item = {
                 "chunk": chunk,
@@ -194,9 +206,9 @@ def process_chunks_with_field_exclusion(
         
         logger.info(f"[DEBUG] Global fallback applied: {len(high_score_candidates)} candidates selected")
     elif len(high_score_candidates) > 0:
-        logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates >= 70. No global fallback needed.")
+        logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates. No global fallback needed.")
     else:
-        logger.info("[DEBUG] No candidates found and no fallback scores available.")
+        logger.info("[DEBUG] No candidates found and no fallback available.")
 
     return strong_matches, high_score_candidates, excluded_fields
 
@@ -251,21 +263,22 @@ async def scoring_logic(
     text_fields = text_fields[:3]
     logger.info(f"[DEBUG] Processing fields: {text_fields}")
 
-    # === Process chunks ===
+    # === Process chunks with device_name priority mode ===
     strong_matches, high_score_candidates, excluded_fields = process_chunks_with_field_exclusion(
-        input_chunks, candidates, text_fields, len(input_chunks)
+        input_chunks, candidates, text_fields, len(input_chunks),
+        device_name_mode=device_name  # Pass device_name flag as mode
     )
 
     logger.info(f"[DEBUG] Final excluded fields: {excluded_fields}")
-    logger.info(f"[DEBUG] Found {len(strong_matches)} strong matches (>90)")
-    logger.info(f"[DEBUG] Found {len(high_score_candidates)} total high-score matches (≥70)")
+    logger.info(f"[DEBUG] Found {len(strong_matches)} strong matches (>={95 if device_name else 90})")
+    logger.info(f"[DEBUG] Found {len(high_score_candidates)} total candidates")
 
     # Deduplicate by device_name
     device_scores = {}
     device_candidates = {}
     seen_names = set()
 
-    # Add ALL high-score candidates, sorted by score
+    # Add ALL candidates, sorted by score
     all_relevant = sorted(high_score_candidates, key=lambda x: x["score"], reverse=True)
 
     for item in all_relevant:
@@ -332,7 +345,6 @@ async def scoring_logic(
                 content += f"- {field}: {value}\n"
             products_info.append(content)
         product_info_block = "\n".join(products_info)
-        logger.info(f"[DEBUG] Generated product_info_block with {len(products_info)} products")
 
     return type_key, top_device_names, product_info_block, top_candidates
 
@@ -380,7 +392,7 @@ async def recommend_system_async(
     all_points_dict = get_all_points(device_type=device_type)
     logger.info(f"[DEBUG] Suitable for: {suitable_for}")
     logger.info(f"[DEBUG] Types found in all_points_dict: {list(all_points_dict.keys())}")
-    mandatory_fields = ["device_name"]  # Removed "brand" from mandatory_fields
+    mandatory_fields = ["device_name"]  
     feature_fields = ["phone_features", "laptop_features", "tablet_features"]
     best_field, best_score = max(
         ((field, token_set_ratio(device_type, field)) for field in feature_fields),

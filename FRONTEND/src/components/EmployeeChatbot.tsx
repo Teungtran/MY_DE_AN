@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -345,27 +346,47 @@ What can I help you explore today?`,
     ));
 
     try {
-      // Use real admin team chat streaming API
-      await adminAPI.teamChatStream(
+      // Use real admin team chat API (now returns JSON directly, no streaming)
+      const response = await adminAPI.teamChatStream(
         userMessage,
-        activeSession, // Use session ID
-        (chunk) => {
-          // Update AI message with streaming chunks
-          setSessions(prev => prev.map(session => 
-            session.id === activeSession 
-              ? { 
-                  ...session, 
-                  messages: session.messages.map(msg => 
-                    msg.id === aiMessageId 
-                      ? { ...msg, content: msg.content + chunk }
-                      : msg
-                  ),
-                  lastMessage: chunk
-                }
-              : session
-          ));
-        }
+        activeSession // Use session ID
       );
+      
+      // Update AI message with complete response
+      setSessions(prev => prev.map(session => 
+        session.id === activeSession 
+          ? { 
+              ...session, 
+              messages: session.messages.map(msg => 
+                msg.id === aiMessageId 
+                  ? { ...msg, content: response.content || '' }
+                  : msg
+              ),
+              lastMessage: response.content || '',
+              // Update title if provided in response
+              ...(response.title && { title: response.title })
+            }
+          : session
+      ));
+      
+      // Update localStorage with new title if provided
+      if (response.title) {
+        try {
+          const storedSessions = localStorage.getItem('employee_sessions');
+          if (storedSessions) {
+            const sessionMetadata = JSON.parse(storedSessions);
+            const updatedMetadata = sessionMetadata.map((meta: any) => 
+              meta.id === activeSession 
+                ? { ...meta, title: response.title }
+                : meta
+            );
+            localStorage.setItem('employee_sessions', JSON.stringify(updatedMetadata));
+          }
+        } catch (error) {
+          console.error('Failed to update session title in localStorage:', error);
+        }
+      }
+      
       setIsTyping(false);
     } catch (error) {
       console.error('Team chat error:', error);
@@ -772,7 +793,75 @@ What can I help you explore today?`,
                     {msg.senderName && (
                       <p className="text-xs opacity-70 mb-1">{msg.senderName}</p>
                     )}
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.sender === 'ai' ? (
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            img: ({ src, alt }) => (
+                              <img 
+                                src={src} 
+                                alt={alt} 
+                                className="rounded-lg max-w-full h-auto my-2 shadow-md" 
+                                style={{ maxHeight: '200px', objectFit: 'cover' }}
+                              />
+                            ),
+                            h1: ({ children }) => (
+                              <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-2">{children}</h1>
+                            ),
+                            h2: ({ children }) => (
+                              <h2 className="text-xl font-bold text-gray-900 mt-4 mb-2">{children}</h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="text-lg font-semibold text-gray-900 mt-4 mb-2">{children}</h3>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className="list-disc list-inside space-y-1 text-gray-700 my-2">{children}</ul>
+                            ),
+                            ol: ({ children }) => (
+                              <ol className="list-decimal list-inside space-y-1 text-gray-700 my-2">{children}</ol>
+                            ),
+                            li: ({ children }) => (
+                              <li className="text-gray-700">{children}</li>
+                            ),
+                            p: ({ children }) => (
+                              <p className="text-gray-800 mb-2 leading-relaxed">{children}</p>
+                            ),
+                            strong: ({ children }) => (
+                              <strong className="font-semibold text-gray-900">{children}</strong>
+                            ),
+                            em: ({ children }) => (
+                              <em className="italic text-gray-800">{children}</em>
+                            ),
+                            code: ({ children }) => (
+                              <code className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+                            ),
+                            pre: ({ children }) => (
+                              <pre className="bg-gray-100 text-gray-900 p-3 rounded-lg overflow-x-auto my-2">{children}</pre>
+                            ),
+                            blockquote: ({ children }) => (
+                              <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700 my-2">{children}</blockquote>
+                            ),
+                            a: ({ href, children }) => (
+                              <a 
+                                href={href} 
+                                className="text-blue-600 hover:text-blue-800 underline"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {children}
+                              </a>
+                            ),
+                            hr: () => (
+                              <hr className="my-4 border-gray-300" />
+                            )
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    )}
                     <p className="text-xs opacity-70 mt-1">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>

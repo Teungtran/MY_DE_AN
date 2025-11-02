@@ -45,22 +45,24 @@ def extract_features(device_doc):
                         features.append(f"{key}: {str(item).strip()}")
 
     return features
-
 def get_best_candidate(
     chunk: str,
     candidates: List[Dict],
     fields: List[str],
     excluded_fields: Set[str] = None,
+    device_name_mode: bool = False
 ) -> Optional[List[Tuple[Dict, float, str]]]:
     """
-    Full-scan version: returns ALL candidates that score >= 60,
-    or the top 5 highest scoring candidates if none score >= 60.
-
-    Enhanced:
-    - Immediately return if any individual field value scores > 90
-    - Return all candidates when 5 candidates score >= 60
-    - Skip excluded fields
-    - If no candidate meets min_score_threshold, return top 5 highest-scoring candidates (REUSING calculated scores)
+    Unified logic for both modes with configurable thresholds.
+    
+    DEVICE_NAME MODE (device_name_mode=True):
+    - Early stop: >95
+    - Scan all candidates, return top 5 (no minimum threshold)
+    
+    NORMAL MODE (device_name_mode=False):
+    - Early stop: >90
+    - Stop when 5 candidates score >=60
+    - Return None if no candidates >=60
 
     Returns: List of (candidate, score, matched_field) or None
     """
@@ -70,20 +72,32 @@ def get_best_candidate(
     if excluded_fields is None:
         excluded_fields = set()
     
-    # Filter out excluded fields
     active_fields = [field for field in fields if field not in excluded_fields]
-    
     if not active_fields:
         logger.info(f"[DEBUG] All fields excluded for chunk '{chunk}'. Skipping.")
         return None
 
-    logger.info(f"\n[DEBUG] === FULL-SCAN Processing chunk: '{chunk}' ===")
-    logger.info(f"[DEBUG] Active fields: {active_fields}")
-    logger.info(f"[DEBUG] Excluded fields: {excluded_fields}")
+    # Configure thresholds based  mode
+    config = {
+        'early_stop': 100.0 if device_name_mode else 90.0,
+        'min_score': None if device_name_mode else 60.0,  # None = no threshold
+        'scan_all': device_name_mode,  # True = scan all, False = stop at 5
+        'mode_label': "DEVICE_NAME" if device_name_mode else "NORMAL"
+    }
     
-    high_score_candidates = []  # List of (candidate, score, field) for score >= 60
+    logger.info(f"\n[DEBUG] === FULL-SCAN [{config['mode_label']} MODE] Processing chunk: '{chunk}' ===")
+    logger.info(f"[DEBUG] Early stop threshold: {config['early_stop']}")
+    if config['min_score'] is not None:
+        logger.info(f"[DEBUG] Min score threshold: {config['min_score']}")
+    logger.info(f"[DEBUG] Scan all: {config['scan_all']}")
+    logger.info(f"[DEBUG] Active fields: {active_fields}")
+    
+    candidate_scores = []  # Unified list for all scores
 
     for candidate_idx, candidate in enumerate(candidates):
+        device_name = get_metadata(candidate["doc"], "device_name", "Unknown")
+        logger.info(f"\n[DEBUG] --- Checking Candidate {candidate_idx + 1}: {device_name} ---")
+
         candidate_best_score = 0.0
         candidate_best_field = None
 
@@ -101,34 +115,49 @@ def get_best_candidate(
                 score = token_set_ratio(chunk.lower(), text.lower())
                 field_max_score = max(field_max_score, score)
 
-                # IMMEDIATE RETURN - Early exit on high score
-                if score > 90.0:
-                    logger.info(f"[DEBUG] *** EARLY RETURN *** Score {score:.1f} > 90 in field '{field}'")
-                    early_result = [(candidate, score, field)]
-                    return early_result
+                # IMMEDIATE RETURN if score exceeds early stop threshold
+                if score > config['early_stop']:
+                    logger.info(f"[DEBUG] *** EARLY RETURN TRIGGERED *** Score {score} > {config['early_stop']} in field '{field}'")
+                    return [(candidate, score, field)]
 
             if field_max_score > candidate_best_score:
                 candidate_best_score = field_max_score
                 candidate_best_field = field
 
-        # Record for high-score tracking (>= 60)
-        if candidate_best_score >= 60:
-            high_score_candidates.append((candidate, candidate_best_score, candidate_best_field))
+        logger.info(f"[DEBUG] Candidate total score: {candidate_best_score} (best field: {candidate_best_field})")
 
-        # Early return if we have 5 high-scoring candidates
-        if len(high_score_candidates) >= 5:
-            logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates with score >= 60. Returning all.")
-            high_score_candidates.sort(key=lambda x: x[1], reverse=True)
-            return high_score_candidates
+        if config['min_score'] is None:
+            # No threshold - collect all scores > 0
+            if candidate_best_score > 0:
+                candidate_scores.append((candidate, candidate_best_score, candidate_best_field))
+        else:
+            if candidate_best_score >= config['min_score']:
+                candidate_scores.append((candidate, candidate_best_score, candidate_best_field))
+                logger.info(f"[DEBUG] Candidate score >= {config['min_score']} (count: {len(candidate_scores)})")
+                
+                # Early return if we have 5 and not scanning all
+                if not config['scan_all'] and len(candidate_scores) >= 5:
+                    logger.info(f"[DEBUG] Found {len(candidate_scores)} candidates. Returning all.")
+                    candidate_scores.sort(key=lambda x: x[1], reverse=True)
+                    return candidate_scores
 
-    # Case 1: Return high-score candidates if any found (>= 60)
-    if high_score_candidates:
-        logger.info(f"[DEBUG] Found {len(high_score_candidates)} candidates with score >= 60. Returning all.")
-        high_score_candidates.sort(key=lambda x: x[1], reverse=True)
-        return high_score_candidates
+    # Return logic
+    if candidate_scores:
+        candidate_scores.sort(key=lambda x: x[1], reverse=True)
+        top_5 = candidate_scores[:5]
+        logger.info(f"[DEBUG] Scanned {len(candidate_scores)} candidates. Returning top {len(top_5)}:")
+        for i, (cand, score, field) in enumerate(top_5, 1):
+            name = get_metadata(cand["doc"], "device_name", "Unknown")
+            logger.info(f"[DEBUG]   {i}. {name}: {score:.2f} (field: {field})")
+        return top_5
     
-    logger.info(f"[DEBUG] No candidates >= 60 found for chunk '{chunk}'. Returning None (global fallback will handle this).")
+    if config['min_score'] is not None:
+        logger.info(f"[DEBUG] No candidates >= {config['min_score']} found. Returning None (fallback may trigger).")
+    else:
+        logger.info(f"[DEBUG] No candidates with score > 0 found.")
     return None
+
+
 
 
 def suggest_similar_candidate(

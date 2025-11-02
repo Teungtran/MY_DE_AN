@@ -202,40 +202,17 @@ What type of data are you planning to analyze?`
         return;
       }
 
-      // Use real streaming API for report analysis
-      await adminAPI.analyzeReport(
-        userMessage,
-        (chunk) => {
-          // Update AI message with streaming chunks
-          setMessages(prev => prev.map(msg => 
-            msg.id === aiMessageId 
-              ? { ...msg, content: msg.content + chunk }
-              : msg
-          ));
-        },
-        () => {
-          // On completion
-          setIsTyping(false);
-        },
-        (error) => {
-          // On error during streaming
-          console.error('Streaming error:', error);
-          setMessages(prev => prev.map(msg => 
-            msg.id === aiMessageId 
-              ? { 
-                  ...msg, 
-                  content: `Sorry, I encountered an error while analyzing your question: "${userMessage}"
-
-**Error**: ${error}
-
-Please try again or rephrase your question.`
-                }
-              : msg
-          ));
-          setIsTyping(false);
-          toast.error('Analysis stream failed. Please try again.');
-        }
-      );
+      // Use real API for report analysis (now returns JSON directly, no streaming)
+      const response = await adminAPI.analyzeReport(userMessage);
+      
+      // Update AI message with complete response
+      setMessages(prev => prev.map(msg => 
+        msg.id === aiMessageId 
+          ? { ...msg, content: response.content || '' }
+          : msg
+      ));
+      
+      setIsTyping(false);
     } catch (error: any) {
       console.error('Report analysis error:', error);
       // Update AI message with error

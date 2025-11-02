@@ -40,7 +40,7 @@ store_team = Team(
     add_state_in_messages=True,
     add_session_summary_references=True,
     share_member_interactions=True,
-    show_members_responses=True,
+    show_members_responses=True
 )
 # Example usage:
 # session_id = "66666"

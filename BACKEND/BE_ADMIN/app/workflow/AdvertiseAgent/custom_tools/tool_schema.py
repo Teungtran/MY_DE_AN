@@ -3,4 +3,4 @@ from typing import Literal, Optional
 
 
 class InferredDeviceType(BaseModel):
-    type: Optional[Literal["phone", "laptop/pc", "earphone", "mouse", "keyboard"]]
+    type: Optional[Literal["phone", "laptop/pc", "tablet", "earphone", "mouse", "keyboard"]]

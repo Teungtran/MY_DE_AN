@@ -2,6 +2,7 @@
 from qdrant_client import QdrantClient
 import time
 from qdrant_client.http import models
+from pydantic import SecretStr
 from app.config.base_config import APP_CONFIG
 from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
@@ -11,16 +12,20 @@ COLLECTION = APP_CONFIG.recommend_config.collection_name
 _cache_timestamp = 0
 _client_cache = None
 _CACHE_TTL = 300 
-
-
+_cache_by_type = {}  # Use module-level dict instead of function attribute
 
 def get_client():
     """Get cached Qdrant client to avoid repeated connections."""
     global _client_cache
     if _client_cache is None:
+        # Convert SecretStr to string if needed
+        api_key = QDRANT_API_KEY
+        if isinstance(api_key, SecretStr):
+            api_key = api_key.get_secret_value()
+        
         _client_cache = QdrantClient(
             url=QDRANT_URL,
-            api_key=QDRANT_API_KEY
+            api_key=api_key
         )
     return _client_cache
 
@@ -34,16 +39,15 @@ def get_all_points(batch_size: int = 150, force_refresh: bool = False, type: str
     current_time = time.time()
     cache_expired = (current_time - _cache_timestamp) > _CACHE_TTL
 
-    valid_types = {"phone", "laptop/pc", "earphone", "mouse", "keyboard"}
+    valid_types = {"phone", "laptop/pc", "tablet"}
     is_get_all = type == "get_all" or type not in valid_types
 
 
     if is_get_all:
         cache_key = "get_all"
-        if (hasattr(get_all_points, '_cache_by_type') and 
-            cache_key in get_all_points._cache_by_type and 
+        if (cache_key in _cache_by_type and 
             not cache_expired and not force_refresh):
-            return {cache_key: get_all_points._cache_by_type[cache_key]}
+            return {cache_key: _cache_by_type[cache_key]}
 
         try:
             client = get_client()
@@ -62,26 +66,20 @@ def get_all_points(batch_size: int = 150, force_refresh: bool = False, type: str
                 if not points or offset is None:
                     break
 
-            if not hasattr(get_all_points, '_cache_by_type'):
-                get_all_points._cache_by_type = {}
-
-            get_all_points._cache_by_type[cache_key] = all_points
+            _cache_by_type[cache_key] = all_points
             _cache_timestamp = current_time
             logger.info(f"Returning {len(all_points)} total points (no category filter)")
             return {cache_key: all_points}
 
         except Exception as e:
             logger.error(f"Error: {e}")
-            return {cache_key: get_all_points._cache_by_type.get(cache_key, [])}
+            return {cache_key: _cache_by_type.get(cache_key, [])}
 
     try:
         client = get_client()
-        if not hasattr(get_all_points, '_cache_by_type'):
-            get_all_points._cache_by_type = {}
-
         cache_key = type
-        if cache_key in get_all_points._cache_by_type and not cache_expired and not force_refresh:
-            return {cache_key: get_all_points._cache_by_type[cache_key]}
+        if cache_key in _cache_by_type and not cache_expired and not force_refresh:
+            return {cache_key: _cache_by_type[cache_key]}
 
         scroll_filter = models.Filter(
             must=[
@@ -107,11 +105,11 @@ def get_all_points(batch_size: int = 150, force_refresh: bool = False, type: str
             if not points or offset is None:
                 break
 
-        get_all_points._cache_by_type[cache_key] = type_points
+        _cache_by_type[cache_key] = type_points
         _cache_timestamp = current_time
         logger.info(f"Found {len(type_points)} points for category '{type}'")
         return {cache_key: type_points}
 
     except Exception as e:
         logger.error(f"Error: {e}")
-        return {type: get_all_points._cache_by_type.get(type, [])}
+        return {type: _cache_by_type.get(type, [])}

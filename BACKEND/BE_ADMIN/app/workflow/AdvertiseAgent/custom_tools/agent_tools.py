@@ -43,7 +43,13 @@ def extract_url_content(url: str) -> str:
     cache_results=True)
 def draft_advertise_from_input(user_input:str) -> str:
     inferred = get_type.run(user_input)
-    device_type = inferred.content.type or "get_all"
+    # Handle case where response_model parsing fails and content is a string
+    if isinstance(inferred.content, str):
+        device_type = "get_all"
+    else:
+        # Check if content has type attribute (InferredDeviceType object)
+        device_type = getattr(inferred.content, 'type', None) or "get_all"
+    
     points_by_type = get_all_points(type=device_type)
     points = points_by_type.get(device_type, [])
 
@@ -62,23 +68,30 @@ def draft_advertise_from_input(user_input:str) -> str:
     if top_score < 0.1:
         return "No good match found for your query."
 
+    def format_number(value, default="N/A"):
+        """Format number with commas or return default."""
+        try:
+            return f"{int(value):,}" if value else default
+        except (ValueError, TypeError):
+            return str(value) if value else default
+    
     metadata = best_match.payload.get("metadata", {})
     device_name = metadata.get("device_name", "Unnamed Device")
     description = best_match.payload.get("page_content", "No description available.")
-    price = metadata.get("sale_price", "unknown price")
+    price = format_number(metadata.get("sale_price"), "Contact for price")
     discount_percent = metadata.get("discount_percent", 0)
+    installment_price = format_number(metadata.get("installment_price"), "N/A")
     source = metadata.get("source", "https://www.example.com")
-    color = ", ".join(metadata.get("colors", []))
+    color = ", ".join(metadata.get("colors", [])) or "Various colors"
     sales_perks = metadata.get("sales_perks", "")
     guarantee = metadata.get("guarantee_program", "")
     payment_perks = metadata.get("payment_perks", "")
-    installment_price = metadata.get("installment_price", "")
 
     ad = (
         f"**🔥 {device_name} — Now on Sale!**\n\n"
         f"{description.strip()}\n\n"
-        f"Price: **{price:,} VND** — that’s a **{discount_percent}% discount**!\n"
-        f"Installment: **{installment_price:,} VND/month**\n"
+        f"Price: **{price} VND** — that's a **{discount_percent}% discount**!\n"
+        f"Installment: **{installment_price} VND/month**\n"
         f"Perks:\n- {sales_perks}\n- {payment_perks}\n- {guarantee}\n"
         f"Color: {color}\n\n"
         f"[Buy Now]({source})"
