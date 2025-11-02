@@ -4,12 +4,22 @@ import tempfile
 import os
 import traceback
 from typing import Optional, Tuple,List
-from markitdown import MarkItDown 
+from markitdown import MarkItDown
+import re
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 import asyncio
+from app.config.base_config import APP_CONFIG
 from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
-DOCINTEL_ENDPOINT = "<document_intelligence_endpoint>"
+
+DOCINTEL_ENDPOINT ="<document_intelligence_endpoint>"
+try:
+    from markitdown._exceptions import MissingDependencyException
+except ImportError:
+    # If the exception class is not available, use a generic exception
+    MissingDependencyException = Exception
+
 
 class URLCrawler:
     def __init__(self):
@@ -22,8 +32,6 @@ class URLCrawler:
             output_dir: Directory to save processed markdown files.
         """
         self.docintel_endpoint = DOCINTEL_ENDPOINT
-        self.base_url = None  # Will be set when get_converted_document is called
-
     async def fetch_html(self, url: str) -> Optional[str]:
         """
         Fetches HTML content by running both httpx and cloudscraper methods concurrently.
@@ -46,15 +54,14 @@ class URLCrawler:
                     result, method = task.result()
                     if result is not None:
                         html_content = result
-                        logger.info(f"[Success] Got content using {method}")
                         for pending_task in pending_tasks:
                             pending_task.cancel()
                         break
                 except Exception as e:
-                    logger.error(f"[Error] Task failed: {e}")
+                    logger.warning(f"Task failed: {e}")
         
         if html_content is None:
-            logger.error("[Error] Unable to fetch content from URL using any method.")
+            logger.error("Unable to fetch content from URL using any method.")
             
         return html_content
     
@@ -75,7 +82,7 @@ class URLCrawler:
             response.raise_for_status()
             return response.text
         except Exception as e:
-            logger.error(f"[cloudscraper] Failed to fetch: {e}")
+            logger.warning(f"[cloudscraper] Failed to fetch: {e}")
             return None
 
     async def fetch_html_httpx(self, url: str) -> Tuple[Optional[str], str]:
@@ -90,7 +97,7 @@ class URLCrawler:
                 response.raise_for_status()
                 return response.text, method_name
         except Exception as e:
-            logger.error(f"[{method_name}] Failed to fetch: {e}")
+            logger.warning(f"[{method_name}] Failed to fetch: {e}")
             return None, method_name
 
     async def fetch_html_cloudscraper(self, url: str) -> Tuple[Optional[str], str]:
@@ -104,14 +111,14 @@ class URLCrawler:
             result = await loop.run_in_executor(None, self.fetch_raw_html_from_url, url)
             return result, method_name
         except Exception as e:
-            logger.error(f"[{method_name}] Failed to fetch: {e}")
+            logger.warning(f"[{method_name}] Failed to fetch: {e}")
             return None, method_name
 
     def clean_html_content(self, html_content: str) -> Tuple[str, List[str]]:
         """
         Cleans HTML content by removing headers, navs, footers, etc.,
-        and removes all links and images entirely.
-        Returns (cleaned_html, empty_list_for_images).
+        extracts og:image meta tags and processes tables into Markdown.
+        Returns (cleaned_html, extracted_images).
         """
         soup = BeautifulSoup(html_content, 'html.parser')
 
@@ -133,23 +140,28 @@ class URLCrawler:
                 for element in soup.find_all(selector):
                     element.decompose()
 
-        # Remove all <a> tags entirely
-        for a_tag in soup.find_all('a'):
-            a_tag.decompose()
-
-        # Remove all <img> tags entirely
-        for img_tag in soup.find_all('img'):
-            img_tag.decompose()
-
-        # Remove all og:image meta tags
-        for meta_tag in soup.find_all("meta", property="og:image"):
-            meta_tag.decompose()
-
-        # No extracted images since we're removing them all
         extracted_images = []
+        seen_image_srcs = set()
+        for tag in soup.find_all("meta", property="og:image"):
+            src = tag.get("content", "")
+            if (src.endswith(".png") or src.endswith(".jpg")) and src not in seen_image_srcs:
+                full_url = urljoin(self.base_url, src)
+                seen_image_srcs.add(full_url)
+                extracted_images.append(f"![Images]({full_url})")
+
+        # Add extraction for all img tags
+        for img_tag in soup.find_all("img"):
+            src = img_tag.get("src", "")
+            if (src.endswith(".png") or src.endswith(".jpg")) and src not in seen_image_srcs:
+                full_url = urljoin(self.base_url, src)
+                seen_image_srcs.add(full_url)
+                extracted_images.append(f"![Images]({full_url})")
+
+        for a_tag in soup.find_all('a'):
+            if a_tag.has_attr('href') and not a_tag['href'].startswith(('http://', 'https://', 'data:', '#', 'javascript:')):
+                a_tag['href'] = urljoin(self.base_url, a_tag['href'])
 
         return str(soup), extracted_images
-
 
     def format_markdown_content(self, markdown_text: str, extracted_images: List[str]) -> str:
         """
@@ -198,7 +210,7 @@ class URLCrawler:
             html_content = await self.fetch_html(url)
             
             if html_content is None:
-                logger.error("[Error] Unable to fetch content from URL.")
+                logger.error("Unable to fetch content from URL.")
                 return None
 
             self.base_url = url  
@@ -207,25 +219,36 @@ class URLCrawler:
             with tempfile.NamedTemporaryFile(mode='w+', suffix='.html', delete=False, encoding='utf-8') as temp_f:
                 temp_f.write(cleaned_html)
                 temp_html_file_path = temp_f.name
-                logger.info(f"Saved cleaned HTML to temporary file: {temp_html_file_path}")
 
-            md = MarkItDown(docintel_endpoint=self.docintel_endpoint)
+            # Try to use MarkItDown with docintel_endpoint if available, otherwise use without it
+            try:
+                if self.docintel_endpoint:
+                    md = MarkItDown(docintel_endpoint=self.docintel_endpoint)
+                else:
+                    md = MarkItDown()
+            except MissingDependencyException as e:
+                # If Azure dependency is missing, use default converter without docintel
+                logger.warning(f"Azure Document Intelligence dependency not available: {e}. Using default MarkItDown converter.")
+                md = MarkItDown()
+            except Exception as e:
+                # Catch any other initialization errors and fallback to default
+                logger.warning(f"Failed to initialize MarkItDown with docintel_endpoint: {e}. Using default converter.")
+                md = MarkItDown()
+            
             result = md.convert(temp_html_file_path)
 
             formatted_markdown = self.format_markdown_content(result.markdown, extracted_images)
 
-            logger.info(f"Successfully converted to Markdown for: {url}")
             return formatted_markdown, url
 
         except Exception as e:
             logger.error(f"An error occurred during conversion: {e}")
-            traceback.logger.error_exc()
+            traceback.print_exc()
             return None
 
         finally:
             if temp_html_file_path and os.path.exists(temp_html_file_path):
                 try:
                     os.remove(temp_html_file_path)
-                    logger.info(f"Deleted temporary file: {temp_html_file_path}")
                 except OSError as e:
-                    logger.error(f"Error when deleting temporary file {temp_html_file_path}: {e}")
+                    logger.warning(f"Error deleting temporary file: {e}")

@@ -5,9 +5,8 @@ import asyncio
 import shutil
 from pathlib import Path
 import uuid
-from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form
 from app.workflow.team_agents import store_team
-from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel, Field
 from app.controllers.login_page import require_store_role 
 from app.report_agent.agent import DataFrameAgent,ai_model
@@ -16,7 +15,6 @@ from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 import pandas as pd
 from app.controllers.redis_caching import redis_caching
-delay: float = 0.01
 router = APIRouter()
 
 class TeamChatRequest(BaseModel):
@@ -98,111 +96,55 @@ async def stream_team_chat(
     current_user: dict = Depends(require_store_role)
 ):
     """
-    Stream chat responses from the store team (requires admin/staff role)
+    Get chat responses from the store team (requires admin/staff role)
+    Returns the complete response content directly.
     """
-    # Mock user for testing (commented out - use for future tests if needed)
-    # mock_user_id = "test_user"
-    
     try:
         if id is None:
             id = str(uuid.uuid4())
         user_id = current_user["user_id"]
-        print(f"Starting team chat stream for user {user_id}, session {id}")
+        logger.info(f"Starting team chat for user {user_id}, session {id}")
         ui_message = _get_ui_title_for_session(id, request.message)
         await save_message_to_redis(id, "human", request.message) 
 
-        async def event_stream():
-            try:
-                # Run the store team with streaming enabled
-                result = store_team.run(
-                    session_id=id,
-                    user_id=user_id,
-                    message=request.message,
-                    stream=True
-                )
-                
-                # Accumulate complete AI response for Redis storage
-                complete_ai_response = ""
-                
-                # Handle streaming response
-                if hasattr(result, '__iter__'):
-                    for chunk in result:
-                        if chunk:
-                            # Extract content from the chunk object
-                            chunk_content = ""
-                            if hasattr(chunk, 'content'):
-                                chunk_content = chunk.content
-                            elif hasattr(chunk, 'data') and hasattr(chunk.data, 'content'):
-                                chunk_content = chunk.data.content
-                            else:
-                                chunk_content = str(chunk)
-                            
-                            # Accumulate the complete response
-                            complete_ai_response += chunk_content
-                            
-                            yield {
-                                "event": "chunk",
-                                "data": json.dumps({
-                                    "content": chunk_content,
-                                    "timestamp": datetime.datetime.now().isoformat()
-                                })
-                            }
-                    
-                    # Save complete AI response to Redis after streaming
-                    if complete_ai_response.strip():
-                        await save_message_to_redis(id, "ai", complete_ai_response)
-
-                else:
-                    # Extract content from single result
-                    content = ""
-                    if hasattr(result, 'content'):
-                        content = result.content
-                    elif hasattr(result, 'data') and hasattr(result.data, 'content'):
-                        content = result.data.content
-                    else:
-                        content = str(result)
-                    
-                    complete_ai_response = content
-                    
-                    yield {
-                        "event": "chunk", 
-                        "data": json.dumps({
-                            "content": content,
-                            "title": ui_message,
-                            "session_id": id,
-                            "timestamp": datetime.datetime.now().isoformat()
-                        })
-                    }
-                    
-                    # Save AI response to Redis
-                    if complete_ai_response.strip():
-                        await save_message_to_redis(id, "ai", complete_ai_response)
-
-                # Send completion event
-                yield {
-                    "event": "complete",
-                    "data": json.dumps({
-                        "status": "completed",
-                        "title": ui_message,
-                        "session_id": id,
-                        "timestamp": datetime.datetime.now().isoformat()
-                    })
-                }
-            except Exception as e:
-                print(f"Error in team chat stream: {str(e)}")
-                yield {
-                    "event": "error",
-                    "data": json.dumps({
-                        "error": str(e),
-                        "timestamp": datetime.datetime.now().isoformat()
-                    })
-                }
+        # Run the store team
+        result = store_team.run(
+            session_id=id,
+            user_id=user_id,
+            message=request.message,
+            stream=False
+        )
         
-        return EventSourceResponse(event_stream())
+        # Extract content from result
+        complete_ai_response = ""
+        try:
+            if hasattr(result, 'content'):
+                complete_ai_response = result.content or ""
+            else:
+                complete_ai_response = str(result) if result is not None else ""
+        except Exception as e:
+            logger.warning(f"Error extracting content from result: {e}")
+            complete_ai_response = str(result) if result is not None else ""
+        
+        # Ensure it's a string
+        if not isinstance(complete_ai_response, str):
+            complete_ai_response = str(complete_ai_response)
+        
+        # Save to Redis
+        if complete_ai_response:
+            await save_message_to_redis(id, "ai", complete_ai_response)
+        
+        # Return response directly
+        return {
+            "content": complete_ai_response,
+            "title": ui_message,
+            "session_id": id,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
         
     except Exception as e:
-        print(f"Failed to start team chat stream: {str(e)}")        
-        raise HTTPException(status_code=500, detail=f"Failed to start chat stream: {str(e)}")
+        logger.error(f"Failed to process team chat: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process chat: {str(e)}")
 
 
 # Report Analysis Endpoints
@@ -254,51 +196,27 @@ async def upload_file(
 
 @router.post("/report/analyze")
 async def report_agent(
-    question: str,
+    question: str = Form(...),
     current_user: dict = Depends(require_store_role)
 ):
-    """Analyze uploaded data file with a natural language question (requires admin/staff role)"""
-    # Mock user for testing (commented out - use for future tests if needed)
-    # mock_user_id = "test_user"
+    """Analyze uploaded data file with a natural language question (requires admin/staff role)
+    Returns the complete analysis content directly.
+    """
     try:
-        async def event_stream():
-            try:
-                content = DataFrameAgent(question)
-                
-                # Stream the content character by character for better UX
-                for i in range(0, len(content), 5):
-                    chunk = content[i:i+5]
-                    yield {
-                        "event": "chunk",
-                        "data": json.dumps({
-                            "content": chunk,
-                            "timestamp": datetime.datetime.now().isoformat()
-                        })
-                    }
-                    await asyncio.sleep(delay * 5)
-                
-                # Send completion event
-                yield {
-                    "event": "complete",
-                    "data": json.dumps({
-                        "status": "completed",
-                        "timestamp": datetime.datetime.now().isoformat()
-                    })
-                }
-                
-            except Exception as e:
-                yield {
-                    "event": "error",
-                    "data": json.dumps({
-                        "error": str(e),
-                        "timestamp": datetime.datetime.now().isoformat()
-                    })
-                }
+        content = DataFrameAgent(question)
         
-        return EventSourceResponse(event_stream())
+        # Ensure content is a string
+        if not isinstance(content, str):
+            content = str(content) if content is not None else "I couldn't generate a response. Please try again."
+        
+        # Return response directly
+        return {
+            "content": content,
+            "timestamp": datetime.datetime.now().isoformat()
+        }
         
     except Exception as e:
-        print(f"Failed to analyze file: {str(e)}")
+        logger.error(f"Failed to analyze file: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 

@@ -71,5 +71,11 @@ def DataFrameAgent(question: str):
         max_iterations=10
         )
     response = agent.invoke({"input": question})
-    return response.get('output') or response.get('result') or response
+    # Extract the output string from the response
+    output = response.get('output') or response.get('result')
+    if output is None:
+        # If no output/result, convert the entire response to string
+        output = str(response)
+    # Ensure we return a string
+    return str(output) if output is not None else "I couldn't generate a response. Please try again."
 

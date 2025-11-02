@@ -12,7 +12,12 @@ import asyncio
 from app.config.base_config import APP_CONFIG
 from app.utils.logger.logger import get_logger
 logger = get_logger(__name__)
-DOCINTEL_ENDPOINT = APP_CONFIG.crawl_config.docintel_endpoint
+DOCINTEL_ENDPOINT ="<document_intelligence_endpoint>"
+try:
+    from markitdown._exceptions import MissingDependencyException
+except ImportError:
+    # If the exception class is not available, use a generic exception
+    MissingDependencyException = Exception
 BASE_URL = APP_CONFIG.crawl_config.base_url
 
 class FPTCrawler:

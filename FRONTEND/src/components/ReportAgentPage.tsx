@@ -5,11 +5,11 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp } from 'lucide-react';
 import { FPTLogo } from './FPTLogo';
 import { adminAPI } from '../utils/api';
 import { toast } from 'sonner';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 
 interface User {
   id: string;
@@ -50,6 +50,7 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
   const [isTyping, setIsTyping] = useState(false);
   const [reports, setReports] = useState<Report[]>([]);
   const [uploadedData, setUploadedData] = useState<UploadResponse | null>(null);
+  const [showDataTable, setShowDataTable] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +93,7 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
 
       // Store uploaded data for display
       setUploadedData(response);
+      setShowDataTable(true);
 
       const aiMessage: Message = {
         id: Date.now().toString(),
@@ -210,9 +212,30 @@ What type of data are you planning to analyze?`
               ? { ...msg, content: msg.content + chunk }
               : msg
           ));
+        },
+        () => {
+          // On completion
+          setIsTyping(false);
+        },
+        (error) => {
+          // On error during streaming
+          console.error('Streaming error:', error);
+          setMessages(prev => prev.map(msg => 
+            msg.id === aiMessageId 
+              ? { 
+                  ...msg, 
+                  content: `Sorry, I encountered an error while analyzing your question: "${userMessage}"
+
+**Error**: ${error}
+
+Please try again or rephrase your question.`
+                }
+              : msg
+          ));
+          setIsTyping(false);
+          toast.error('Analysis stream failed. Please try again.');
         }
       );
-      setIsTyping(false);
     } catch (error: any) {
       console.error('Report analysis error:', error);
       // Update AI message with error
@@ -471,6 +494,81 @@ I'm here to help once you're ready to try again!`
             </CardContent>
           </Card>
 
+          {/* Data Preview Table */}
+          {uploadedData && (
+            <Card className="bg-white border-gray-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center text-black">
+                      <FileText className="h-5 w-5 mr-2" />
+                      Data Preview
+                    </CardTitle>
+                    <CardDescription className="text-gray-600">
+                      Showing first {Math.min(100, uploadedData.data.length)} of {uploadedData.data.length} rows
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowDataTable(!showDataTable)}
+                    className="text-gray-600 hover:text-black"
+                  >
+                    {showDataTable ? (
+                      <>
+                        <ChevronUp className="h-4 w-4 mr-1" />
+                        Hide
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="h-4 w-4 mr-1" />
+                        Show
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardHeader>
+              {showDataTable && (
+                <CardContent>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="max-h-96 overflow-auto">
+                      <Table>
+                        <TableHeader className="bg-gray-100 sticky top-0">
+                          <TableRow>
+                            <TableHead className="text-black font-semibold border-r w-16">#</TableHead>
+                            {uploadedData.data[0] && Object.keys(uploadedData.data[0]).map((key) => (
+                              <TableHead key={key} className="text-black font-semibold border-r min-w-[120px]">
+                                {key}
+                              </TableHead>
+                            ))}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {uploadedData.data.slice(0, 100).map((row, index) => (
+                            <TableRow key={index} className="hover:bg-gray-50">
+                              <TableCell className="border-r font-medium text-gray-600">
+                                {index + 1}
+                              </TableCell>
+                              {Object.values(row).map((value, colIndex) => (
+                                <TableCell key={colIndex} className="border-r text-black">
+                                  {value !== null && value !== undefined ? String(value) : '-'}
+                                </TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                  {uploadedData.data.length > 100 && (
+                    <p className="text-sm text-gray-500 mt-2 text-center">
+                      + {uploadedData.data.length - 100} more rows available for analysis
+                    </p>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          )}
 
         </ScrollArea>
         </div>

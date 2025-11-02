@@ -321,49 +321,106 @@ export const adminAPI = {
     return response.json();
   },
 
-  analyzeReport: async (question: string, onChunk: (chunk: string) => void) => {
+  analyzeReport: async (
+    question: string, 
+    onChunk: (chunk: string) => void,
+    onComplete?: () => void,
+    onError?: (error: string) => void
+  ) => {
     const formData = new FormData();
     formData.append('question', question);
 
     const token = getAuthToken();
-    const response = await fetch(`${API_BASE_URL}/admin/v1/chat/report/analyze`, {
-      method: 'POST',
-      body: formData,
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    });
+    try {
+      const response = await fetch(`${API_BASE_URL}/admin/v1/chat/report/analyze`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      }
 
-    const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
 
-    if (!reader) {
-      throw new Error('No reader available');
-    }
+      if (!reader) {
+        throw new Error('No reader available');
+      }
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      let buffer = '';
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+
+          // Handle SSE format: event: <type> or data: <json>
+          if (trimmedLine.startsWith('event: ')) {
+            // Event type - we can handle 'complete', 'error', 'chunk' if needed
+            const eventType = trimmedLine.slice(7).trim();
+            if (eventType === 'complete') {
+              onComplete?.();
+              continue;
+            } else if (eventType === 'error') {
+              // Error event - next line should have data
+              continue;
+            }
+          } else if (trimmedLine.startsWith('data: ')) {
+            try {
+              const jsonStr = trimmedLine.slice(6);
+              const data = JSON.parse(jsonStr);
+              
+              if (data.error) {
+                // Handle error from server
+                onError?.(data.error);
+                return;
+              } else if (data.content) {
+                onChunk(data.content);
+              }
+            } catch (e) {
+              // Ignore parsing errors for incomplete chunks or invalid JSON
+              console.warn('Failed to parse SSE data:', e, trimmedLine);
+            }
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const trimmedLine = buffer.trim();
+        if (trimmedLine.startsWith('data: ')) {
           try {
-            const data = JSON.parse(line.slice(6));
+            const jsonStr = trimmedLine.slice(6);
+            const data = JSON.parse(jsonStr);
             if (data.content) {
               onChunk(data.content);
             }
           } catch (e) {
-            // Ignore parsing errors for incomplete chunks
+            // Ignore parsing errors
           }
         }
       }
+
+      onComplete?.();
+    } catch (error) {
+      console.error('Report analysis streaming error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      onError?.(errorMessage);
+      throw error;
     }
   },
 };
