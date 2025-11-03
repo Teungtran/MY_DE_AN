@@ -9,7 +9,9 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends, Form, Q
 from app.workflow.team_agents import store_team
 from pydantic import BaseModel, Field
 from app.controllers.login_page import require_store_role 
-from app.report_agent.agent import DataFrameAgent,ai_model
+from app.report_agent.execute import trigger
+from app.report_agent.main_agent import llm
+ 
 from app.report_agent.parse_file import import_data
 from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
@@ -21,7 +23,6 @@ class TeamChatRequest(BaseModel):
     """Schema for team chat requests"""
     message: str = Field(..., description="User message")
 
-llm = ai_model()
 prompt = """
 give the intention of the given message in less than 5 words
 """
@@ -93,7 +94,7 @@ async def get_chat_history(id: str):
 async def stream_team_chat(
     request: TeamChatRequest,
     id: Optional[str] = Query(None, description="Session ID (optional, will generate new one if not provided)"),
-    # current_user: dict = Depends(require_store_role)
+    current_user: dict = Depends(require_store_role)
 ):
     """
     Get chat responses from the store team (requires admin/staff role)
@@ -151,7 +152,7 @@ async def stream_team_chat(
 @router.post("/report/upload")
 async def upload_file(
     file: UploadFile = File(...),
-    # current_user: dict = Depends(require_store_role)
+    current_user: dict = Depends(require_store_role)
 ):
     """Upload report file for analysis (requires admin/staff role)"""
     # Mock user for testing (commented out - use for future tests if needed)
@@ -197,13 +198,13 @@ async def upload_file(
 @router.post("/report/analyze")
 async def report_agent(
     question: str = Form(...),
-    # current_user: dict = Depends(require_store_role)
+    current_user: dict = Depends(require_store_role)
 ):
     """Analyze uploaded data file with a natural language question (requires admin/staff role)
     Returns the complete analysis content directly.
     """
     try:
-        content = DataFrameAgent(question)
+        content = trigger(question)
         
         # Ensure content is a string
         if not isinstance(content, str):

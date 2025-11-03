@@ -1,27 +1,22 @@
-from langchain_openai import ChatOpenAI
-from langchain_experimental.agents.agent_toolkits import create_pandas_dataframe_agent
-from app.config.base_config import OpenAIConfig
-from typing import Callable
-from textwrap import dedent
-from langchain.agents.agent_types import AgentType
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 import pandas as pd
-from app.workflow.prompt import ANALYSE_PROMPT
 from app.report_agent.parse_file import import_data
-from pydantic import SecretStr
-chat_config = OpenAIConfig()
-api_key = chat_config.api_key
-if isinstance(api_key, Callable):
-    api_key = api_key()  
-if isinstance(api_key, SecretStr):  
-    api_key = api_key.get_secret_value()
-def ai_model():
-    return ChatOpenAI(
-        openai_api_key=api_key,
-        model="gpt-4o-mini",
-        temperature=0
+from .analyse_tool import analyze_tool
+class AnalyseInput(BaseModel):
+    user_input: str = Field(
+        ...,
+        description=(
+            "User's question asking for specific data analysis "
+        )
     )
 
-llm = ai_model()  
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "user_input": "what is the peak hour in that day?"
+            }
+        }
 
 def convert_any_datetime(df):
     datetime_columns = []
@@ -53,29 +48,14 @@ def convert_any_datetime(df):
             df[col] = pd.to_datetime(df[col], format="mixed", errors='coerce', utc=True)
 
     return df
-def DataFrameAgent(question: str):
-    df = import_data()
-    df_time = convert_any_datetime(df)
-    data_summary = {
-        'data_info': df_time.info()
-        }
-    agent = create_pandas_dataframe_agent(
-        llm, 
-        df_time, 
-        agent_type=AgentType.OPENAI_FUNCTIONS, 
-        verbose=True, 
-        allow_dangerous_code=True,
-        return_intermediate_steps = True,
-        prefix=dedent(ANALYSE_PROMPT.format(data_summary=data_summary)),
-        include_df_in_prompt=True,
-        max_iterations=10
-        )
-    response = agent.invoke({"input": question})
-    # Extract the output string from the response
-    output = response.get('output') or response.get('result')
-    if output is None:
-        # If no output/result, convert the entire response to string
-        output = str(response)
-    # Ensure we return a string
-    return str(output) if output is not None else "I couldn't generate a response. Please try again."
+df = import_data()
+df_time = convert_any_datetime(df)
+@tool("analyze_agent",
+    description="Analyzes data and answers questions about datasets."
+                "Call this tool first when users ask about data analysis, statistics, "
+                "or insights from the data. Uses directly injected data or cached data.",
+                args_schema=AnalyseInput)
+def analyze_agent(question: str):
+    response = analyze_tool(user_input=question,df = df_time)
+    return str(response) if response is not None else "I couldn't generate a response. Please try again."
 
