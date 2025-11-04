@@ -1,6 +1,5 @@
-from dpath import get
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
 from pydantic import SecretStr
 from langchain_openai import ChatOpenAI
 from app.config.base_config import OpenAIConfig

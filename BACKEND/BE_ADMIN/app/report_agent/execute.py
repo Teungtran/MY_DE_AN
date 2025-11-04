@@ -1,6 +1,7 @@
 from langchain_core.messages import HumanMessage
 from .main_agent import create_graph
-from utils.logging.logger import get_logger
+from app.utils.logging.logger import get_logger
+
 def format_message(message):
     """Format a message for display without modifying it too much."""
     if hasattr(message, "content") and message.content:
