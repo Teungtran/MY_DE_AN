@@ -660,7 +660,7 @@ What can I help you explore today?`,
       </Sheet>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
         {/* Navigation Tabs */}
         <div className="border-b border-gray-200 bg-white">
           <div className="flex items-center justify-between p-4">
@@ -764,7 +764,7 @@ What can I help you explore today?`,
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4 bg-gray-50">
+        <ScrollArea className="flex-1 p-4 bg-gray-50 pb-24">
           <div className="space-y-4 max-w-4xl mx-auto">
             {currentSession?.messages.map((msg) => (
               <div
@@ -890,8 +890,8 @@ What can I help you explore today?`,
           </div>
         </ScrollArea>
 
-        {/* Message Input */}
-        <div className="p-4 border-t border-gray-200 bg-white">
+        {/* Sticky Message Input */}
+        <div className="sticky bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white shadow-lg z-10">
           <form onSubmit={sendMessage} className="flex space-x-2 max-w-4xl mx-auto">
             <Input
               value={message}
