@@ -45,117 +45,114 @@ def extract_features(device_doc):
                         features.append(f"{key}: {str(item).strip()}")
 
     return features
+
+
 def get_best_candidate(
     chunk: str,
     candidates: List[Dict],
     fields: List[str],
     excluded_fields: Set[str] = None,
-    device_name_mode: bool = False
+    device_name_mode: bool = False,
+    target_count: int = 5  # NEW: Configurable target count
 ) -> Optional[List[Tuple[Dict, float, str]]]:
     """
-    Unified logic for both modes with configurable thresholds.
+    Unified logic with configurable target count.
     
-    DEVICE_NAME MODE (device_name_mode=True):
-    - Early stop: >95
-    - Scan all candidates, return top 5 (no minimum threshold)
-    
-    NORMAL MODE (device_name_mode=False):
-    - Early stop: >90
-    - Stop when 5 candidates score >=60
-    - Return None if no candidates >=60
-
     Returns: List of (candidate, score, matched_field) or None
     """
-    if not candidates or not chunk.strip():
-        return None
+    try:
+        if not candidates or not chunk.strip():
+            return None
 
-    if excluded_fields is None:
-        excluded_fields = set()
-    
-    active_fields = [field for field in fields if field not in excluded_fields]
-    if not active_fields:
-        logger.info(f"[DEBUG] All fields excluded for chunk '{chunk}'. Skipping.")
-        return None
+        if excluded_fields is None:
+            excluded_fields = set()
+        
+        active_fields = [field for field in fields if field not in excluded_fields]
+        if not active_fields:
+            logger.info(f"[DEBUG] All fields excluded for chunk '{chunk}'. Skipping.")
+            return None
 
-    # Configure thresholds based  mode
-    config = {
-        'early_stop': 100.0 if device_name_mode else 90.0,
-        'min_score': None if device_name_mode else 60.0,  # None = no threshold
-        'scan_all': device_name_mode,  # True = scan all, False = stop at 5
-        'mode_label': "DEVICE_NAME" if device_name_mode else "NORMAL"
-    }
-    
-    logger.info(f"\n[DEBUG] === FULL-SCAN [{config['mode_label']} MODE] Processing chunk: '{chunk}' ===")
-    logger.info(f"[DEBUG] Early stop threshold: {config['early_stop']}")
-    if config['min_score'] is not None:
-        logger.info(f"[DEBUG] Min score threshold: {config['min_score']}")
-    logger.info(f"[DEBUG] Scan all: {config['scan_all']}")
-    logger.info(f"[DEBUG] Active fields: {active_fields}")
-    
-    candidate_scores = []  # Unified list for all scores
+        # Configure thresholds based on mode
+        config = {
+            'early_stop': 100.0 if device_name_mode else 90.0,
+            'min_score': None if device_name_mode else 60.0,
+            'target_count': target_count,  # Use configurable count
+            'mode_label': "DEVICE_NAME" if device_name_mode else "NORMAL"
+        }
+        
+        logger.info(f"\n[DEBUG] === Processing chunk: '{chunk}' (Mode: {config['mode_label']}) ===")
+        logger.info(f"[DEBUG] Target count: {config['target_count']}, Early stop: {config['early_stop']}")
+        
+        candidate_scores = []
 
-    for candidate_idx, candidate in enumerate(candidates):
-        device_name = get_metadata(candidate["doc"], "device_name", "Unknown")
-        logger.info(f"\n[DEBUG] --- Checking Candidate {candidate_idx + 1}: {device_name} ---")
+        for candidate_idx, candidate in enumerate(candidates):
+            try:
+                device_name = get_metadata(candidate["doc"], "device_name", "Unknown")
 
-        candidate_best_score = 0.0
-        candidate_best_field = None
+                candidate_best_score = 0.0
+                candidate_best_field = None
 
-        for field in active_fields:
-            field_value = get_metadata(candidate["doc"], field)
-            if not field_value:
+                for field in active_fields:
+                    try:
+                        field_value = get_metadata(candidate["doc"], field)
+                        if not field_value:
+                            continue
+
+                        all_texts = extract_all_text_from_field(field_value, field)
+                        if not all_texts:
+                            continue
+
+                        field_max_score = 0.0
+                        for text in all_texts:
+                            try:
+                                score = token_set_ratio(chunk.lower(), text.lower())
+                                field_max_score = max(field_max_score, score)
+
+                                # Early return for very high scores
+                                if score > config['early_stop']:
+                                    logger.info(f"[DEBUG] Early stop triggered: score {score} > {config['early_stop']}")
+                                    return [(candidate, score, field)]
+                            except Exception as e:
+                                logger.warning(f"[WARNING] Error calculating score for text: {e}")
+                                continue
+
+                        if field_max_score > candidate_best_score:
+                            candidate_best_score = field_max_score
+                            candidate_best_field = field
+                    except Exception as e:
+                        logger.warning(f"[WARNING] Error processing field {field} for candidate: {e}")
+                        continue
+
+                # Collect candidates based on threshold
+                if config['min_score'] is None:
+                    if candidate_best_score > 0:
+                        candidate_scores.append((candidate, candidate_best_score, candidate_best_field))
+                else:
+                    if candidate_best_score >= config['min_score']:
+                        candidate_scores.append((candidate, candidate_best_score, candidate_best_field))
+                        
+                        # Stop early if we have enough candidates (only in normal mode)
+                        if not device_name_mode and len(candidate_scores) >= config['target_count']:
+                            logger.info(f"[DEBUG] Reached target count: {len(candidate_scores)}")
+                            candidate_scores.sort(key=lambda x: x[1], reverse=True)
+                            return candidate_scores[:config['target_count']]
+            except Exception as e:
+                logger.warning(f"[WARNING] Error processing candidate {candidate_idx}: {e}")
                 continue
 
-            all_texts = extract_all_text_from_field(field_value, field)
-            if not all_texts:
-                continue
-
-            field_max_score = 0.0
-            for text in all_texts:
-                score = token_set_ratio(chunk.lower(), text.lower())
-                field_max_score = max(field_max_score, score)
-
-                # IMMEDIATE RETURN if score exceeds early stop threshold
-                if score > config['early_stop']:
-                    logger.info(f"[DEBUG] *** EARLY RETURN TRIGGERED *** Score {score} > {config['early_stop']} in field '{field}'")
-                    return [(candidate, score, field)]
-
-            if field_max_score > candidate_best_score:
-                candidate_best_score = field_max_score
-                candidate_best_field = field
-
-        logger.info(f"[DEBUG] Candidate total score: {candidate_best_score} (best field: {candidate_best_field})")
-
-        if config['min_score'] is None:
-            # No threshold - collect all scores > 0
-            if candidate_best_score > 0:
-                candidate_scores.append((candidate, candidate_best_score, candidate_best_field))
-        else:
-            if candidate_best_score >= config['min_score']:
-                candidate_scores.append((candidate, candidate_best_score, candidate_best_field))
-                logger.info(f"[DEBUG] Candidate score >= {config['min_score']} (count: {len(candidate_scores)})")
-                
-                # Early return if we have 5 and not scanning all
-                if not config['scan_all'] and len(candidate_scores) >= 5:
-                    logger.info(f"[DEBUG] Found {len(candidate_scores)} candidates. Returning all.")
-                    candidate_scores.sort(key=lambda x: x[1], reverse=True)
-                    return candidate_scores
-
-    # Return logic
-    if candidate_scores:
-        candidate_scores.sort(key=lambda x: x[1], reverse=True)
-        top_5 = candidate_scores[:5]
-        logger.info(f"[DEBUG] Scanned {len(candidate_scores)} candidates. Returning top {len(top_5)}:")
-        for i, (cand, score, field) in enumerate(top_5, 1):
-            name = get_metadata(cand["doc"], "device_name", "Unknown")
-            logger.info(f"[DEBUG]   {i}. {name}: {score:.2f} (field: {field})")
-        return top_5
+        # Return results
+        if candidate_scores:
+            candidate_scores.sort(key=lambda x: x[1], reverse=True)
+            top_results = candidate_scores[:config['target_count']]
+            logger.info(f"[DEBUG] Returning {len(top_results)} candidates from {len(candidate_scores)} total")
+            return top_results
+        
+        logger.info(f"[DEBUG] No candidates found for chunk '{chunk}'")
+        return None
     
-    if config['min_score'] is not None:
-        logger.info(f"[DEBUG] No candidates >= {config['min_score']} found. Returning None (fallback may trigger).")
-    else:
-        logger.info(f"[DEBUG] No candidates with score > 0 found.")
-    return None
+    except Exception as e:
+        logger.error(f"[ERROR] Error in get_best_candidate for chunk '{chunk}': {e}", exc_info=True)
+        return None
 
 
 

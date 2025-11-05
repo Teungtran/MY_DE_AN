@@ -292,11 +292,11 @@ class RecommendSystem(BaseModel):
     )
     has_features: bool = Field(
         ...,
-        description="True or False if there any specific features mentioned"
+        description="True or False if there any specific features mentioned, if user_input do not specify any requirements beside price , put False"
     )
     device_name: bool = Field(
         ...,
-        description="True or False if device name or any brand like APPLE , Samsung.... exsist"
+        description="True or False if device name or any brand like APPLE , Samsung.... exsist, if user_input do not specify any requirements beside price , put False"
     )
     device_type: Optional[
         Literal["phone", "laptop/pc", "tablet", "earphone", "mouse", "keyboard"]

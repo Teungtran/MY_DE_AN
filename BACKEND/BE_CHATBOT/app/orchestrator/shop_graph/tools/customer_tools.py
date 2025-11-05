@@ -19,7 +19,7 @@ from app.models.database import  Order as OrderModel, Item, SessionLocal
 from app.utils.logging.logger import get_logger
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Optional, Tuple, Set
-from threading import Lock
+from threading import Lock, Event
 
 
 logger = get_logger(__name__)
@@ -37,7 +37,7 @@ def process_chunks_with_field_exclusion(
     candidates: List[Dict],
     all_fields: List[str],
     chunk_count: int,
-    device_name_mode: bool = False  # NEW PARAMETER
+    device_name_mode: bool = False  
 ) -> Tuple[List[Dict], List[Dict], Set[str]]:
     """
     Process ALL chunks in parallel with device_name priority support.
@@ -60,10 +60,10 @@ def process_chunks_with_field_exclusion(
     excluded_fields_lock = Lock()
     strong_matches = []
     high_score_candidates = []
-    chunk_results_lock = Lock()
-    total_candidates_lock = Lock()
+    results_lock = Lock()  # Unified lock for all result lists
     total_candidates_count = 0
-    early_stop_flag = {"stop": False}
+    total_candidates_lock = Lock()
+    early_stop_event = Event()  # Thread-safe event instead of dict
     
     all_candidate_scores = []  # For global fallback in normal mode
     all_scores_lock = Lock()
@@ -77,94 +77,104 @@ def process_chunks_with_field_exclusion(
     logger.info(f"[DEBUG:process_chunks] Early stop threshold: {early_stop_threshold}")
 
     def process_chunk(chunk: str):
-        nonlocal excluded_fields, strong_matches, high_score_candidates, total_candidates_count, early_stop_flag, all_candidate_scores
+        nonlocal excluded_fields, strong_matches, high_score_candidates, total_candidates_count, all_candidate_scores
 
-        # Check if we should stop early
-        if early_stop_flag["stop"]:
-            logger.info(f"[DEBUG] Early stop triggered, skipping chunk: {chunk}")
-            return
+        try:
+            # Check if we should stop early (thread-safe)
+            if early_stop_event.is_set():
+                logger.info(f"[DEBUG] Early stop triggered, skipping chunk: {chunk}")
+                return
 
-        # Get available fields (consider exclusions)
-        with excluded_fields_lock:
-            available_fields = [f for f in all_fields if f not in excluded_fields]
-        if not available_fields:
-            logger.info(f"[DEBUG] All fields excluded. Skipping chunk: {chunk}")
-            return
+            # Get available fields (consider exclusions)
+            with excluded_fields_lock:
+                available_fields = [f for f in all_fields if f not in excluded_fields]
+            if not available_fields:
+                logger.info(f"[DEBUG] All fields excluded. Skipping chunk: {chunk}")
+                return
 
-        # Process this chunk independently with device_name_mode
-        results = get_best_candidate(
-            chunk=chunk,
-            candidates=candidates,
-            fields=available_fields,
-            excluded_fields=excluded_fields,
-            device_name_mode=device_name_mode  # Pass the mode
-        )
-        
-        # NORMAL MODE: Collect fallback scores if no results (ORIGINAL BEHAVIOR)
-        if not device_name_mode and not results:
-            logger.info(f"[DEBUG] No results from get_best_candidate, collecting fallback scores for chunk '{chunk}'")
-            chunk_fallback_scores = []
-            for candidate in candidates:
-                candidate_best_score = 0.0
-                candidate_best_field = None
-                
-                for field in available_fields:
-                    field_value = get_metadata(candidate["doc"], field)
-                    if not field_value:
-                        continue
-
-                    all_texts = extract_all_text_from_field(field_value, field)
-                    if not all_texts:
-                        continue
-
-                    field_max_score = 0.0
-                    for text in all_texts:
-                        score = token_set_ratio(chunk.lower(), text.lower())
-                        field_max_score = max(field_max_score, score)
-
-                    if field_max_score > candidate_best_score:
-                        candidate_best_score = field_max_score
-                        candidate_best_field = field
-                
-                if candidate_best_score > 0:
-                    chunk_fallback_scores.append((candidate, candidate_best_score, candidate_best_field, chunk))
+            # Process this chunk independently with device_name_mode
+            results = get_best_candidate(
+                chunk=chunk,
+                candidates=candidates,
+                fields=available_fields,
+                excluded_fields=excluded_fields,
+                device_name_mode=device_name_mode  # Pass the mode
+            )
             
-            with all_scores_lock:
-                all_candidate_scores.extend(chunk_fallback_scores)
-        elif results:
-            logger.info(f"[DEBUG] get_best_candidate returned {len(results)} results")
+            # NORMAL MODE: Collect fallback scores if no results (ORIGINAL BEHAVIOR)
+            if not device_name_mode and not results:
+                logger.info(f"[DEBUG] No results from get_best_candidate, collecting fallback scores for chunk '{chunk}'")
+                chunk_fallback_scores = []
+                try:
+                    for candidate in candidates:
+                        candidate_best_score = 0.0
+                        candidate_best_field = None
+                        
+                        for field in available_fields:
+                            try:
+                                field_value = get_metadata(candidate["doc"], field)
+                                if not field_value:
+                                    continue
 
-        if not results:
-            logger.info(f"[DEBUG] Chunk '{chunk}' found no candidates")
-            return
+                                all_texts = extract_all_text_from_field(field_value, field)
+                                if not all_texts:
+                                    continue
 
-        chunk_results = []
-        for candidate, score, matched_field in results:
-            item = {
-                "chunk": chunk,
-                "candidate": candidate,
-                "score": score,
-                "matched_field": matched_field
-            }
-            chunk_results.append(item)
+                                field_max_score = 0.0
+                                for text in all_texts:
+                                    score = token_set_ratio(chunk.lower(), text.lower())
+                                    field_max_score = max(field_max_score, score)
 
-        # Add to global results
-        with chunk_results_lock:
-            for item in chunk_results:
-                high_score_candidates.append(item)
-                if item["score"] >= early_stop_threshold:
-                    strong_matches.append(item)
+                                if field_max_score > candidate_best_score:
+                                    candidate_best_score = field_max_score
+                                    candidate_best_field = field
+                            except Exception as e:
+                                logger.warning(f"[DEBUG] Error processing field {field} for candidate: {e}")
+                                continue
+                        
+                        if candidate_best_score > 0:
+                            chunk_fallback_scores.append((candidate, candidate_best_score, candidate_best_field, chunk))
+                    
+                    with all_scores_lock:
+                        all_candidate_scores.extend(chunk_fallback_scores)
+                except Exception as e:
+                    logger.error(f"[ERROR] Error collecting fallback scores for chunk '{chunk}': {e}", exc_info=True)
+            elif results:
+                logger.info(f"[DEBUG] get_best_candidate returned {len(results)} results")
 
-        with total_candidates_lock:
-            total_candidates_count += len(chunk_results)
-            current_total = total_candidates_count
+            if not results:
+                logger.info(f"[DEBUG] Chunk '{chunk}' found no candidates")
+                return
 
-        logger.info(f"[DEBUG] Chunk '{chunk}' returned {len(chunk_results)} results (Total: {current_total})")
+            chunk_results = []
+            for candidate, score, matched_field in results:
+                item = {
+                    "chunk": chunk,
+                    "candidate": candidate,
+                    "score": score,
+                    "matched_field": matched_field
+                }
+                chunk_results.append(item)
 
-        # Stop when we have enough candidates
-        if current_total >= 5:
-            logger.info(f"[DEBUG] Total candidates reached {current_total}, triggering early stop")
-            early_stop_flag["stop"] = True
+            # Add to global results (thread-safe)
+            with results_lock:
+                for item in chunk_results:
+                    high_score_candidates.append(item)
+                    if item["score"] >= early_stop_threshold:
+                        strong_matches.append(item)
+
+            with total_candidates_lock:
+                total_candidates_count += len(chunk_results)
+                current_total = total_candidates_count
+
+            logger.info(f"[DEBUG] Chunk '{chunk}' returned {len(chunk_results)} results (Total: {current_total})")
+
+            # Stop when we have enough candidates (thread-safe)
+            if current_total >= 5:
+                logger.info(f"[DEBUG] Total candidates reached {current_total}, triggering early stop")
+                early_stop_event.set()
+        except Exception as e:
+            logger.error(f"[ERROR] Error processing chunk '{chunk}': {e}", exc_info=True)
 
     logger.info("[DEBUG] Processing all chunks in parallel")
     with ThreadPoolExecutor(max_workers=8) as executor:
@@ -173,13 +183,13 @@ def process_chunks_with_field_exclusion(
         for future in as_completed(futures):
             try:
                 future.result()
-                if early_stop_flag["stop"]:
+                if early_stop_event.is_set():
                     logger.info("[DEBUG] Early stop triggered, canceling remaining futures")
                     for f in futures:
                         f.cancel()
                     break
             except Exception as e:
-                logger.info(f"[DEBUG] Error processing chunk: {e}")
+                logger.error(f"[ERROR] Error processing chunk in executor: {e}", exc_info=True)
 
     logger.info(f"[DEBUG] All chunks processed. Found {len(strong_matches)} strong matches (>={early_stop_threshold}), {len(high_score_candidates)} total candidates")
     
@@ -226,127 +236,228 @@ async def scoring_logic(
     features_fields,
     supported_field
 ):
-    logger.info(f"[DEBUG] Processing type: {type_key}, Devices: {len(points_list)}")
+    """
+    Improved scoring logic that always returns 10 candidates (5 best + 5 similar)
+    and handles price filtering correctly.
+    """
+    try:
+        logger.info(f"[DEBUG] Processing type: {type_key}, Devices: {len(points_list)}")
 
-    # === Filtering: suitable_for and price ===
-    filtered_points = points_list
+        # === Filtering: suitable_for and price ===
+        filtered_points = points_list
 
-    if suitable_for and suitable_for != "general":
-        filtered_points = [
-            doc for doc in filtered_points
-            if get_metadata(doc, "suitable_for", "general") == suitable_for
-        ]
-        logger.info(f"[DEBUG] Filtered to {len(filtered_points)} devices for suitable_for={suitable_for}")
-
-    if has_price_input and price_input:
         try:
-            max_price = float(price_input[0])
-            filtered_points = [
-                doc for doc in filtered_points
-                if get_metadata(doc, "sale_price", 0) <= max_price
-            ]
-            logger.info(f"[DEBUG] Price filtered to {len(filtered_points)} devices under {max_price:,.0f} VND")
-        except:
-            logger.info("[DEBUG] Price filter error, keeping all")
+            if suitable_for and suitable_for != "general":
+                filtered_points = [
+                    doc for doc in filtered_points
+                    if get_metadata(doc, "suitable_for", "general") == suitable_for
+                ]
+                logger.info(f"[DEBUG] Filtered to {len(filtered_points)} devices for suitable_for={suitable_for}")
+        except Exception as e:
+            logger.error(f"[ERROR] Error filtering by suitable_for: {e}", exc_info=True)
+            # Continue with original list
 
-    candidates = [{"doc": doc, "score": 0} for doc in filtered_points]
-    original_candidates = candidates.copy()
+        # Price filtering logic - if price is provided, filter by it
+        if has_price_input and price_input:
+            try:
+                max_price = float(price_input[0])
+                filtered_points = [
+                    doc for doc in filtered_points
+                    if get_metadata(doc, "sale_price", 0) <= max_price
+                ]
+                logger.info(f"[DEBUG] Price filtered to {len(filtered_points)} devices under {max_price:,.0f} VND")
+            except Exception as e:
+                logger.warning(f"[WARNING] Price filter error: {e}, keeping all", exc_info=True)
 
-    # === Determine fields ===
-    text_fields = []
-    if device_name and not has_features:
-        text_fields = mandatory_fields
-    elif has_features and not device_name:
-        text_fields = features_fields + supported_field
-    elif device_name and has_features:
-        text_fields = mandatory_fields + features_fields
-    text_fields = text_fields[:3]
-    logger.info(f"[DEBUG] Processing fields: {text_fields}")
+        candidates = [{"doc": doc, "score": 0} for doc in filtered_points]
+        original_candidates = candidates.copy()
 
-    # === Process chunks with device_name priority mode ===
-    strong_matches, high_score_candidates, excluded_fields = process_chunks_with_field_exclusion(
-        input_chunks, candidates, text_fields, len(input_chunks),
-        device_name_mode=device_name  # Pass device_name flag as mode
-    )
+        # === Determine fields ===
+        text_fields = []
+        try:
+            if device_name and not has_features:
+                text_fields = mandatory_fields
+            elif has_features and not device_name:
+                text_fields = features_fields + supported_field
+            elif device_name and has_features:
+                text_fields = mandatory_fields + features_fields
+            text_fields = text_fields[:3]
+            logger.info(f"[DEBUG] Processing fields: {text_fields}")
+        except Exception as e:
+            logger.error(f"[ERROR] Error determining fields: {e}", exc_info=True)
+            text_fields = mandatory_fields[:3]  # Fallback
 
-    logger.info(f"[DEBUG] Final excluded fields: {excluded_fields}")
-    logger.info(f"[DEBUG] Found {len(strong_matches)} strong matches (>={95 if device_name else 90})")
-    logger.info(f"[DEBUG] Found {len(high_score_candidates)} total candidates")
+        # === Check if this is a price-only query (no features, no device_name) ===
+        is_price_only_query = has_price_input and price_input and not has_features and not device_name
+        
+        if is_price_only_query:
+            # Skip matching logic entirely for price-only queries
+            logger.info("[DEBUG] PRICE-ONLY QUERY detected - skipping matching logic")
+            final_candidates = candidates  # Use all filtered candidates
+        else:
+            try:
+                # === Normal flow: Process chunks - get best candidates ===
+                strong_matches, high_score_candidates, excluded_fields = process_chunks_with_field_exclusion(
+                    input_chunks, candidates, text_fields, len(input_chunks),
+                    device_name_mode=device_name
+                )
 
-    # Deduplicate by device_name
-    device_scores = {}
-    device_candidates = {}
-    seen_names = set()
+                logger.info(f"[DEBUG] Final excluded fields: {excluded_fields}")
+                logger.info(f"[DEBUG] Found {len(strong_matches)} strong matches")
+                logger.info(f"[DEBUG] Found {len(high_score_candidates)} total candidates")
 
-    # Add ALL candidates, sorted by score
-    all_relevant = sorted(high_score_candidates, key=lambda x: x["score"], reverse=True)
+                # === Deduplicate by device_name and get top candidates ===
+                device_scores = {}
+                device_candidates = {}
+                seen_names = set()
 
-    for item in all_relevant:
-        cand = item["candidate"]
-        dev_name = get_metadata(cand["doc"], "device_name")
-        if dev_name and dev_name not in seen_names:
-            device_scores[dev_name] = item["score"]
-            device_candidates[dev_name] = cand
-            seen_names.add(dev_name)
+                try:
+                    # Sort all candidates by score
+                    all_relevant = sorted(high_score_candidates, key=lambda x: x["score"], reverse=True)
 
-    logger.info(f"[DEBUG] Found {len(seen_names)} unique devices")
+                    for item in all_relevant:
+                        try:
+                            cand = item["candidate"]
+                            dev_name = get_metadata(cand["doc"], "device_name")
+                            if dev_name and dev_name not in seen_names:
+                                device_scores[dev_name] = item["score"]
+                                device_candidates[dev_name] = cand
+                                seen_names.add(dev_name)
+                        except Exception as e:
+                            logger.warning(f"[WARNING] Error processing candidate item: {e}")
+                            continue
 
-    # === Build final candidates list ===
-    sorted_devices = sorted(device_scores.items(), key=lambda x: x[1], reverse=True)
-    final_candidates = []
-    top_candidates = []  # Keep track of actual candidate objects for FAISS
+                    logger.info(f"[DEBUG] Found {len(seen_names)} unique devices from matching")
+
+                    # === Build initial candidates list (top 5 from matching) ===
+                    sorted_devices = sorted(device_scores.items(), key=lambda x: x[1], reverse=True)
+                    top_5_matched = []
+                    
+                    for name, score in sorted_devices[:5]:  # Get only top 5
+                        cand = device_candidates[name]
+                        cand["score"] = score
+                        top_5_matched.append(cand)
+
+                    logger.info(f"[DEBUG] Selected top 5 from matching: {[get_metadata(c['doc'], 'device_name') for c in top_5_matched]}")
+
+                    # === Get 5 similar candidates using similarity search ===
+                    similar_candidates = []
+                    existing_names = {get_metadata(c["doc"], "device_name", "") for c in top_5_matched}
+                    
+                    if top_5_matched:
+                        try:
+                            # Use the best matched candidate as reference for similarity
+                            best_candidate = top_5_matched[0]
+                            logger.info(f"[DEBUG] Finding similar products to: {get_metadata(best_candidate['doc'], 'device_name')}")
+                            
+                            # Get up to 10 similar candidates (we'll filter to 5 unique)
+                            similar = suggest_similar_candidate(best_candidate, original_candidates, top_k=10)
+                            
+                            for sim_cand in similar:
+                                try:
+                                    name = get_metadata(sim_cand["doc"], "device_name", "")
+                                    if name and name not in existing_names:
+                                        similar_candidates.append(sim_cand)
+                                        existing_names.add(name)
+                                        if len(similar_candidates) >= 5:
+                                            break
+                                except Exception as e:
+                                    logger.warning(f"[WARNING] Error processing similar candidate: {e}")
+                                    continue
+                            
+                            logger.info(f"[DEBUG] Added {len(similar_candidates)} similar candidates")
+                        except Exception as e:
+                            logger.error(f"[ERROR] Error finding similar candidates: {e}", exc_info=True)
+
+                    final_candidates = top_5_matched + similar_candidates
+                    
+                    # Remove duplicates one more time (safety check)
+                    unique_final = []
+                    final_names = set()
+                    for cand in final_candidates:
+                        try:
+                            name = get_metadata(cand["doc"], "device_name", "")
+                            if name and name not in final_names:
+                                unique_final.append(cand)
+                                final_names.add(name)
+                        except Exception as e:
+                            logger.warning(f"[WARNING] Error deduplicating candidate: {e}")
+                            continue
+                    
+                    final_candidates = unique_final
+                    logger.info(f"[DEBUG] Final unique candidates: {len(final_candidates)}")
+                except Exception as e:
+                    logger.error(f"[ERROR] Error in candidate processing: {e}", exc_info=True)
+                    final_candidates = []
+            except Exception as e:
+                logger.error(f"[ERROR] Error in process_chunks_with_field_exclusion: {e}", exc_info=True)
+                final_candidates = []
+
+        # === Pagination for large results (MEDIUM PRIORITY) ===
+        MAX_RESULTS = 100  # Limit to prevent returning too many items
+        should_return_all = has_price_input and price_input and not has_features and not device_name
+        
+        if should_return_all:
+            # Pagination: Don't return 10,000 products at once!
+            limited_points = filtered_points[:MAX_RESULTS]
+            logger.info(f"[DEBUG] PRICE-ONLY QUERY - Returning {len(limited_points)} products (limited from {len(filtered_points)}) under price")
+            top_matches = [{"doc": doc, "score": 0} for doc in limited_points]
+            logger.info(f"[DEBUG] Total products returned: {len(top_matches)}")
+        elif has_price_input and price_input:
+            logger.info(f"[DEBUG] Price filter WITH features/device_name - returning top {min(len(final_candidates), MAX_RESULTS)} matched candidates")
+            top_matches = final_candidates[:MAX_RESULTS]
+        else:
+            top_matches = final_candidates[:10]  # Limit to 10 otherwise
+            logger.info(f"[DEBUG] No price filter - returning top {len(top_matches)} candidates")
+
+        # === Build device names list ===
+        top_device_names = []
+        try:
+            for m in top_matches:
+                try:
+                    name = get_metadata(m["doc"], "device_name")
+                    if name:
+                        top_device_names.append(name)
+                except Exception as e:
+                    logger.warning(f"[WARNING] Error extracting device name: {e}")
+                    continue
+        except Exception as e:
+            logger.error(f"[ERROR] Error building device names list: {e}", exc_info=True)
+
+        # === Build product info block ===
+        product_info_block = ""
+        try:
+            if top_matches:
+                meta_fields = [
+                    "device_name", "laptop_features", "phone_features", "tablet_features",
+                    "image_link", "sale_price", "all_perks", "source"
+                ]
+                products_info = []
+                for idx, item in enumerate(top_matches, start=1):
+                    try:
+                        score = item.get('score', 0)
+                        content = f"Product {idx} (Score: {score:.2f}) [{type_key}]:\n"
+                        for field in meta_fields:
+                            try:
+                                value = get_metadata(item["doc"], field, "")
+                                content += f"- {field}: {value}\n"
+                            except Exception as e:
+                                logger.warning(f"[WARNING] Error getting field {field}: {e}")
+                                content += f"- {field}: N/A\n"
+                        products_info.append(content)
+                    except Exception as e:
+                        logger.warning(f"[WARNING] Error formatting product {idx}: {e}")
+                        continue
+                product_info_block = "\n".join(products_info)
+        except Exception as e:
+            logger.error(f"[ERROR] Error building product info block: {e}", exc_info=True)
+
+        return type_key, top_device_names, product_info_block, top_matches
     
-    for name, score in sorted_devices:
-        cand = device_candidates[name]
-        cand["score"] = score
-        final_candidates.append(cand)
-        top_candidates.append(cand)  # Store the candidate object
-
-    if len(final_candidates) >= 5:
-        top_matches = final_candidates[:5]
-        top_candidates = top_candidates[:5]
-        logger.info(f"[DEBUG] Returning top 5 from {len(final_candidates)} candidates")
-    else:
-        logger.info(f"[DEBUG] Only {len(final_candidates)} found, adding suggestions")
-        additional = []
-        additional_candidates = []
-        if final_candidates:
-            top_n = final_candidates[:2] if len(final_candidates) > 1 else [final_candidates[0]]
-            existing_names = {get_metadata(c["doc"], "device_name", "") for c in final_candidates}
-            for best in top_n:
-                sims = suggest_similar_candidate(best, original_candidates, top_k=3)
-                for s in sims:
-                    name = get_metadata(s["doc"], "device_name", "")
-                    if name and name not in existing_names:
-                        additional.append(s)
-                        additional_candidates.append(s)
-                        existing_names.add(name)
-        final_candidates.extend(additional)
-        top_candidates.extend(additional_candidates)
-        top_matches = final_candidates[:5]
-        top_candidates = top_candidates[:5]
-
-    top_device_names = [
-        get_metadata(m["doc"], "device_name") for m in top_matches
-        if get_metadata(m["doc"], "device_name")
-    ]
-
-    product_info_block = ""
-    if top_matches:
-        meta_fields = [
-            "device_name", "laptop_features", "phone_features", "tablet_features",
-            "image_link", "sale_price", "all_perks", "source"
-        ]
-        products_info = []
-        for idx, item in enumerate(top_matches, start=1):
-            content = f"Product {idx} (Score: {item['score']:.2f}) [{type_key}]:\n"
-            for field in meta_fields:
-                value = get_metadata(item["doc"], field, "")
-                content += f"- {field}: {value}\n"
-            products_info.append(content)
-        product_info_block = "\n".join(products_info)
-
-    return type_key, top_device_names, product_info_block, top_candidates
+    except Exception as e:
+        logger.error(f"[ERROR] Scoring logic failed for type {type_key}: {e}", exc_info=True)
+        # Graceful failure - return empty results
+        return type_key, [], "", []
 
 def parse_structured_input(structured_input):
     """
