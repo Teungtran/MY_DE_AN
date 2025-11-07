@@ -371,7 +371,6 @@ async def scoring_logic(
 
                     final_candidates = top_5_matched + similar_candidates
                     
-                    # Remove duplicates one more time (safety check)
                     unique_final = []
                     final_names = set()
                     for cand in final_candidates:

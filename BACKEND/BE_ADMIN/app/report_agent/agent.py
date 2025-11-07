@@ -55,7 +55,7 @@ df_time = convert_any_datetime(df)
                 "Call this tool first when users ask about data analysis, statistics, "
                 "or insights from the data. Uses directly injected data or cached data.",
                 args_schema=AnalyseInput)
-def analyze_agent(question: str):
-    response = analyze_tool(user_input=question,df = df_time)
+def analyze_agent(user_input: str):
+    response = analyze_tool(user_input=user_input,df = df_time)
     return str(response) if response is not None else "I couldn't generate a response. Please try again."
 

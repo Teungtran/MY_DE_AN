@@ -1,31 +1,30 @@
-# Multi-stage build for React/Vite application
-FROM node:18-alpine AS builder
+# ---------- Build stage ----------
+# Use Node 20 to match React Router / Vite requirements
+FROM node:20-alpine AS builder
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for caching
 COPY package*.json ./
 
-# Install dependencies (including dev dependencies needed for build)
+# Install dependencies (clean CI install)
 RUN npm ci
 
 # Copy source code
 COPY . .
 
-# Build the application
+# Build the application (Vite outputs to "dist" by default)
 RUN npm run build
 
-# Production stage
+# ---------- Production stage ----------
 FROM nginx:alpine AS production
 
-# Copy custom nginx configuration if needed
-# COPY nginx.conf /etc/nginx/nginx.conf
-
-# Copy built application from builder stage (Vite builds to 'build' per vite.config.ts)
+# Copy build artifacts to nginx html directory
+# Vite outputs to "build" directory as configured in vite.config.ts
 COPY --from=builder /app/build /usr/share/nginx/html
 
-# Copy a simple nginx configuration for SPA
+# Configure nginx for SPA routing + API proxy
 RUN echo 'server { \
     listen 80; \
     server_name localhost; \
@@ -37,8 +36,7 @@ RUN echo 'server { \
         try_files $uri $uri/ /index.html; \
     } \
     \
-    # Proxy all API calls to backend API Gateway \
-    # Frontend calls /auth/*, /ml/*, etc. which get proxied to nginx:8090 \
+    # Proxy backend API calls \
     location ~ ^/(auth|ml|chat|admin|preprocess)/ { \
         proxy_pass http://nginx:8090; \
         proxy_http_version 1.1; \
@@ -53,8 +51,5 @@ RUN echo 'server { \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
-# Expose port 80
 EXPOSE 80
-
-# Start nginx
 CMD ["nginx", "-g", "daemon off;"]

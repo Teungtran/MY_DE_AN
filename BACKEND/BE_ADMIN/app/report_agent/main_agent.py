@@ -10,7 +10,8 @@ from .agent import analyze_agent,df_time
 from langgraph.prebuilt import tools_condition
 from .state import create_tool_node_with_fallback
 from langchain_core.messages import ToolMessage
-from langgraph.graph import StateGraph
+from langgraph.graph.state import StateGraph,CompiledStateGraph
+
 from langgraph.checkpoint.memory import MemorySaver
 chat_config = OpenAIConfig()
 
@@ -170,7 +171,7 @@ def react_agent(state: InputState):
         return {"messages": [AIMessage(content="I’m not sure how to handle that request. Could you clarify what kind of analysis you need?")]}
     
     
-def create_graph():
+def create_graph() -> CompiledStateGraph:
     graph_agent = StateGraph(InputState)
 
     graph_agent.add_node("AGENT", react_agent)
@@ -184,3 +185,4 @@ def create_graph():
                 checkpointer=MemorySaver(),
                 name="Agent Graph",
             )
+    return graph
