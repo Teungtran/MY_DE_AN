@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { Input } from './ui/input';
-import { LogOut, Upload, Brain, TrendingUp, RefreshCw, MessageCircle, FileText, Database, Download } from 'lucide-react';
+import { LogOut, Upload, Brain, TrendingUp, RefreshCw, MessageCircle, FileText, Database, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 import { FPTLogo } from './FPTLogo';
 import { toast } from 'sonner';
@@ -64,6 +64,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
   const [scalerVersion, setScalerVersion] = useState<string>('scaler_churn_version_20250701T105905.pkl');
   const [runId, setRunId] = useState<string>('b523ba441ea0465085716dcebb916294');
   const [apiSummary, setApiSummary] = useState<any>(null);
+  const [isTableExpanded, setIsTableExpanded] = useState(true);
 
 
 
@@ -524,53 +525,101 @@ export function MLPage({ user, onLogout }: MLPageProps) {
               <Card className="bg-white border-gray-200">
                 <CardHeader>
                   <div className="flex items-center justify-between">
-                    <CardTitle className="text-black">Prediction Results</CardTitle>
-                    <Button
-                      onClick={downloadResults}
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                      size="sm"
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Results
-                    </Button>
+                    <div className="flex items-center space-x-2">
+                      <CardTitle className="text-black">Prediction Results</CardTitle>
+                      <Badge variant="secondary" className="bg-gray-100 text-black">
+                        {predictionResults.length} records
+                      </Badge>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        onClick={downloadResults}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        size="sm"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button
+                        onClick={() => setIsTableExpanded(!isTableExpanded)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-600 hover:text-black"
+                      >
+                        {isTableExpanded ? (
+                          <>
+                            <ChevronUp className="h-4 w-4 mr-1" />
+                            Collapse
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="h-4 w-4 mr-1" />
+                            Expand
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="border-gray-200">
-                        <TableHead className="text-black">Text/Customer</TableHead>
-                        <TableHead className="text-black">Prediction</TableHead>
-                        <TableHead className="text-black">Confidence</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {predictionResults.map((result) => (
-                        <TableRow key={result.id} className="border-gray-200">
-                          <TableCell className="text-black max-w-xs truncate">
-                            {result.text}
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              className={
-                                result.prediction.includes('Positive') || result.prediction.includes('Low Risk') 
-                                  ? 'bg-green-600 text-white'
-                                  : result.prediction.includes('Negative') || result.prediction.includes('High Risk')
-                                  ? 'bg-red-600 text-white'
-                                  : 'bg-yellow-600 text-white'
-                              }
-                            >
-                              {result.prediction}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-black">
-                            {(result.confidence * 100).toFixed(1)}%
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
+                {isTableExpanded && (
+                  <CardContent>
+                    <div className="overflow-auto border border-gray-200 rounded-lg" style={{ maxHeight: '500px' }}>
+                      <Table>
+                        <TableHeader className="bg-gray-50 sticky top-0 z-10">
+                          <TableRow className="border-gray-200">
+                            <TableHead className="text-black font-semibold sticky top-0 bg-gray-50">
+                              #
+                            </TableHead>
+                            <TableHead className="text-black font-semibold sticky top-0 bg-gray-50">
+                              Text/Customer
+                            </TableHead>
+                            <TableHead className="text-black font-semibold sticky top-0 bg-gray-50">
+                              Prediction
+                            </TableHead>
+                            <TableHead className="text-black font-semibold sticky top-0 bg-gray-50">
+                              Confidence
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {predictionResults.map((result, index) => (
+                            <TableRow key={result.id} className="border-gray-200 hover:bg-gray-50">
+                              <TableCell className="text-gray-600 font-medium">
+                                {index + 1}
+                              </TableCell>
+                              <TableCell className="text-black max-w-md">
+                                <div className="truncate" title={result.text}>
+                                  {result.text}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge 
+                                  className={
+                                    result.prediction.includes('Positive') || result.prediction.includes('Low Risk') 
+                                      ? 'bg-green-600 text-white'
+                                      : result.prediction.includes('Negative') || result.prediction.includes('High Risk')
+                                      ? 'bg-red-600 text-white'
+                                      : 'bg-yellow-600 text-white'
+                                  }
+                                >
+                                  {result.prediction}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="text-black font-medium">
+                                {(result.confidence * 100).toFixed(1)}%
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {predictionResults.length > 10 && (
+                      <div className="mt-3 text-sm text-gray-500 text-center">
+                        Showing all {predictionResults.length} results. Scroll to view more.
+                      </div>
+                    )}
+                  </CardContent>
+                )}
               </Card>
             )}
 

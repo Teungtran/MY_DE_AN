@@ -31,6 +31,9 @@ RUN echo 'server { \
     root /usr/share/nginx/html; \
     index index.html; \
     \
+    # Allow large file uploads (up to 200MB) \
+    client_max_body_size 200M; \
+    \
     # SPA fallback - serve index.html for all routes \
     location / { \
         try_files $uri $uri/ /index.html; \
@@ -48,6 +51,8 @@ RUN echo 'server { \
         proxy_set_header X-Forwarded-Proto $scheme; \
         proxy_read_timeout 300s; \
         proxy_connect_timeout 75s; \
+        # Allow large file uploads through proxy \
+        client_max_body_size 200M; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 

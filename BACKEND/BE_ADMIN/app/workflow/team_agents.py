@@ -6,6 +6,8 @@ from app.workflow.prompt import TEAM_PROMPT
 from .AdvertiseAgent.agent import advertise_expert
 from .SearchAgent.agent import tavily_agent
 from .ExpertAgent.agent import expert_agent
+from .SQLAgent.agent import sql_agent
+
 from app.workflow.team_memory import get_storage
 from textwrap import dedent
 from typing import Callable
@@ -26,7 +28,7 @@ store_team = Team(
     mode="coordinate",
     tools=[ReasoningTools(add_instructions=True,think=True, analyze=True)],
     instructions=dedent(TEAM_PROMPT),
-    members=[tavily_agent, expert_agent, advertise_expert],
+    members=[tavily_agent, expert_agent, advertise_expert,sql_agent],
     expected_output="A Markdown format answer that is clear for the user, using simple vocabulary",
     markdown=True,
     add_history_to_messages=True,

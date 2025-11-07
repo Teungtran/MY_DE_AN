@@ -28,7 +28,7 @@ churn_evaluation:
 
 churn_cloud_storage_push:
   root_dir: artifacts
-  bucket_name: ml-dataversion
+  bucket_name: ml-dataversion-1
   data_version_dir: artifacts/churn/data_version  
   evaluation_dir: artifacts/churn/evaluation 
 
@@ -75,7 +75,7 @@ sentiment_evaluation:
 
 sentiment_cloud_storage_push:
   root_dir: artifacts
-  bucket_name: ml-dataversion
+  bucket_name: ml-dataversion-1
   data_version_dir: artifacts/sentiment/data_version  
   evaluation_dir: artifacts/sentiment/evaluation 
 
@@ -110,7 +110,7 @@ segmentation_evaluation:
 
 segmentation_cloud_storage_push:
   root_dir: artifacts
-  bucket_name: ml-dataversion
+  bucket_name: ml-dataversion-1
   data_version_dir: artifacts/segmentation/data_version  
   evaluation_dir: artifacts/segmentation/evaluation 
 

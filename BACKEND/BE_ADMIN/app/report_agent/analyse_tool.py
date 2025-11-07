@@ -133,8 +133,12 @@ def generate_pandas_code(user_input: str, df_sample: str, data_info):
         5. Use only columns that exist in the dataset.
         6. Implement logic directly — no complex structures, loops, or helper functions.
         7. The final output must be a dictionary named `result`.
-        8. Make the logic reflect the user’s question (sum, mean, filter, count, compare, etc.).
+        8. Make the logic reflect the user's question (sum, mean, filter, count, compare, etc.).
         9. Keep the code short, clean, and executable.
+        10. **CRITICAL**: Store values as simple Python types (int, float, str, list). DO NOT use .to_dict(), .to_list(), or any pandas conversion methods.
+        11. **CRITICAL**: Use len(df) for total count, NOT df['column'].nunique() unless specifically asked for unique values.
+        12. For counts: use int(value_counts_result['category_name']) to get individual counts.
+        13. For percentages: calculate as (count / total) * 100 and convert to float().
         
     ## NOTE When generating the code, **try to gather as much relevant information as possible** from the data that supports the user’s question.  
 
@@ -160,8 +164,15 @@ def generate_pandas_code(user_input: str, df_sample: str, data_info):
 
     # Convert column names to lowercase
     df.columns = df.columns.str.lower()
-        
-    /// Then write your code here
+    
+    # Example: Count distribution (DO NOT use .to_dict())
+    counts = df['category'].value_counts()
+    result = {{
+        'category_a_count': int(counts['Category A']),
+        'category_b_count': int(counts['Category B']),
+        'total_rows': len(df),
+        'percentage_a': float((counts['Category A'] / len(df)) * 100)
+    }}
     
     """)
     try:
@@ -264,12 +275,15 @@ def analyze_tool(user_input: str, df: pd.DataFrame):
                 - Check indentation (result variable must be at module level)
                 - Ensure 'result' is defined in ALL code paths (if/else)
                 - Initialize result = None at the start if needed
+                - DO NOT use .to_dict(), .to_list() or any pandas conversion methods
+                - Use len(df) for total count, NOT .nunique() unless specifically needed
             4. GENERATE NEW CODE that:
                 - Fixes the error COMPLETELY
                 - Defines 'result' variable at module level (no indentation)
                 - Avoids undefined variables or bad column names
-                - Uses simple scalar variables (int, float, str)
-                - No lambdas, dict chaining
+                - Uses simple scalar variables (int, float, str, list)
+                - NO .to_dict(), NO .to_list(), NO lambdas, NO dict chaining
+                - Extract values using int(), float(), str() conversions
                 
             === OUTPUT ===
             Return ONLY valid Python code storing final output in `result`.

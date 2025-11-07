@@ -48,14 +48,26 @@ def convert_any_datetime(df):
             df[col] = pd.to_datetime(df[col], format="mixed", errors='coerce', utc=True)
 
     return df
-df = import_data()
-df_time = convert_any_datetime(df)
+
+def get_data():
+    """Lazy load data only when needed"""
+    try:
+        df = import_data()
+        df_time = convert_any_datetime(df)
+        return df_time
+    except ValueError as e:
+        # No data file uploaded yet
+        return None
+
 @tool("analyze_agent",
     description="Analyzes data and answers questions about datasets."
                 "Call this tool first when users ask about data analysis, statistics, "
                 "or insights from the data. Uses directly injected data or cached data.",
                 args_schema=AnalyseInput)
 def analyze_agent(user_input: str):
-    response = analyze_tool(user_input=user_input,df = df_time)
+    df_time = get_data()
+    if df_time is None:
+        return "No data file has been uploaded yet. Please upload a CSV or Excel file first."
+    response = analyze_tool(user_input=user_input, df=df_time)
     return str(response) if response is not None else "I couldn't generate a response. Please try again."
 

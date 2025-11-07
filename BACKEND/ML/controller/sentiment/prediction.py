@@ -16,7 +16,7 @@ async def predict_sentiment(
     model_version: str = Form(default="1"),
     tokenizer_version: str = Form(default="tokenizer/tokenizer_version_20250810T020107.pkl"),
     run_id: str = Form(default="e5eb544e473d4a7b9109b98c5255de04"),
-    current_user: Dict[str, Any] = Depends(require_staff_or_admin)
+    # current_user: Dict[str, Any] = Depends(require_staff_or_admin)
     ) :
     """
     Predict sentiment using uploaded data.

@@ -34,6 +34,9 @@ export default function App() {
 
   const handleLogout = () => {
     removeAuthToken();
+    // Clear chat history from localStorage
+    localStorage.removeItem('customer_conversations');
+    localStorage.removeItem('employee_sessions');
     setUser(null);
   };
 

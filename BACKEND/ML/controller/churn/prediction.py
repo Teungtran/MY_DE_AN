@@ -16,7 +16,7 @@ async def predict_churn(
     model_version: str = Form(default="1"),
     scaler_version: str = Form(default="scaler/scaler_churn_version_20250705T125012.pkl"),
     run_id: str = Form(default="e26506b0b99247c6bcec84a630fa665e"),
-    current_user: Dict[str, Any] = Depends(require_staff_or_admin)
+    # current_user: Dict[str, Any] = Depends(require_staff_or_admin)
     ):
     """
     Predict customer churn using uploaded data.

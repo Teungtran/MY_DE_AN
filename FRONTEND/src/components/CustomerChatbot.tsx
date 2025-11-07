@@ -646,8 +646,8 @@ What can I help you with today?`,
         </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4 bg-gray-50 pb-24">
-          <div className="space-y-4 max-w-4xl mx-auto">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+          <div className="space-y-4 max-w-4xl mx-auto pb-4">
             {currentConv?.messages.map((msg) => (
               <div
                 key={msg.id}
@@ -740,7 +740,7 @@ What can I help you with today?`,
             )}
             <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Sticky Message Input */}
         <div className="sticky bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white shadow-lg z-10">

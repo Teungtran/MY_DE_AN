@@ -6,7 +6,7 @@ from app.schemas.device_schemas import CancelOrder, Order, TrackOrder, Recommend
 from ..support_funcs.get_candidates import get_all_points
 from app.orchestrator.shop_graph.tools.hybrid_search import get_best_candidate, suggest_similar_candidate
 from ..support_funcs.supports import get_metadata, extract_all_text_from_field
-from langchain.retrievers import BM25Retriever
+from langchain_community.retrievers import BM25Retriever
 from app.services.get_retriever import get_device_retriever
 from functools import lru_cache
 import asyncio

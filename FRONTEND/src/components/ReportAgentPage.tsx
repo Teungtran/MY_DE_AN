@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp } from 'lucide-react';
+import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { FPTLogo } from './FPTLogo';
 import { adminAPI } from '../utils/api';
 import { toast } from 'sonner';
@@ -73,6 +73,10 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
       return;
     }
 
+    // Clear previous data when uploading new file
+    setUploadedData(null);
+    setShowDataTable(false);
+
     const newReport: Report = {
       id: Date.now().toString(),
       name: file.name,
@@ -80,7 +84,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
       status: 'processing'
     };
 
-    setReports(prev => [newReport, ...prev]);
+    // Replace the entire reports list with just the new report
+    setReports([newReport]);
 
     try {
       // Use real API to upload report
@@ -143,6 +148,15 @@ Would you like to try uploading the file again?`,
 
       setMessages(prev => [...prev, errorMessage]);
       toast.error('File upload failed. Please try again.');
+    }
+  };
+
+  const handleClearData = () => {
+    if (window.confirm('Are you sure you want to clear the current data? This will remove the uploaded file and preview.')) {
+      setUploadedData(null);
+      setShowDataTable(false);
+      setReports([]);
+      toast.success('Data cleared successfully');
     }
   };
 
@@ -410,7 +424,7 @@ I'm here to help once you're ready to try again!`
       </div>
 
       {/* Right Panel - Report Upload & Insights */}
-      <div className="w-1/2 flex flex-col bg-white">
+      <div className="w-1/2 flex flex-col bg-white overflow-hidden">
         {/* Header */}
         <div className="p-4 border-b border-gray-200 bg-white">
           <div className="flex items-center space-x-3">
@@ -422,7 +436,7 @@ I'm here to help once you're ready to try again!`
           </div>
         </div>
 
-        <ScrollArea className="flex-1 p-4 space-y-6 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50">
           {/* File Upload */}
           <Card className="bg-white border-gray-200">
             <CardHeader>
@@ -448,7 +462,7 @@ I'm here to help once you're ready to try again!`
                     onChange={handleFileUpload}
                   />
                 </label>
-                <p className="text-xs text-gray-500 mt-1">CSV, Excel files up to 10MB</p>
+                <p className="text-xs text-gray-500 mt-1">CSV, Excel files up to 200MB</p>
               </div>
 
               {reports.length > 0 && (
@@ -485,37 +499,65 @@ I'm here to help once you're ready to try again!`
                       Showing first {Math.min(100, uploadedData.data.length)} of {uploadedData.data.length} rows
                     </CardDescription>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowDataTable(!showDataTable)}
-                    className="text-gray-600 hover:text-black"
-                  >
-                    {showDataTable ? (
-                      <>
-                        <ChevronUp className="h-4 w-4 mr-1" />
-                        Hide
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4 mr-1" />
-                        Show
-                      </>
-                    )}
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleClearData}
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      title="Clear data"
+                    >
+                      <Trash2 className="h-4 w-4 mr-1" />
+                      Clear
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowDataTable(!showDataTable)}
+                      className="text-gray-600 hover:text-black"
+                    >
+                      {showDataTable ? (
+                        <>
+                          <ChevronUp className="h-4 w-4 mr-1" />
+                          Hide
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-4 w-4 mr-1" />
+                          Show
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               {showDataTable && (
                 <CardContent className="p-0">
                   <div className="border-t border-gray-200">
-                    <div className="overflow-auto" style={{ maxHeight: '500px' }}>
-                      <div className="overflow-x-auto">
-                        <Table>
+                    {/* Scrollable container for both horizontal and vertical scrolling */}
+                    <div 
+                      className="overflow-auto border border-gray-200 rounded-lg"
+                      style={{ 
+                        maxHeight: '600px',
+                        maxWidth: '100%'
+                      }}
+                    >
+                      <div className="inline-block min-w-full">
+                        <Table className="min-w-full">
                           <TableHeader className="bg-gray-100 sticky top-0 z-10">
                             <TableRow>
-                              <TableHead className="text-black font-semibold border-r w-16 sticky left-0 bg-gray-100 z-20">#</TableHead>
+                              <TableHead 
+                                className="text-black font-semibold border-r w-16 sticky left-0 bg-gray-100 z-20 shadow-sm"
+                                style={{ minWidth: '60px' }}
+                              >
+                                #
+                              </TableHead>
                               {uploadedData.data[0] && Object.keys(uploadedData.data[0]).map((key) => (
-                                <TableHead key={key} className="text-black font-semibold border-r min-w-[150px] whitespace-nowrap">
+                                <TableHead 
+                                  key={key} 
+                                  className="text-black font-semibold border-r whitespace-nowrap px-4"
+                                  style={{ minWidth: '150px' }}
+                                >
                                   {key}
                                 </TableHead>
                               ))}
@@ -524,11 +566,18 @@ I'm here to help once you're ready to try again!`
                           <TableBody>
                             {uploadedData.data.slice(0, 100).map((row, index) => (
                               <TableRow key={index} className="hover:bg-gray-50">
-                                <TableCell className="border-r font-medium text-gray-600 sticky left-0 bg-white z-10">
+                                <TableCell 
+                                  className="border-r font-medium text-gray-600 sticky left-0 bg-white z-10 shadow-sm"
+                                  style={{ minWidth: '60px' }}
+                                >
                                   {index + 1}
                                 </TableCell>
-                                {Object.values(row).map((value, colIndex) => (
-                                  <TableCell key={colIndex} className="border-r text-black whitespace-nowrap">
+                                {Object.entries(row).map(([key, value], colIndex) => (
+                                  <TableCell 
+                                    key={`${key}-${colIndex}`} 
+                                    className="border-r text-black whitespace-nowrap px-4"
+                                    style={{ minWidth: '150px' }}
+                                  >
                                     {value !== null && value !== undefined ? String(value) : '-'}
                                   </TableCell>
                                 ))}
@@ -541,7 +590,7 @@ I'm here to help once you're ready to try again!`
                     {uploadedData.data.length > 100 && (
                       <div className="p-3 bg-gray-50 border-t border-gray-200">
                         <p className="text-sm text-gray-500 text-center">
-                          + {uploadedData.data.length - 100} more rows available for analysis
+                          Showing first 100 rows. + {uploadedData.data.length - 100} more rows available for analysis
                         </p>
                       </div>
                     )}
@@ -551,7 +600,7 @@ I'm here to help once you're ready to try again!`
             </Card>
           )}
 
-        </ScrollArea>
+        </div>
         </div>
       </div>
     </div>

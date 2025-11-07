@@ -156,17 +156,30 @@ async def upload_file(
     """Upload report file for analysis (requires admin/staff role)"""
     # Mock user for testing (commented out - use for future tests if needed)
     mock_user_id = "test_user"
+    
+    # Validate file exists
+    if not file or not file.filename:
+        logger.error("No file provided in upload request")
+        raise HTTPException(status_code=400, detail="No file provided")
+    
     allowed_extensions = {'.csv', '.xlsx', '.xls'}
     file_extension = Path(file.filename).suffix.lower()
     
+    logger.info(f"Uploading file: {file.filename}, extension: {file_extension}")
+    
     if file_extension not in allowed_extensions:
+        logger.error(f"Unsupported file type: {file_extension}")
         raise HTTPException(
             status_code=400, 
             detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}"
         )
     
-    artifact_dir = Path("report_agent/artifact")
+    # Use the same path resolution as parse_file.py
+    # From api_chat.py (app/controllers/) -> go up to app/ -> then to report_agent/artifact
+    artifact_dir = Path(__file__).parent.parent / "report_agent" / "artifact"
     artifact_dir.mkdir(parents=True, exist_ok=True)
+    
+    logger.info(f"Artifact directory: {artifact_dir.absolute()}")
     
     supported_extensions = ['.csv', '.txt', '.xlsx', '.xls']
     existing_files = [f for f in artifact_dir.iterdir() if f.suffix.lower() in supported_extensions]
@@ -174,24 +187,36 @@ async def upload_file(
     for existing_file in existing_files:
         try:
             existing_file.unlink()  
-            print(f"Deleted old file: {existing_file.name}")
+            logger.info(f"Deleted old file: {existing_file.name}")
         except Exception as e:
-            print(f"Could not delete {existing_file.name}: {e}")
+            logger.warning(f"Could not delete {existing_file.name}: {e}")
     
     # Save the new file
     file_path = artifact_dir / file.filename
+    logger.info(f"Saving file to: {file_path.absolute()}")
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+    
+    # Verify file was saved
+    if not file_path.exists():
+        logger.error(f"File was not saved successfully to {file_path.absolute()}")
+        raise HTTPException(status_code=500, detail="Failed to save uploaded file")
+    
+    logger.info(f"File saved successfully: {file_path.name}, size: {file_path.stat().st_size} bytes")
     
     try:
         df = import_data()  
         
         df = df.where(pd.notnull(df), None)
         data_records = df.to_dict(orient="records")
+        logger.info(f"File uploaded and parsed successfully: {file.filename}, {len(data_records)} records")
+    except ValueError as e:
+        logger.error(f"ValueError parsing file {file.filename}: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to parse uploaded file: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to parse uploaded file: {e}")
+        logger.error(f"Unexpected error parsing file {file.filename}: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=400, detail=f"Failed to parse uploaded file: {str(e)}")
 
-    print(f"File uploaded and parsed: {file.filename}")
     return {"filename": file.filename, "data": data_records}
 
 @router.post("/report/analyze")

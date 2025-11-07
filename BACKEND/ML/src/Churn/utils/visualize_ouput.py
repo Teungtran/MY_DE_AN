@@ -8,9 +8,11 @@ def visualize_customer_churn(df: pd.DataFrame, output_dir: str = "plots\churn"):
     plt.switch_backend('Agg')  # Non-GUI backend for server use
 
     try:
-        churn_counts = df['Churn_RATE'].value_counts().sort_index()
+        # Ensure Churn_RATE is numeric to avoid categorical plotting warnings
+        churn_counts = df['Churn_RATE'].astype(float).value_counts().sort_index()
         labels = ['Not Churned', 'Churned']
-        sizes = [churn_counts.get(0, 0), churn_counts.get(1, 0)]
+        # Ensure sizes are native Python integers to avoid warnings
+        sizes = [int(churn_counts.get(0.0, 0)), int(churn_counts.get(1.0, 0))]
         colors = ['#2ecc71', '#e74c3c']  
         fig_pie = plt.figure(figsize=(8, 6))
         plt.pie(

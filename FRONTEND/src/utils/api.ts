@@ -323,6 +323,19 @@ export const adminAPI = {
     formData.append('file', file);
 
     const response = await apiRequestFormData('/admin/v1/chat/report/upload', formData);
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      let errorMessage = `HTTP error! status: ${response.status}`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.detail || errorMessage;
+      } catch {
+        errorMessage = errorText || errorMessage;
+      }
+      throw new Error(errorMessage);
+    }
+    
     return response.json();
   },
 

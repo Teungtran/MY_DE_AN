@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 load_dotenv()
 from typing import List ,Tuple
 from collections import defaultdict
-from langchain.retrievers import BM25Retriever
-
+from langchain_community.retrievers import BM25Retriever
 def setup_dynamic_doc(question: str) -> int:
     """Dynamically determine document count based on query complexity."""
     if isinstance(question, str):

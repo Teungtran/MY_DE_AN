@@ -9,16 +9,25 @@ def rating_distribution(df: pd.DataFrame, output_dir: str = "plots/ratings") -> 
     plt.switch_backend('Agg')  # Non-GUI backend for server use
 
     try:
-        rating_counts = df['rating'].value_counts().sort_index()
+        # Ensure rating is numeric to avoid categorical plotting warnings
+        rating_counts = df['rating'].astype(float).value_counts().sort_index()
         rating_colors = plt.cm.YlOrRd(np.linspace(0.3, 0.8, len(rating_counts)))
 
         fig, ax = plt.subplots(figsize=(8, 6))
+        # Convert index to numeric to avoid categorical plotting warning
+        x_values = rating_counts.index.astype(float)
+        # Ensure values are native Python integers to avoid warnings
+        y_values = [int(v) for v in rating_counts.values]
         bars = ax.bar(
-            rating_counts.index.astype(str),
-            rating_counts.values,
+            x_values,
+            y_values,
             color=rating_colors,
             edgecolor='black'
         )
+        
+        # Set x-axis labels as strings for display
+        ax.set_xticks(x_values)
+        ax.set_xticklabels([str(x) for x in x_values])
 
         for rect in bars:
             height = rect.get_height()

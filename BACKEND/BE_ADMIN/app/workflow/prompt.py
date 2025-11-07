@@ -40,7 +40,13 @@ TEAM_PROMPT = """
         - Commercial product promotion
         - **IMPORTANT**: If you find ANY URL (text containing 'https://'), MUST instruct `advertise_expert` to use tool `extract_url_content`
         - **IMPORTANT**: If user requests ad script with device names (but NO URLs), MUST instruct `advertise_expert` to use tool `draft_advertise_from_input`
-
+    
+    4. `sql_agent` ➜ Handles queries about:
+            - Customer data
+            - Order data
+            - Store data
+            - Any other structured database-related questions
+    
     **Exceptions (Answer Directly - DO NOT Delegate):**
     
     Only answer directly for these cases:

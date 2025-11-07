@@ -19,7 +19,7 @@ class WorkflowResponse(BaseModel):
 @router.post("/", response_model=WorkflowResponse)
 async def train_model(
     file: Optional[UploadFile] = File(None),
-    current_user: Dict[str, Any] = Depends(require_admin_role)
+    # current_user: Dict[str, Any] = Depends(require_admin_role)
 ):
     """
     Run the complete churn model training workflow.
@@ -41,7 +41,7 @@ async def train_model(
     
     try:
         # Log the admin user who initiated training
-        logger.info(f"Churn model training initiated by admin user: {current_user['user_id']} ({current_user['email']})")
+        # logger.info(f"Churn model training initiated by admin user: {current_user['user_id']} ({current_user['email']})")
 
 
         workflow_runner = WorkflowRunner()
@@ -63,7 +63,7 @@ async def train_model(
 
 @router.get("/status")
 async def get_workflow_status(
-    current_user: Dict[str, Any] = Depends(require_admin_role)
+    # current_user: Dict[str, Any] = Depends(require_admin_role)
 ):
     """
     Check the status of the workflow system.

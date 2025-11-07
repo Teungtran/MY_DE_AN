@@ -25,7 +25,17 @@ class PredictionPipeline:
     def __init__(self, model_uri: str, tokenizer_uri: str):
         try:
             config = ConfigurationManager().get_mlflow_config()
-            mlflow.set_tracking_uri(config.tracking_uri)
+            # Get DagsHub token from environment
+            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            if dagshub_token:
+                # Include credentials in tracking URI
+                tracking_uri = config.tracking_uri.replace(
+                    "https://",
+                    f"https://{config.dagshub_username}:{dagshub_token}@"
+                )
+            else:
+                tracking_uri = config.tracking_uri
+            mlflow.set_tracking_uri(tracking_uri)
             logger.info(f"MLflow tracking URI set to: {mlflow.get_tracking_uri()}")
             self.model = mlflow.pyfunc.load_model(model_uri)
             tokenizer_path = mlflow.artifacts.download_artifacts(artifact_uri=tokenizer_uri)
@@ -102,12 +112,27 @@ class PredictionPipeline:
             mlflow_config = config_manager.get_mlflow_config()
             threshold_config = config_manager.get_threshold_config()
             
+            # Get DagsHub token from environment and set it for dagshub.get_token()
+            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            if dagshub_token:
+                # Set token in environment for dagshub.get_token() to find
+                os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
+            
             dagshub.init(
                 repo_owner=mlflow_config.dagshub_username,
                 repo_name=mlflow_config.dagshub_repo_name,
                 mlflow=True
             )
-            mlflow.set_tracking_uri(mlflow_config.tracking_uri)
+            
+            # Include credentials in tracking URI for MLflow authentication
+            if dagshub_token:
+                tracking_uri = mlflow_config.tracking_uri.replace(
+                    "https://",
+                    f"https://{mlflow_config.dagshub_username}:{dagshub_token}@"
+                )
+            else:
+                tracking_uri = mlflow_config.tracking_uri
+            mlflow.set_tracking_uri(tracking_uri)
             mlflow.set_experiment(mlflow_config.prediction_experiment_name)  
             
             with mlflow.start_run(run_name=f"sentiment_prediction_run_{time_str}"):
@@ -124,7 +149,7 @@ class PredictionPipeline:
                 df_processed['rating'] = df_processed['predicted_sentiment']
                 # Calculate rating distribution for metrics
                 rating_counts = df_processed['rating'].value_counts()
-                avg_rating = df_processed['rating'].mean()
+                avg_rating = float(df_processed['rating'].mean())
                 
                 s3_url = None
                 prediction_csv_path = None
@@ -148,9 +173,9 @@ class PredictionPipeline:
                 # Calculate prediction confidence for TensorFlow model
                 try:
                     # For rating prediction, confidence can be measured by the spread/variance
-                    rating_variance = df_processed['rating'].var()
+                    rating_variance = float(df_processed['rating'].var())
                     # Lower variance indicates more consistent (confident) predictions
-                    average_confidence = max(0.5, min(1.0, 1.0 - (rating_variance / 5.0)))
+                    average_confidence = float(max(0.5, min(1.0, 1.0 - (rating_variance / 5.0))))
                 except Exception as e:
                     logger.warning(f"Could not calculate confidence: {e}")
                     average_confidence = None 
@@ -174,7 +199,7 @@ class PredictionPipeline:
                 # Log metrics
                 mlflow.log_metric("processing_time_seconds", processing_time)
                 mlflow.log_metric("average_rating", avg_rating)
-                mlflow.log_metric("rating_variance", rating_variance if 'rating_variance' in locals() else 0)
+                mlflow.log_metric("rating_variance", float(rating_variance) if 'rating_variance' in locals() else 0.0)
                 
                 # Log rating distribution
                 for rating, count in rating_counts.items():
@@ -218,21 +243,39 @@ class PredictionPipeline:
                         from io import StringIO
                         s3_df = pd.read_csv(StringIO(response.text))
                         s3_df = s3_df.where(pd.notnull(s3_df), None)
-                        s3_results_data = s3_df.to_dict(orient="records")
+                        # Convert numpy types to native Python types for JSON serialization
+                        import numpy as np
+                        s3_results_data = []
+                        for record in s3_df.to_dict(orient="records"):
+                            converted_record = {}
+                            for k, v in record.items():
+                                if v is None or pd.isna(v):
+                                    converted_record[k] = None
+                                elif isinstance(v, (np.integer, np.int64, np.int32)):
+                                    converted_record[k] = int(v)
+                                elif isinstance(v, (np.floating, np.float64, np.float32)):
+                                    converted_record[k] = float(v)
+                                else:
+                                    converted_record[k] = v
+                            s3_results_data.append(converted_record)
                         logger.info(f"Successfully retrieved {len(s3_results_data)} records from S3")
                     else:
                         logger.warning(f"Failed to retrieve S3 file: HTTP {response.status_code}")
                 except Exception as e:
                     logger.error(f"Error retrieving S3 results: {e}")
             
+            # Convert numpy types to native Python types for JSON serialization
+            rating_dist = rating_counts.sort_index()
+            rating_dist_dict = {float(k): int(v) for k, v in rating_dist.items()}
+            
             return {
                 "message": message,
                 "s3_url": s3_url,
                 "s3_results_data": s3_results_data,
                 "summary": {
-                    "total_records": len(df_processed),
-                    "average_rating": avg_rating,
-                    "rating_distribution": dict(rating_counts.sort_index())
+                    "total_records": int(len(df_processed)),
+                    "average_rating": float(avg_rating),
+                    "rating_distribution": rating_dist_dict
                 }
             }
 

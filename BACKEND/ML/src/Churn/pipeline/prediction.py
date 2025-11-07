@@ -26,7 +26,17 @@ class PredictionPipeline:
     
         try:
             config = ConfigurationManager().get_mlflow_config()
-            mlflow.set_tracking_uri(config.tracking_uri)
+            # Get DagsHub token from environment
+            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            if dagshub_token:
+                # Include credentials in tracking URI
+                tracking_uri = config.tracking_uri.replace(
+                    "https://",
+                    f"https://{config.dagshub_username}:{dagshub_token}@"
+                )
+            else:
+                tracking_uri = config.tracking_uri
+            mlflow.set_tracking_uri(tracking_uri)
             logger.info(f"MLflow tracking URI set to: {mlflow.get_tracking_uri()}")
             self.model = mlflow.pyfunc.load_model(model_uri)
             scaler_path = mlflow.artifacts.download_artifacts(artifact_uri=scaler_uri)
@@ -110,12 +120,27 @@ class PredictionPipeline:
             mlflow_config = config_manager.get_mlflow_config()
             threshold_config = config_manager.get_threshold_config()
             
+            # Get DagsHub token from environment and set it for dagshub.get_token()
+            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            if dagshub_token:
+                # Set token in environment for dagshub.get_token() to find
+                os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
+            
             dagshub.init(
-            repo_owner=mlflow_config.dagshub_username,
-            repo_name=mlflow_config.dagshub_repo_name,
-            mlflow=True
-        )
-            mlflow.set_tracking_uri(mlflow_config.tracking_uri)
+                repo_owner=mlflow_config.dagshub_username,
+                repo_name=mlflow_config.dagshub_repo_name,
+                mlflow=True
+            )
+            
+            # Include credentials in tracking URI for MLflow authentication
+            if dagshub_token:
+                tracking_uri = mlflow_config.tracking_uri.replace(
+                    "https://",
+                    f"https://{mlflow_config.dagshub_username}:{dagshub_token}@"
+                )
+            else:
+                tracking_uri = mlflow_config.tracking_uri
+            mlflow.set_tracking_uri(tracking_uri)
             mlflow.set_experiment(mlflow_config.prediction_experiment_name)  
             with mlflow.start_run(run_name=f"prediction_run_{time_str}"):
                 data_ingestion = DataIngestion(config=data_ingestion_config)
@@ -146,8 +171,8 @@ class PredictionPipeline:
                 # Add predictions back to the original df_features
                 df_features['Churn_RATE'] = y_pred
                 counts = df_features['Churn_RATE'].value_counts()
-                count_churn = counts.get(1, 0)
-                count_not_churn = counts.get(0, 0)
+                count_churn = int(counts.get(1, 0))
+                count_not_churn = int(counts.get(0, 0))
                 
                 s3_url = None
                 prediction_csv_path = None
@@ -173,7 +198,7 @@ class PredictionPipeline:
                     sklearn_model = self.model._model_impl  
                     y_proba = sklearn_model.predict_proba(X)
                     max_confidence = y_proba.max(axis=1)
-                    average_confidence = max_confidence.mean()
+                    average_confidence = float(max_confidence.mean())
                 except AttributeError:
                     average_confidence = None 
                 end_time = time.time()
@@ -222,22 +247,37 @@ class PredictionPipeline:
                         from io import StringIO
                         s3_df = pd.read_csv(StringIO(response.text))
                         s3_df = s3_df.where(pd.notnull(s3_df), None)
-                        s3_results_data = s3_df.to_dict(orient="records")
+                        # Convert numpy types to native Python types for JSON serialization
+                        import numpy as np
+                        s3_results_data = []
+                        for record in s3_df.to_dict(orient="records"):
+                            converted_record = {}
+                            for k, v in record.items():
+                                if v is None or pd.isna(v):
+                                    converted_record[k] = None
+                                elif isinstance(v, (np.integer, np.int64, np.int32)):
+                                    converted_record[k] = int(v)
+                                elif isinstance(v, (np.floating, np.float64, np.float32)):
+                                    converted_record[k] = float(v)
+                                else:
+                                    converted_record[k] = v
+                            s3_results_data.append(converted_record)
                         logger.info(f"Successfully retrieved {len(s3_results_data)} records from S3")
                     else:
                         logger.warning(f"Failed to retrieve S3 file: HTTP {response.status_code}")
                 except Exception as e:
                     logger.error(f"Error retrieving S3 results: {e}")
             
+            # Convert numpy types to native Python types for JSON serialization
             return {
                 "message": message,
                 "s3_url": s3_url,
                 "s3_results_data": s3_results_data,
                 "summary": {
-                    "total_records": len(df_features),
-                    "churn_count": count_churn,
-                    "not_churn_count": count_not_churn,
-                    "average_confidence": average_confidence
+                    "total_records": int(len(df_features)),
+                    "churn_count": int(count_churn),
+                    "not_churn_count": int(count_not_churn),
+                    "average_confidence": float(average_confidence) if average_confidence is not None else None
                 }
             }
 

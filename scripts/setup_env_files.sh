@@ -48,7 +48,7 @@ AWS_SECRET_ACCESS_KEY=<your_aws_secret_access_key>
 AWS_REGION=<your_aws_region>
 TABLE_NAME=CHAT_HISTORY
 PREPROCESS_BUCKET_NAME=dataversion0204
-ML_BUCKET_NAME=ml-dataversion
+ML_BUCKET_NAME=ml-dataversion-1
 
 # redis
 REDIS_PASS=<your_redis_password>

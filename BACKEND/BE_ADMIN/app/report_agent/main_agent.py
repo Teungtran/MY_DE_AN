@@ -6,7 +6,7 @@ from app.config.base_config import OpenAIConfig
 from typing import Callable
 import json
 from .state import InputState
-from .agent import analyze_agent,df_time
+from .agent import analyze_agent, get_data
 from langgraph.prebuilt import tools_condition
 from .state import create_tool_node_with_fallback
 from langchain_core.messages import ToolMessage
@@ -29,10 +29,23 @@ def ai_model():
 llm = ai_model()
 tools = [analyze_agent]
 
-df_sample = df_time.head(5).to_string()
-df_info = df_time.info()
 logger = get_logger("AI Data Analyst")
-REASONING_PROMPT = f"""
+
+def get_reasoning_prompt():
+    """Generate reasoning prompt with current data info"""
+    df_time = get_data()
+    if df_time is None:
+        df_sample = "No data uploaded yet"
+        df_info = "No data uploaded yet"
+    else:
+        df_sample = df_time.head(5).to_string()
+        # Capture df.info() output as string
+        import io
+        buffer = io.StringIO()
+        df_time.info(buf=buffer)
+        df_info = buffer.getvalue()
+    
+    return f"""
     You are **SAGE**, an AI Data Analyst.
 
     ## ROLE
@@ -55,7 +68,7 @@ REASONING_PROMPT = f"""
     - If they ask what the dataset is about, what columns it contains, or request an overview — that also counts as **analysis**.
 
     2. **Decide Action**
-    - **CALL_ANALYZE_TOOL** → Only if the user’s query *clearly and intentionally* relates to this dataset information:
+    - **CALL_ANALYZE_TOOL** → Only if the user's query *clearly and intentionally* relates to this dataset information:
             {df_info}
         and this data sample:
             {df_sample}
@@ -125,7 +138,7 @@ def react_agent(state: InputState):
     chat_context = "\n".join(
         f"{type(m).__name__}: {m.content}" for m in recent_messages
     )
-    reasoning_prompt = REASONING_PROMPT + "\n\nChat History:\n" + chat_context
+    reasoning_prompt = get_reasoning_prompt() + "\n\nChat History:\n" + chat_context
 
     reasoning_result = llm.invoke(reasoning_prompt)
     raw = reasoning_result.content

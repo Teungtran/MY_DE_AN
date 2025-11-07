@@ -11,6 +11,9 @@ from fastapi import UploadFile
 import mlflow
 import dagshub
 from datetime import datetime
+from dotenv import load_dotenv
+import os
+load_dotenv()  # Loads .env values
 
 class WorkflowRunner:
     def __init__(self):
@@ -40,12 +43,27 @@ class WorkflowRunner:
         try:
             mlflow_config = self.config_manager.get_mlflow_config()
             logger.info(f"MLflow configured with experiment: {mlflow_config.experiment_name}")
+            # Get DagsHub token from environment and set it for dagshub.get_token()
+            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            if dagshub_token:
+                # Set token in environment for dagshub.get_token() to find
+                os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
+            
             dagshub.init(
                 repo_owner=mlflow_config.dagshub_username,
                 repo_name=mlflow_config.dagshub_repo_name,
                 mlflow=True
             )
-            mlflow.set_tracking_uri(mlflow_config.tracking_uri)
+            
+            # Include credentials in tracking URI for MLflow authentication
+            if dagshub_token:
+                tracking_uri = mlflow_config.tracking_uri.replace(
+                    "https://",
+                    f"https://{mlflow_config.dagshub_username}:{dagshub_token}@"
+                )
+            else:
+                tracking_uri = mlflow_config.tracking_uri
+            mlflow.set_tracking_uri(tracking_uri)
             mlflow.set_experiment(mlflow_config.experiment_name)
         except Exception as e:
             logger.warning(f"MLflow configuration failed: {e}. Continuing without MLflow tracking.")
