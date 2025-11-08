@@ -54,40 +54,41 @@ def get_reasoning_prompt():
     You interpret natural language queries and decide how best to respond — either by analyzing data or replying conversationally.
 
     ## INPUT
-    You will receive up to the **last 10 chat messages** (user + assistant).  
-    Focus mainly on the **latest user message** to determine intent.
-
-    ---
+    You will receive the **CURRENT USER QUESTION** and up to the **last 10 chat messages** (user + assistant) for context.  
+    **CRITICAL**: You MUST focus ONLY on the **CURRENT USER QUESTION** - ignore all previous questions in the chat history.
+    The chat history is provided only for context, but your analysis must be based solely on the current question.
 
     ## TASK
 
     1. **Understand Intent**
-    - Identify what the user is really asking.
-    - If the message is playful, off-topic, or nonsensical (e.g., jokes, emojis, small talk, food requests, compliments, or unrelated tasks), treat it as **out of scope**, even if it includes words that sound analytical.
-    - If the user asks to explore, summarize, describe, compare, calculate, visualize, or interpret **data**, treat it as **data analysis**.
-    - If they ask what the dataset is about, what columns it contains, or request an overview — that also counts as **analysis**.
+    - **IMPORTANT**: Analyze ONLY the CURRENT USER QUESTION provided above. Do NOT analyze questions from the chat history.
+    - Identify what the user is really asking in the CURRENT USER QUESTION.
+    - If the CURRENT USER QUESTION is playful, off-topic, or nonsensical (e.g., jokes, emojis, small talk, food requests, compliments, or unrelated tasks), treat it as **out of scope**, even if it includes words that sound analytical.
+    - If the CURRENT USER QUESTION asks to explore, summarize, describe, compare, calculate, visualize, or interpret **data**, treat it as **data analysis**.
+    - If the CURRENT USER QUESTION asks what the dataset is about, what columns it contains, or requests an overview — that also counts as **analysis**.
 
-    2. **Decide Action**
-    - **CALL_ANALYZE_TOOL** → Only if the user's query *clearly and intentionally* relates to this dataset information:
+    2. **Decide Action** (based on CURRENT USER QUESTION only)
+    - **CALL_ANALYZE_TOOL** → Only if the CURRENT USER QUESTION *clearly and intentionally* relates to this dataset information:
             {df_info}
         and this data sample:
             {df_sample}
-        OR if they explicitly want to know more about the current dataset (its structure, content, or insights).
+        OR if the CURRENT USER QUESTION explicitly wants to know more about the current dataset (its structure, content, or insights).
 
-    - **RESPOND_GREETING** → For short friendly messages (hi, hello, hey, thanks, goodbye) or simple personal questions (who are you, what can you do).
+    - **RESPOND_GREETING** → If the CURRENT USER QUESTION is a short friendly message (hi, hello, hey, thanks, goodbye) or simple personal question (who are you, what can you do).
 
-    - **RESPOND_OUT_OF_SCOPE** → For anything that is unrelated, humorous, or not logically connected to dataset analysis — even if it uses analysis-like phrasing or keywords (e.g., "compare cookies" or "analyze pizza revenue").
+    - **RESPOND_OUT_OF_SCOPE** → If the CURRENT USER QUESTION is unrelated, humorous, or not logically connected to dataset analysis — even if it uses analysis-like phrasing or keywords (e.g., "compare cookies" or "analyze pizza revenue").
 
-    ---
 
     ## OUTPUT FORMAT
     Return **valid JSON only**, with no other text:
 
     {{
-    "reasoning": "Brief natural-language explanation of your reasoning",
-    "user_intention": "Short rephrasing of what the user asked",
+    "reasoning": "Brief explanation of your reasoning based on the CURRENT USER QUESTION only",
+    "user_intention": "Short rephrasing of what the CURRENT USER QUESTION is asking",
     "tool_action": "CALL_ANALYZE_TOOL | RESPOND_GREETING | RESPOND_OUT_OF_SCOPE"
     }}
+
+    **REMINDER**: Your "user_intention" must reflect the CURRENT USER QUESTION, not any previous questions from chat history.
 """
 
 
@@ -135,10 +136,24 @@ def react_agent(state: InputState):
     # --- Otherwise, reasoning stage ---
     logger.info("[DEBUG] Calling analyze_agent with latest 10 messages for reasoning")
 
+    # Build chat history context
     chat_context = "\n".join(
         f"{type(m).__name__}: {m.content}" for m in recent_messages
     )
-    reasoning_prompt = get_reasoning_prompt() + "\n\nChat History:\n" + chat_context
+    
+    # Emphasize the latest user message in the prompt
+    reasoning_prompt = get_reasoning_prompt() + f"""
+
+    === CURRENT USER QUESTION (MOST IMPORTANT - ANSWER THIS ONE) ===
+    {latest_user_message}
+
+    === CHAT HISTORY (for context only) ===
+    {chat_context}
+
+    === REMINDER ===
+    The CURRENT USER QUESTION above is what you must analyze. Ignore any previous questions in the chat history.
+    Focus ONLY on: "{latest_user_message}"
+    """
 
     reasoning_result = llm.invoke(reasoning_prompt)
     raw = reasoning_result.content

@@ -59,12 +59,12 @@ def get_data():
         # No data file uploaded yet
         return None
 
-@tool("analyze_agent",
-    description="Analyzes data and answers questions about datasets."
-                "Call this tool first when users ask about data analysis, statistics, "
-                "or insights from the data. Uses directly injected data or cached data.",
-                args_schema=AnalyseInput)
+@tool("analyze_agent",args_schema=AnalyseInput)
 def analyze_agent(user_input: str):
+    """
+    Analyzes data and answers questions about datasets. 
+    Call this tool first when users ask about the dataset given
+    """
     df_time = get_data()
     if df_time is None:
         return "No data file has been uploaded yet. Please upload a CSV or Excel file first."

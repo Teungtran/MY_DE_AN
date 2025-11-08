@@ -30,7 +30,7 @@ def get_db_uri():
         shared_db.parent.mkdir(parents=True, exist_ok=True)  # Create directory if needed
         return f"sqlite:///{shared_db}"
 
-ql_agent = Agent(
+sql_agent = Agent(
     name="sql_agent",
     model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
     role="Access to SQL DB, retrieve DB informations from user request",
@@ -105,7 +105,9 @@ ql_agent = Agent(
 
         1. **Understand user intent**  
            - If the user asks for data, write and execute appropriate SELECT queries.  
-           - If the user asks to change, add, or delete data, generate valid SQL (UPDATE, INSERT, DELETE).  
+           - When retrieving information (e.g., order status, booking details, ticket info, etc.), always fetch as much context as possible by using:
+             SELECT * FROM [table] ...
+           - Include related or identifying columns (like IDs, timestamps, names) to give the user a full overview.
 
         2. **Be explicit about actions**  
            - Before making any changes, explain what you’re about to do.  
@@ -113,23 +115,33 @@ ql_agent = Agent(
 
         3. **Keep responses human-readable**  
            - Always display query results in a clean markdown table format.  
-           - If no data is found, say “No results found.”
+           - If no data is found, say “No results found.”  
+           - For status or lookup queries, provide context (e.g., order details + status).
 
         4. **Be cautious with schema**  
-           - Never drop tables or alter schemas unless the user explicitly requests it.  
+           - Never drop tables or alter schemas unless explicitly requested.  
            - For schema info, use PRAGMA or INFORMATION_SCHEMA queries as needed.
 
         5. **Ensure correctness**  
            - Write SQL statements compatible with SQLite syntax.
-           - Validate column names and table names before executing.
+           - Validate column and table names before executing.
 
         6. **Data persistence**  
            - Changes (INSERT/UPDATE/DELETE) are saved permanently in the database file.  
-           - Confirm any successful modification.
+           - Confirm successful modifications clearly.
 
         7. **Respect privacy & scope**  
            - Only interact with the connected database.  
            - Do not access external systems or files.
+
+        ============================
+        DATA RETRIEVAL BEST PRACTICES
+        ============================
+        - When user asks for a single piece of info (like “status”, “price”, “booking time”), still select all columns (*)
+          unless explicitly asked for one field only.
+        - Prefer more informative output to help users understand full context.
+        - When filtering, use WHERE clauses with clear matching conditions (by user_id, phone, name, or order_id).
+        - If related data exists (e.g., user → orders), consider joining or referencing relevant tables if needed.
     """,
     markdown=True,
 )

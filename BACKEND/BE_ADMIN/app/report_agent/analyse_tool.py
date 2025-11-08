@@ -83,9 +83,13 @@ def execute_pandas_code(code: str, df: pd.DataFrame) -> dict:
         if result_value is None:
             return {
                 'success': False,
-                'result': None,
+                'result': "Result is None. Make sure to assign a string value to 'result'.",
                 'code': code
             }
+        # Ensure result is always a string
+        if not isinstance(result_value, str):
+            result_value = str(result_value)
+        
         return {
             'success': True,
             'result': result_value,
@@ -111,36 +115,49 @@ def generate_pandas_code(user_input: str, df_sample: str, data_info):
 
     ### STEP 1: UNDERSTAND THE DATA
 
-    **ACTUAL DATA INFORMATION (columns that exist):**  
+    **ACTUAL DATA INFORMATION (ONLY USE THESE COLUMNS - DO NOT CREATE OR ASSUME COLUMNS):**  
     {data_info}
 
-    **Sample:**  
+    **Sample Data (first 5 rows):**  
     {df_sample}
 
-    ## STEP 2: DESCRIBE COLUMNS
+    ## STEP 2: IDENTIFY RELEVANT COLUMNS
 
-        Write short, clear **description** for each column likely represents and how it might be useful for analysis.  
-        Use your best judgment from the column names and sample data.
+        **CRITICAL**: You MUST only use column names that appear in the data_info above.
+        - Match user query keywords to column names (case-insensitive, partial matches OK)
+        - Examples: "VIP" or "customer" → look for columns like "customer_labels", "customer_type", "customer_category"
+        - Examples: "price" or "cost" → look for columns like "price", "cost", "amount", "value"
+        - Examples: "date" or "time" → look for datetime columns or date-related column names
+        - If user mentions specific values (like "VIP", "Regular"), find the column that likely contains these values
+        - Use the sample data above to see examples of actual values in columns
+        - The sample data shows real values, so you can see what format/names are actually used
 
     ## STEP 3: GENERATE PANDAS CODE
 
         **Generate simple, clear pandas code following these rules:**
 
         1. Always start with necessary imports (`import pandas as pd`).
-        2. Work directly on `df` (no new variables like `df_temp`).
-        3. Convert all column names to lowercase.
-        4. Convert timestamp columns using `pd.to_datetime` if present.
-        5. Use only columns that exist in the dataset.
-        6. Implement logic directly — no complex structures, loops, or helper functions.
-        7. The final output must be a dictionary named `result`.
-        8. Make the logic reflect the user's question (sum, mean, filter, count, compare, etc.).
-        9. Keep the code short, clean, and executable.
-        10. **CRITICAL**: Store values as simple Python types (int, float, str, list). DO NOT use .to_dict(), .to_list(), or any pandas conversion methods.
-        11. **CRITICAL**: Use len(df) for total count, NOT df['column'].nunique() unless specifically asked for unique values.
-        12. For counts: use int(value_counts_result['category_name']) to get individual counts.
-        13. For percentages: calculate as (count / total) * 100 and convert to float().
+        2. Convert all column names to lowercase first: `df.columns = df.columns.str.lower()`
+        3. **CRITICAL**: ONLY use column names from the data_info above. DO NOT assume column names exist.
+        4. **CRITICAL**: Before using specific values (like "VIP", "Regular"), FIRST check what values actually exist in the column:
+            - Use `df['column_name'].unique()` or `df['column_name'].value_counts()` to see actual values
+            - Match user query terms to actual values in the column (case-insensitive)
+            - Use `.get()` with default 0 when accessing value_counts to handle missing values safely
+        5. Convert timestamp columns using `pd.to_datetime` if present.
+        6. Work directly on `df` (no new variables like `df_temp`).
+        7. Implement logic directly — no complex structures, loops, or helper functions.
+        8. **CRITICAL**: The final output MUST be a STRING variable named `result`.
+        9. Make the logic reflect the user's question (sum, mean, filter, count, compare, etc.).
+        10. Keep the code short, clean, and executable.
+        11. **CRITICAL**: DO NOT create dictionaries, lists, or any complex data structures.
+        12. **CRITICAL**: For multiple results, concatenate them into a single string using + or f-strings.
+        13. **CRITICAL**: Use len(df) for total count, NOT df['column'].nunique() unless specifically asked for unique values.
+        14. For counts: First get value_counts(), then use `.get('actual_value', 0)` to safely access counts.
+        15. For percentages: calculate as (count / total) * 100 and convert to float(), then format as string.
+        16. Always convert numbers to strings using str() or f-strings before concatenating.
+        17. **IMPORTANT**: When matching user query terms to column values, use case-insensitive matching or check multiple variations.
         
-    ## NOTE When generating the code, **try to gather as much relevant information as possible** from the data that supports the user’s question.  
+    ## NOTE When generating the code, **try to gather as much relevant information as possible** from the data that supports the user's question.  
 
         **Guidelines:**
         - If the user asks about **averages**, also include totals, maximums, and minimums.  
@@ -148,31 +165,66 @@ def generate_pandas_code(user_input: str, df_sample: str, data_info):
         - If the question refers to **time**, include hourly or daily breakdowns and surrounding context.  
         - If it mentions **anomalies**, include counts and proportions for each relevant anomaly column.  
         - Always add at least **3–5 relevant metrics** that help explain or support the main query.
+        - Concatenate all findings into one clear, readable string.
 
         **Goal:**  
-        Provide **comprehensive insights**, not just a single number or value.
+        Provide **comprehensive insights** as a single formatted string, not just a single number or value.
         
     ## STEP 5: OUTPUT FORMAT
 
         Return only executable Python code (no markdown or explanations).
-        Store all final values in a single dictionary named result.
+        Store all final values in a single STRING variable named result.
+        Use string concatenation or f-strings to combine multiple findings.
 
-        result = {...}
+        result = "Metric 1: value1, Metric 2: value2, ..."
         
-    ## EXAMPLE:
+    ## EXAMPLE 1: Distribution analysis with value matching (when user mentions specific categories)
     import pandas as pd
 
     # Convert column names to lowercase
     df.columns = df.columns.str.lower()
     
-    # Example: Count distribution (DO NOT use .to_dict())
-    counts = df['category'].value_counts()
-    result = {{
-        'category_a_count': int(counts['Category A']),
-        'category_b_count': int(counts['Category B']),
-        'total_rows': len(df),
-        'percentage_a': float((counts['Category A'] / len(df)) * 100)
-    }}
+    # Get value counts for the relevant column (match column name from data_info)
+    counts = df['customer_labels'].value_counts()
+    
+    # Match user query terms to actual values (case-insensitive, partial match)
+    # Iterate through actual values to find matches - this is acceptable for value matching
+    vip_count = 0
+    regular_count = 0
+    for val, count in counts.items():
+        val_lower = str(val).lower()
+        if 'vip' in val_lower:
+            vip_count += int(count)
+        elif 'regular' in val_lower:
+            regular_count += int(count)
+    
+    total_rows = len(df)
+    vip_percentage = float((vip_count / total_rows) * 100) if total_rows > 0 else 0.0
+    regular_percentage = float((regular_count / total_rows) * 100) if total_rows > 0 else 0.0
+    
+    result = f"VIP count: {{vip_count}}, Regular count: {{regular_count}}, Total count: {{total_rows}}, VIP percentage: {{vip_percentage:.2f}}%, Regular percentage: {{regular_percentage:.2f}}%"
+
+    ## EXAMPLE 2: Simple count (when exact values match)
+    import pandas as pd
+
+    df.columns = df.columns.str.lower()
+    counts = df['status'].value_counts()
+    active_count = int(counts.get('active', 0))
+    inactive_count = int(counts.get('inactive', 0))
+    total = len(df)
+    
+    result = f"Active: {{active_count}}, Inactive: {{inactive_count}}, Total: {{total}}"
+
+    ## EXAMPLE 3: Numeric analysis (using columns from data_info)
+    import pandas as pd
+
+    df.columns = df.columns.str.lower()
+    avg_value = float(df['price'].mean()) if 'price' in df.columns else 0.0
+    max_value = float(df['price'].max()) if 'price' in df.columns else 0.0
+    min_value = float(df['price'].min()) if 'price' in df.columns else 0.0
+    total = len(df)
+    
+    result = f"Average price: {{avg_value:.2f}}, Max price: {{max_value:.2f}}, Min price: {{min_value:.2f}}, Total records: {{total}}"
     
     """)
     try:
@@ -196,24 +248,36 @@ def generate_pandas_code(user_input: str, df_sample: str, data_info):
 
 def verify_result(result: Dict) -> Dict:
     """
-    Uses an LLM to verify if the result contains any error messages.
+    Verifies if the result contains any error messages.
     If errors are found, sets success to False.
     """
-    prompt = f"""Analyze this execution result and determine if it contains any error messages or exceptions.
-
-            Result data:
-            {result.get('result')}
-
-            Code that was executed:
-            {result.get('code')}
-
-            Reply with ONLY "ERROR_FOUND" if there are any errors, exceptions, or error messages.
-            Reply with ONLY "NO_ERROR" if everything looks successful.
-            """
-    message = llm.invoke(prompt)
-    llm_response = message.content
-    if "ERROR_FOUND" in llm_response:
+    # If success is already False, don't override it
+    if not result.get('success', True):
+        return result
+    
+    result_data = result.get('result')
+    
+    # Result should always be a string now
+    if not isinstance(result_data, str):
+        # Convert to string if it's not already
+        result_data = str(result_data)
+        result['result'] = result_data
+    
+    # Check for error keywords in the string result
+    error_keywords = ['error', 'exception', 'traceback', 'failed', 'cannot', 'invalid', 'not found', 'undefined', 'code executed but no', 'result is none']
+    if any(keyword in result_data.lower() for keyword in error_keywords):
         result['success'] = False
+        return result
+    
+    # If result is a non-empty string without error keywords, it's valid
+    if result_data and result_data.strip():
+        return result
+    
+    # Empty string might be an issue
+    if not result_data or not result_data.strip():
+        result['success'] = False
+        result['result'] = "Result is empty. Make sure to assign a non-empty string value to 'result'."
+    
     return result
 
 
@@ -269,25 +333,38 @@ def analyze_tool(user_input: str, df: pd.DataFrame):
             {execution_result.get('error', 'Unknown error')}
 
             === YOUR TASK ===
-            1. ANALYZE the error type: {execution_result.get('error', 'Unknown')}
+            1. ANALYZE the error type: {execution_result.get('result', 'Unknown error')}
             2. IDENTIFY the root cause and FIX IT.
             3. Common fixes needed:
                 - Check indentation (result variable must be at module level)
                 - Ensure 'result' is defined in ALL code paths (if/else)
-                - Initialize result = None at the start if needed
+                - **CRITICAL**: 'result' MUST be a STRING, NOT a dictionary, list, or any other data type
+                - **CRITICAL**: ONLY use column names from the data_info provided. DO NOT assume column names exist.
+                - **CRITICAL**: Before using specific values (like "VIP", "Regular"), FIRST check what values actually exist in the column using value_counts() or unique()
+                - Match user query terms to actual column values using case-insensitive matching
+                - For multiple values, concatenate them into a single string using f-strings or +
                 - DO NOT use .to_dict(), .to_list() or any pandas conversion methods
                 - Use len(df) for total count, NOT .nunique() unless specifically needed
             4. GENERATE NEW CODE that:
                 - Fixes the error COMPLETELY
-                - Defines 'result' variable at module level (no indentation)
+                - Defines 'result' as a STRING variable at module level (no indentation)
+                - Uses ONLY column names from data_info (check the data_info provided)
+                - First checks actual values in columns before matching to user query terms
+                - Uses case-insensitive matching when matching user query terms to column values
                 - Avoids undefined variables or bad column names
-                - Uses simple scalar variables (int, float, str, list)
-                - NO .to_dict(), NO .to_list(), NO lambdas, NO dict chaining
-                - Extract values using int(), float(), str() conversions
+                - Concatenates all findings into one string (e.g., result = f"Metric1: {{value1}}, Metric2: {{value2}}")
+                - NO dictionaries, NO lists, NO .to_dict(), NO .to_list(), NO lambdas, NO dict chaining
+                - Convert all numbers to strings using str() or f-strings before concatenating
                 
             === OUTPUT ===
-            Return ONLY valid Python code storing final output in `result`.
-            Make sure `result` is defined at the module level (no indentation before it).
+            Return ONLY valid Python code storing final output as a STRING in `result`.
+            Make sure `result` is a string variable defined at the module level (no indentation before it).
+            Example: result = f"Total: {{total}}, Average: {{avg:.2f}}"
+            
+            === REMEMBER ===
+            - Match user query keywords to column names from data_info (case-insensitive, partial matches OK)
+            - Check actual values in columns before using them
+            - Use iteration over value_counts() items when you need to match user query terms to actual values
             """)
 
             try:
