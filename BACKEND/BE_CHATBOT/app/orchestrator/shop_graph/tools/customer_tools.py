@@ -12,7 +12,7 @@ from functools import lru_cache
 import asyncio
 import re
 from ..support_funcs.get_id import generate_short_id
-from app.services.inmemory_store import create_temporary_faiss_store,store_recommended_devices, clear_expired_recommendations,get_recommended_devices
+from app.services.inmemory_store import create_temporary_faiss_store,store_recommended_devices, clear_expired_recommendations,get_recommended_devices, get_faiss_store_info
 from app.orchestrator.shop_graph.tools.send_email import send_order_confirmation,send_order_update,send_order_cancel
 from app.utils.email import send_email
 from app.models.database import  Order as OrderModel, Item, SessionLocal

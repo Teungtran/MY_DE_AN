@@ -1,18 +1,52 @@
 from typing import Annotated, Optional, List
-from langchain_core.messages import AnyMessage
+from langchain_core.messages import AnyMessage, AIMessage
 from langgraph.graph import add_messages
 from typing_extensions import TypedDict, Literal
-from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.runnables import Runnable
 from langchain_core.messages import ToolMessage
 from pydantic import EmailStr
-from app.services.inmemory_store import recommended_devices_cache
+from app.utils.logging.logger import get_logger
 
+logger = get_logger(__name__)
 
 def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[str]]) -> Optional[List[str]]:
     """Merge recommended devices lists, with right taking precedence."""
     if right is None:
         return left
     return right
+
+
+def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> List[AnyMessage]:
+    """
+    Get the last N messages, but if the first message is a ToolMessage,
+    extend backwards to include its parent AIMessage with tool_calls.
+    
+    This prevents OpenAI API error: "messages with role 'tool' must be 
+    a response to a preceeding message with 'tool_calls'."
+    """
+    if not messages or len(messages) <= limit:
+        return messages
+    
+    # Start with last N messages
+    recent = messages[-limit:]
+    
+    # Check if first message is a ToolMessage (orphaned tool response)
+    if isinstance(recent[0], ToolMessage):
+        # We need to find the AIMessage that made this tool call
+        # Look backwards from where we sliced
+        for i in range(len(messages) - limit - 1, -1, -1):
+            msg = messages[i]
+            # Check if this is an AIMessage with tool_calls
+            if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
+                # Include this message and everything after it
+                recent = messages[i:]
+                logger.info(f"Extended context to include tool call: {len(messages)} -> {len(recent)} messages")
+                break
+        else:
+            # Couldn't find parent, just use what we have
+            logger.warning(f"Could not find parent AIMessage for ToolMessage, using {len(recent)} messages")
+    
+    return recent
 
 
 class InputState(TypedDict):
@@ -61,14 +95,18 @@ class Assistant:
 
     def __call__(self, state: AgenticState):
         while True:
-            result = self.runnable.invoke(state)
+            # Get recent messages safely (handles tool call chains)
+            recent_messages = get_safe_recent_messages(state["messages"], limit=10)
+            limited_state = {**state, "messages": recent_messages}
+            logger.info(f"Processing with {len(recent_messages)}/{len(state['messages'])} messages")
+            result = self.runnable.invoke(limited_state)
 
             if not result.tool_calls and (
                 not result.content
                 or isinstance(result.content, list)
                 and not result.content[0].get("text")
             ):
-                messages = state["messages"] + [("user", "Respond with a real output.")]
+                messages = get_safe_recent_messages(state["messages"], limit=10) + [("user", "Respond with a real output.")]
                 state = {**state, "messages": messages}
             else:
                 break

@@ -50,7 +50,12 @@ RUN echo 'server { \
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
         proxy_set_header X-Forwarded-Proto $scheme; \
         proxy_read_timeout 300s; \
-        proxy_connect_timeout 75s; \
+        proxy_connect_timeout 300s; \
+        proxy_send_timeout 300s; \
+        # SSE/Streaming support \
+        proxy_buffering off; \
+        proxy_cache off; \
+        chunked_transfer_encoding on; \
         # Allow large file uploads through proxy \
         client_max_body_size 200M; \
     } \
