@@ -37,6 +37,7 @@ def get_reasoning_prompt():
     if df_time is None:
         df_sample = "No data uploaded yet"
         df_info = "No data uploaded yet"
+        available_columns = "No columns available"
     else:
         df_sample = df_time.head(5).to_string()
         # Capture df.info() output as string
@@ -44,6 +45,7 @@ def get_reasoning_prompt():
         buffer = io.StringIO()
         df_time.info(buf=buffer)
         df_info = buffer.getvalue()
+        available_columns = ", ".join(df_time.columns.tolist())
     
     return f"""
     You are **SAGE**, an AI Data Analyst.
@@ -58,6 +60,9 @@ def get_reasoning_prompt():
     **CRITICAL**: You MUST focus ONLY on the **CURRENT USER QUESTION** - ignore all previous questions in the chat history.
     The chat history is provided only for context, but your analysis must be based solely on the current question.
 
+    ## AVAILABLE COLUMNS
+    {available_columns}
+
     ## TASK
 
     1. **Understand Intent**
@@ -67,7 +72,12 @@ def get_reasoning_prompt():
     - If the CURRENT USER QUESTION asks to explore, summarize, describe, compare, calculate, visualize, or interpret **data**, treat it as **data analysis**.
     - If the CURRENT USER QUESTION asks what the dataset is about, what columns it contains, or requests an overview — that also counts as **analysis**.
 
-    2. **Decide Action** (based on CURRENT USER QUESTION only)
+    2. **Identify Relevant Columns**
+    - Based on the CURRENT USER QUESTION, identify which columns from the available columns should be used for analysis.
+    - List the specific column names that are relevant to answering the question.
+    - If the question is general or exploratory, you may list multiple columns or "all columns".
+
+    3. **Decide Action** (based on CURRENT USER QUESTION only)
     - **CALL_ANALYZE_TOOL** → Only if the CURRENT USER QUESTION *clearly and intentionally* relates to this dataset information:
             {df_info}
         and this data sample:
@@ -84,11 +94,12 @@ def get_reasoning_prompt():
 
     {{
     "reasoning": "Brief explanation of your reasoning based on the CURRENT USER QUESTION only",
-    "user_intention": "Short rephrasing of what the CURRENT USER QUESTION is asking",
+    "user_intention": "Short rephrasing of what the CURRENT USER QUESTION is asking, including the specific columns to analyze (e.g., 'Analyze sales trends using Revenue and Date columns')",
     "tool_action": "CALL_ANALYZE_TOOL | RESPOND_GREETING | RESPOND_OUT_OF_SCOPE"
     }}
 
     **REMINDER**: Your "user_intention" must reflect the CURRENT USER QUESTION, not any previous questions from chat history.
+    **IMPORTANT**: Always include the relevant column names in "user_intention" and "columns_to_use".
 """
 
 
@@ -189,8 +200,14 @@ def react_agent(state: InputState):
 
     elif tool_action == "CALL_ANALYZE_TOOL":
         logger.info("[DEBUG] Triggering analyze_agent tool call")
+        # Pass the entire parsed reasoning result to the tool
+        tool_input = {
+            "user_question": latest_user_message,
+            "reasoning": parsed.get("reasoning", ""),
+            "user_intention": parsed.get("user_intention", ""),
+        }
         result = llm.bind_tools(tools).invoke([
-            HumanMessage(content=latest_user_message)
+            HumanMessage(content=json.dumps(tool_input))
         ])
         return {"messages": [result]}
 
