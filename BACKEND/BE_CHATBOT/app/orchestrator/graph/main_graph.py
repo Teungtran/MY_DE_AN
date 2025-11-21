@@ -37,6 +37,7 @@ def initiate_dynamodb_checkpointer() -> DynamoDBSaver:
     )
     logger.info(f"Initialized DynamoDBSaver with table: {table_name} in region: {aws_region}")
     return saver
+
 saver = initiate_dynamodb_checkpointer()
 
 def setup_agentic_graph():

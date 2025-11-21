@@ -30,15 +30,11 @@ def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> Lis
     # Start with last N messages
     recent = messages[-limit:]
     
-    # Check if first message is a ToolMessage (orphaned tool response)
     if isinstance(recent[0], ToolMessage):
-        # We need to find the AIMessage that made this tool call
-        # Look backwards from where we sliced
+
         for i in range(len(messages) - limit - 1, -1, -1):
             msg = messages[i]
-            # Check if this is an AIMessage with tool_calls
             if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
-                # Include this message and everything after it
                 recent = messages[i:]
                 logger.info(f"Extended context to include tool call: {len(messages)} -> {len(recent)} messages")
                 break
