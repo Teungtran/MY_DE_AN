@@ -30,7 +30,7 @@ def redis_caching() -> Optional[redis.Redis]:
         # Create connection pool with proper settings
         pool = redis.ConnectionPool(
             host=REDIS_HOST,
-            port=16594,
+            port=11899,
             password=REDIS_PASS,
             max_connections=50,
             decode_responses=True,
@@ -40,7 +40,7 @@ def redis_caching() -> Optional[redis.Redis]:
             health_check_interval=30
         )
         
-        _redis_client = redis.Redis(connection_pool=pool)
+        _redis_client = redis.Redis(connection_pool=pool,username="default")
         
         # Test the connection
         _redis_client.ping()
