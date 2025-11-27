@@ -8,6 +8,7 @@ RUN mkdir -p /app/logs /app/app/report_agent/artifact
 
 # Copy dependency definition first (for better layer caching)
 COPY pyproject.toml uv.lock ./
+ENV UV_HTTP_TIMEOUT=300
 
 # Install dependencies
 RUN uv sync --no-cache-dir

@@ -14,6 +14,7 @@ RUN mkdir -p /app/artifacts/data_ingestion \
 
 # Copy dependency definition
 COPY pyproject.toml uv.lock ./
+ENV UV_HTTP_TIMEOUT=300
 RUN uv sync --no-cache-dir
 
 # Copy app code

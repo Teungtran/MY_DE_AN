@@ -8,6 +8,7 @@ RUN mkdir -p /app/logs
 
 # Copy dependency definition
 COPY pyproject.toml uv.lock ./
+ENV UV_HTTP_TIMEOUT=300
 RUN uv sync --no-cache-dir
 
 

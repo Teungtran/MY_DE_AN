@@ -2,6 +2,8 @@
 # Use Node 20 to match React Router / Vite requirements
 FROM node:20-alpine AS builder
 
+ENV UV_HTTP_TIMEOUT=300
+
 # Set working directory
 WORKDIR /app
 
