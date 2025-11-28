@@ -853,6 +853,32 @@ What can I help you explore today?`,
                             ),
                             hr: () => (
                               <hr className="my-4 border-gray-300" />
+                            ),
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto my-4">
+                                <table className="min-w-full border-collapse border border-gray-300 text-sm">
+                                  {children}
+                                </table>
+                              </div>
+                            ),
+                            thead: ({ children }) => (
+                              <thead className="bg-gray-100">{children}</thead>
+                            ),
+                            tbody: ({ children }) => (
+                              <tbody className="bg-white">{children}</tbody>
+                            ),
+                            tr: ({ children }) => (
+                              <tr className="border-b border-gray-200 hover:bg-gray-50">{children}</tr>
+                            ),
+                            th: ({ children }) => (
+                              <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-900 bg-gray-100">
+                                {children}
+                              </th>
+                            ),
+                            td: ({ children }) => (
+                              <td className="border border-gray-300 px-4 py-2 text-gray-700">
+                                {children}
+                              </td>
                             )
                           }}
                         >

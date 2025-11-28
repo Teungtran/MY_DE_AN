@@ -142,6 +142,8 @@ sql_agent = Agent(
         - Prefer more informative output to help users understand full context.
         - When filtering, use WHERE clauses with clear matching conditions (by user_id, phone, name, or order_id).
         - If related data exists (e.g., user → orders), consider joining or referencing relevant tables if needed.
+        ## OUTPUT FORMAT
+        - Return your answer in mardown format, DO NOT return any table format, just plain text ONLY
     """,
     markdown=True,
 )

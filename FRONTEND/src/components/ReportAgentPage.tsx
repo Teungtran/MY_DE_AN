@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
@@ -373,7 +374,101 @@ I'm here to help once you're ready to try again!`
                     {msg.senderName && (
                       <p className="text-xs opacity-70 mb-1">{msg.senderName}</p>
                     )}
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.sender === 'ai' ? (
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            img: ({ src, alt }) => (
+                              <img 
+                                src={src} 
+                                alt={alt} 
+                                className="rounded-lg max-w-full h-auto my-2 shadow-md" 
+                                style={{ maxHeight: '200px', objectFit: 'cover' }}
+                              />
+                            ),
+                            h1: ({ children }) => (
+                              <h1 className="text-2xl font-bold text-gray-900 mt-4 mb-2">{children}</h1>
+                            ),
+                            h2: ({ children }) => (
+                              <h2 className="text-xl font-bold text-gray-900 mt-4 mb-2">{children}</h2>
+                            ),
+                            h3: ({ children }) => (
+                              <h3 className="text-lg font-semibold text-gray-900 mt-4 mb-2">{children}</h3>
+                            ),
+                            ul: ({ children }) => (
+                              <ul className="list-disc list-inside space-y-1 text-gray-700 my-2">{children}</ul>
+                            ),
+                            ol: ({ children }) => (
+                              <ol className="list-decimal list-inside space-y-1 text-gray-700 my-2">{children}</ol>
+                            ),
+                            li: ({ children }) => (
+                              <li className="text-gray-700">{children}</li>
+                            ),
+                            p: ({ children }) => (
+                              <p className="text-gray-800 mb-2 leading-relaxed">{children}</p>
+                            ),
+                            strong: ({ children }) => (
+                              <strong className="font-semibold text-gray-900">{children}</strong>
+                            ),
+                            em: ({ children }) => (
+                              <em className="italic text-gray-800">{children}</em>
+                            ),
+                            code: ({ children }) => (
+                              <code className="bg-gray-100 text-gray-900 px-1.5 py-0.5 rounded text-sm font-mono">{children}</code>
+                            ),
+                            pre: ({ children }) => (
+                              <pre className="bg-gray-100 text-gray-900 p-3 rounded-lg overflow-x-auto my-2">{children}</pre>
+                            ),
+                            blockquote: ({ children }) => (
+                              <blockquote className="border-l-4 border-gray-300 pl-4 italic text-gray-700 my-2">{children}</blockquote>
+                            ),
+                            a: ({ href, children }) => (
+                              <a 
+                                href={href} 
+                                className="text-blue-600 hover:text-blue-800 underline"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {children}
+                              </a>
+                            ),
+                            hr: () => (
+                              <hr className="my-4 border-gray-300" />
+                            ),
+                            table: ({ children }) => (
+                              <div className="overflow-x-auto my-4">
+                                <table className="min-w-full border-collapse border border-gray-300 text-sm">
+                                  {children}
+                                </table>
+                              </div>
+                            ),
+                            thead: ({ children }) => (
+                              <thead className="bg-gray-100">{children}</thead>
+                            ),
+                            tbody: ({ children }) => (
+                              <tbody className="bg-white">{children}</tbody>
+                            ),
+                            tr: ({ children }) => (
+                              <tr className="border-b border-gray-200 hover:bg-gray-50">{children}</tr>
+                            ),
+                            th: ({ children }) => (
+                              <th className="border border-gray-300 px-4 py-2 text-left font-semibold text-gray-900 bg-gray-100">
+                                {children}
+                              </th>
+                            ),
+                            td: ({ children }) => (
+                              <td className="border border-gray-300 px-4 py-2 text-gray-700">
+                                {children}
+                              </td>
+                            )
+                          }}
+                        >
+                          {msg.content}
+                        </ReactMarkdown>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    )}
                     <p className="text-xs opacity-70 mt-1">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
