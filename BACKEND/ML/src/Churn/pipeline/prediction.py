@@ -164,7 +164,10 @@ class PredictionPipeline:
                 df_encoded = self.encode_churn(df_features_for_prediction)
 
                 X = self.scaler.transform(df_encoded)
-                y_pred = self.model.predict_proba(X)[:, 1]
+                
+                # Access the underlying sklearn model to use predict_proba
+                sklearn_model = self.model._model_impl
+                y_pred = sklearn_model.predict_proba(X)[:, 1]
                 
                 # Add predictions back to the original df_features
                 df_features['Churn_RATE'] = y_pred
@@ -193,11 +196,12 @@ class PredictionPipeline:
 
                 
                 try:    
-                    sklearn_model = self.model._model_impl  
+                    # sklearn_model is already defined above, reuse it
                     y_proba = sklearn_model.predict_proba(X)
                     max_confidence = y_proba.max(axis=1)
                     average_confidence = float(max_confidence.mean())
-                except AttributeError:
+                except (AttributeError, NameError) as e:
+                    logger.warning(f"Could not calculate confidence: {e}")
                     average_confidence = None 
                 end_time = time.time()
                 end_datetime = datetime.now()

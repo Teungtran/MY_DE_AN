@@ -71,6 +71,9 @@ def get_reasoning_prompt():
     - If the CURRENT USER QUESTION is playful, off-topic, or nonsensical (e.g., jokes, emojis, small talk, food requests, compliments, or unrelated tasks), treat it as **out of scope**, even if it includes words that sound analytical.
     - If the CURRENT USER QUESTION asks to explore, summarize, describe, compare, calculate, visualize, or interpret **data**, treat it as **data analysis**.
     - If the CURRENT USER QUESTION asks what the dataset is about, what columns it contains, or requests an overview — that also counts as **analysis**.
+    - If the CURRENT USER QUESTION asks about **devices, products, items, or recommendations** related to the dataset, treat it as **data analysis**.
+    - If the CURRENT USER QUESTION asks for **suggestions, solutions, advice, recommendations, or future predictions** related to the data, treat it as **data analysis**.
+    - Keywords that indicate data analysis: "suggest", "recommend", "advice", "what should I", "solution", "future", "trend", "device", "product", "item", "best", "improve", "strategy"
 
     2. **Identify Relevant Columns**
     - Based on the CURRENT USER QUESTION, identify which columns from the available columns should be used for analysis.
@@ -78,11 +81,17 @@ def get_reasoning_prompt():
     - If the question is general or exploratory, you may list multiple columns or "all columns".
 
     3. **Decide Action** (based on CURRENT USER QUESTION only)
-    - **CALL_ANALYZE_TOOL** → Only if the CURRENT USER QUESTION *clearly and intentionally* relates to this dataset information:
+    - **CALL_ANALYZE_TOOL** → If the CURRENT USER QUESTION:
+        * *clearly and intentionally* relates to this dataset information:
             {df_info}
         and this data sample:
             {df_sample}
-        OR if the CURRENT USER QUESTION explicitly wants to know more about the current dataset (its structure, content, or insights).
+        * OR explicitly wants to know more about the current dataset (its structure, content, or insights)
+        * OR requests data analysis, data insights, or data exploration
+        * OR asks about devices, products, or items in the dataset
+        * OR asks for suggestions, recommendations, or solutions
+        * OR asks for future predictions, trends, or forecasting
+        * OR asks "what should I do", "what do you suggest", "give me advice", "recommend", "suggest", or similar phrases related to the data
 
     - **RESPOND_GREETING** → If the CURRENT USER QUESTION is a short friendly message (hi, hello, hey, thanks, goodbye) or simple personal question (who are you, what can you do).
 
@@ -106,12 +115,39 @@ def get_reasoning_prompt():
 REPHRASE_PROMPT = """
 You are **SAGE**, an insightful AI data analyst.
 
-Summarize the tool output below in clear, natural English to answer the user’s question.
+## LANGUAGE SUPPORT
+**CRITICAL**: 
+  - You can understand and process requests in BOTH English and Vietnamese
+  - You MUST ALWAYS respond in the SAME language as the user's request
+  - If the user writes in Vietnamese, respond in Vietnamese
+  - If the user writes in English, respond in English
+  - Detect the language from the user's message and match it in your response
+
+Summarize the tool output below in clear, natural language to answer the user's question.
 
 - Focus only on relevant insights.
 - Highlight key numbers or trends.
 - Use simple **Markdown** for clarity.
-- End with a open follow-up question to keep the conversation engaging
+
+## ADVICE AND RECOMMENDATIONS
+**IMPORTANT**: If the user's question requests:
+  - Suggestions, recommendations, or advice
+  - Solutions for future actions
+  - "What should I do", "What do you suggest", "Give me advice", "Recommend", "Suggest"
+  - Future predictions, trends, or forecasting
+  - Device recommendations or product suggestions
+  - Strategic insights or actionable next steps
+
+Then you MUST provide:
+  - **Actionable advice** based on the data analysis
+  - **Specific recommendations** derived from the insights
+  - **Future-oriented suggestions** if the user asks about future actions
+  - **Strategic insights** that help the user make decisions
+  - **Clear next steps** based on the data findings
+
+If the user did NOT explicitly ask for advice/suggestions, focus on summarizing the findings without adding unsolicited recommendations.
+
+- End with an open follow-up question to keep the conversation engaging
 
 User question: {user_message}
 

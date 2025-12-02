@@ -89,17 +89,20 @@ export function MLPage({ user, onLogout }: MLPageProps) {
     }
   };
 
-  const handlePrediction = async () => {
+  const handlePrediction = async (type?: 'sentiment' | 'churn') => {
     if (!selectedFile) {
       toast.error('Please select a file first');
       return;
     }
 
+    // Use the passed type parameter, or fall back to current state
+    const currentType = type || predictionType;
+
     setIsProcessing(true);
     try {
       let response: any;
       
-      if (predictionType === 'sentiment') {
+      if (currentType === 'sentiment') {
         response = await mlAPI.sentimentPredict(selectedFile, {
           model_version: modelVersion || undefined,
           tokenizer_version: undefined,
@@ -120,17 +123,19 @@ export function MLPage({ user, onLogout }: MLPageProps) {
       // Transform data for prediction results table
       const results: PredictionResult[] = response.payload.s3_results_data.map((item: any, index: number) => ({
         id: index.toString(),
-        text: predictionType === 'sentiment' ? item.review : `${item.Customer_Name} (${item.customer_id})`,
-        prediction: predictionType === 'sentiment' ? 
+        text: currentType === 'sentiment' ? item.review : `${item.Customer_Name} (${item.customer_id})`,
+        prediction: currentType === 'sentiment' ? 
           `Rating: ${item.rating}/5` : 
           `Churn Risk: ${(item.Churn_RATE * 100).toFixed(1)}%`,
-        confidence: predictionType === 'sentiment' ? item.predicted_sentiment / 5 : item.Churn_RATE,
+        confidence: currentType === 'sentiment' ? item.predicted_sentiment / 5 : item.Churn_RATE,
         rating: item.rating,
         churn_rate: item.Churn_RATE
       }));
 
+      // Update the prediction type state
+      setPredictionType(currentType);
       setPredictionResults(results);
-      toast.success(`${predictionType === 'sentiment' ? 'Sentiment' : 'Churn'} analysis completed successfully!`);
+      toast.success(`${currentType === 'sentiment' ? 'Sentiment' : 'Churn'} analysis completed successfully!`);
     } catch (error) {
       console.error('Prediction error:', error);
       toast.error('Prediction failed. Please try again.');
@@ -457,20 +462,14 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <Button
-                    onClick={() => {
-                      setPredictionType('sentiment');
-                      handlePrediction();
-                    }}
+                    onClick={() => handlePrediction('sentiment')}
                     disabled={isProcessing || !selectedFile}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {isProcessing ? 'Processing...' : 'Predict Sentiment'}
                   </Button>
                   <Button
-                    onClick={() => {
-                      setPredictionType('churn');
-                      handlePrediction();
-                    }}
+                    onClick={() => handlePrediction('churn')}
                     disabled={isProcessing || !selectedFile}
                     className="bg-purple-600 hover:bg-purple-700 text-white"
                   >
@@ -522,7 +521,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
             {/* Results Table */}
             {predictionResults.length > 0 && (
-              <Card className="bg-white border-gray-200">
+              <Card className="bg-white border-gray-200 mb-6">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -562,7 +561,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                   </div>
                 </CardHeader>
                 {isTableExpanded && (
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <div className="overflow-auto border border-gray-200 rounded-lg" style={{ maxHeight: '500px' }}>
                       <Table>
                         <TableHeader className="bg-gray-50 sticky top-0 z-10">
@@ -625,7 +624,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
             {/* Charts */}
             {predictionResults.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
                 {/* Pie Chart - Distribution */}
                 <Card className="bg-white border-gray-200">
                   <CardHeader>
