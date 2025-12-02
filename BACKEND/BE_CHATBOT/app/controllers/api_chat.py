@@ -85,6 +85,28 @@ def _get_ui_title_for_session(session_id: str, message: str) -> str:
     _ui_title_cache[session_id] = title
     return title
 
+def format_tool_args_to_markdown(tool_args: dict) -> str:
+    """
+    Convert tool arguments dictionary to a readable markdown format.
+    Dynamically formats any dictionary without hardcoded field mappings.
+    
+    Args:
+        tool_args: Dictionary containing tool call arguments
+        
+    Returns:
+        Formatted markdown string with proper labels and values
+    """
+    if not tool_args or not isinstance(tool_args, dict):
+        return str(tool_args)
+    
+    formatted_lines = []
+    for key, value in tool_args.items():
+        # Convert snake_case to Title Case for readability
+        readable_key = key.replace('_', ' ').title()
+        formatted_lines.append(f"• **{readable_key}**: {value}")
+    
+    return '\n'.join(formatted_lines)
+
 async def stream_and_save_response(conversation_id: str, user_id: str, user_message: str, 
                             final_response, final_tool_call, prompt_token: int, 
                             completion_token: int, start_time, history_lang: str,
@@ -382,9 +404,15 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                 if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                     tool_args = last_message.tool_calls[0]["args"]
                     logger.debug(f"New tool call request: {tool_args}")
+                    
+                    # Format tool args to markdown
+                    formatted_args = format_tool_args_to_markdown(tool_args)
+                    
                     confirmation_message = (
-                        f"Please confirm your request: {tool_args}, press 'y' to confirm or 'n' to reject.\n"
-                        f"Vui lòng xác nhận yêu cầu: {tool_args}, nhấn 'y' để xác nhận hoặc 'n' để từ chối."
+                        f"**Please confirm your request / Vui lòng xác nhận yêu cầu:**\n\n"
+                        f"{formatted_args}\n\n"
+                        f"✅ Press **'y'** to confirm / Nhấn **'y'** để xác nhận\n"
+                        f"❌ Press **'n'** to reject / Nhấn **'n'** để từ chối"
                     )
                     await save_message_to_redis(conversation_id, "ai", confirmation_message)
                     for char in confirmation_message:

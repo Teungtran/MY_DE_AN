@@ -521,7 +521,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
             {/* Results Table */}
             {predictionResults.length > 0 && (
-              <Card className="bg-white border-gray-200 mb-6">
+              <Card className="bg-white border-gray-200">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -624,74 +624,78 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
             {/* Charts */}
             {predictionResults.length > 0 && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 relative">
                 {/* Pie Chart - Distribution */}
-                <Card className="bg-white border-gray-200">
+                <Card className="bg-white border-gray-200 relative">
                   <CardHeader>
                     <CardTitle className="text-black">
                       {predictionType === 'sentiment' ? 'Sentiment Distribution' : 'Risk Level Distribution'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={predictionType === 'sentiment' ? sentimentCharts.pieData : churnCharts.pieData}
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={80}
-                          dataKey="value"
-                          label={({ name, value }) => `${name}: ${value}%`}
-                        >
-                          {(predictionType === 'sentiment' ? sentimentCharts.pieData : churnCharts.pieData).map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#ffffff', 
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            color: '#000'
-                          }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
+                    <div style={{ width: '100%', height: '300px', position: 'relative' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={predictionType === 'sentiment' ? sentimentCharts.pieData : churnCharts.pieData}
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={80}
+                            dataKey="value"
+                            label={({ name, value }) => `${name}: ${value}%`}
+                          >
+                            {(predictionType === 'sentiment' ? sentimentCharts.pieData : churnCharts.pieData).map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#ffffff', 
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              color: '#000'
+                            }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
                   </CardContent>
                 </Card>
 
                 {/* Bar Chart - Detailed Distribution */}
-                <Card className="bg-white border-gray-200">
+                <Card className="bg-white border-gray-200 relative">
                   <CardHeader>
                     <CardTitle className="text-black">
                       {predictionType === 'sentiment' ? 'Rating Distribution' : 'Churn Rate Distribution'}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={predictionType === 'sentiment' ? sentimentCharts.barData : churnCharts.barData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                        <XAxis 
-                          dataKey={predictionType === 'sentiment' ? 'rating' : 'range'} 
-                          stroke="#6b7280"
-                        />
-                        <YAxis stroke="#6b7280" />
-                        <Tooltip 
-                          contentStyle={{ 
-                            backgroundColor: '#ffffff', 
-                            border: '1px solid #d1d5db',
-                            borderRadius: '6px',
-                            color: '#000'
-                          }}
-                        />
-                        <Legend />
-                        <Bar 
-                          dataKey="count" 
-                          fill={predictionType === 'sentiment' ? '#3B82F6' : '#8B5CF6'}
-                          name={predictionType === 'sentiment' ? 'Number of Reviews' : 'Number of Customers'}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
+                    <div style={{ width: '100%', height: '300px', position: 'relative' }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={predictionType === 'sentiment' ? sentimentCharts.barData : churnCharts.barData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                          <XAxis 
+                            dataKey={predictionType === 'sentiment' ? 'rating' : 'range'} 
+                            stroke="#6b7280"
+                          />
+                          <YAxis stroke="#6b7280" />
+                          <Tooltip 
+                            contentStyle={{ 
+                              backgroundColor: '#ffffff', 
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              color: '#000'
+                            }}
+                          />
+                          <Legend />
+                          <Bar 
+                            dataKey="count" 
+                            fill={predictionType === 'sentiment' ? '#3B82F6' : '#8B5CF6'}
+                            name={predictionType === 'sentiment' ? 'Number of Reviews' : 'Number of Customers'}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </CardContent>
                 </Card>
               </div>

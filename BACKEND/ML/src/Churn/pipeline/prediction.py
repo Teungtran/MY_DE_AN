@@ -171,9 +171,12 @@ class PredictionPipeline:
                 
                 # Add predictions back to the original df_features
                 df_features['Churn_RATE'] = y_pred
-                counts = df_features['Churn_RATE'].value_counts()
-                count_churn = int(counts.get(1, 0))
-                count_not_churn = int(counts.get(0, 0))
+                
+                # Count churn risk levels (Churn_RATE is a probability, not binary)
+                # Use a threshold of 0.5 to categorize high risk vs low risk
+                threshold = 0.5
+                count_churn = int((df_features['Churn_RATE'] >= threshold).sum())
+                count_not_churn = int((df_features['Churn_RATE'] < threshold).sum())
                 
                 s3_url = None
                 prediction_csv_path = None
@@ -210,9 +213,14 @@ class PredictionPipeline:
                 logger.info(f"Prediction processing time: {processing_time:.2f} seconds")
                 logger.info(f"Started at: {start_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
                 logger.info(f"Completed at: {end_datetime.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Generate visualization
                 plot_path = visualize_customer_churn(df_features)
-                mlflow.log_artifact(plot_path, "visualization")
-                os.remove(plot_path)
+                if plot_path != "visualization_failed.png" and os.path.exists(plot_path):
+                    mlflow.log_artifact(plot_path, "visualization")
+                    os.remove(plot_path)
+                else:
+                    logger.warning("Visualization creation failed, skipping artifact logging")
                 mlflow.log_metric("processing_time_seconds", processing_time)
                 mlflow.log_metric("count_churn", count_churn)
                 mlflow.log_metric("count_not_churn", count_not_churn)

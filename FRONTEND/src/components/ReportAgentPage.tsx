@@ -350,7 +350,7 @@ I'm here to help once you're ready to try again!`
           </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 pb-20">
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -496,8 +496,8 @@ I'm here to help once you're ready to try again!`
           </div>
         </div>
 
-        {/* Message Input */}
-        <div className="p-4 border-t border-gray-200 bg-white">
+        {/* Message Input - Sticky at bottom */}
+        <div className="sticky bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white shadow-lg z-10">
           <form onSubmit={sendMessage} className="flex space-x-2">
             <Input
               value={message}
