@@ -16,7 +16,7 @@ def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[st
     return right
 
 
-def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> List[AnyMessage]:
+def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 5) -> List[AnyMessage]:
     """
     Get the last N messages, but if the first message is a ToolMessage,
     extend backwards to include its parent AIMessage with tool_calls.
@@ -39,7 +39,6 @@ def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> Lis
                 logger.info(f"Extended context to include tool call: {len(messages)} -> {len(recent)} messages")
                 break
         else:
-            # Couldn't find parent, just use what we have
             logger.warning(f"Could not find parent AIMessage for ToolMessage, using {len(recent)} messages")
     
     return recent
@@ -92,7 +91,7 @@ class Assistant:
     def __call__(self, state: AgenticState):
         while True:
             # Get recent messages safely (handles tool call chains)
-            recent_messages = get_safe_recent_messages(state["messages"], limit=10)
+            recent_messages = get_safe_recent_messages(state["messages"], limit=5)
             limited_state = {**state, "messages": recent_messages}
             logger.info(f"Processing with {len(recent_messages)}/{len(state['messages'])} messages")
             result = self.runnable.invoke(limited_state)
@@ -102,7 +101,7 @@ class Assistant:
                 or isinstance(result.content, list)
                 and not result.content[0].get("text")
             ):
-                messages = get_safe_recent_messages(state["messages"], limit=10) + [("user", "Respond with a real output.")]
+                messages = get_safe_recent_messages(state["messages"], limit=5) + [("user", "Respond with a real output.")]
                 state = {**state, "messages": messages}
             else:
                 break
