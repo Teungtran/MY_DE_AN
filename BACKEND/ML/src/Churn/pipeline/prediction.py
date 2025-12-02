@@ -15,6 +15,7 @@ from datetime import datetime
 import time
 import os
 import dagshub
+import dagshub.auth
 import tempfile
 import os
 import boto3
@@ -27,9 +28,9 @@ class PredictionPipeline:
         try:
             config = ConfigurationManager().get_mlflow_config()
             # Get DagsHub token from environment
-            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            dagshub_token = os.getenv("DAGSHUB_USER_TOKEN")
             if dagshub_token:
-                # Include credentials in tracking URI
+                dagshub.auth.add_app_token(dagshub_token) 
                 tracking_uri = config.tracking_uri.replace(
                     "https://",
                     f"https://{config.dagshub_username}:{dagshub_token}@"
@@ -120,11 +121,8 @@ class PredictionPipeline:
             mlflow_config = config_manager.get_mlflow_config()
             threshold_config = config_manager.get_threshold_config()
             
-            # Get DagsHub token from environment and set it for dagshub.get_token()
-            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
-            if dagshub_token:
-                # Set token in environment for dagshub.get_token() to find
-                os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
+            dagshub_token = os.getenv("DAGSHUB_USER_TOKEN")
+
             
             dagshub.init(
                 repo_owner=mlflow_config.dagshub_username,
@@ -132,8 +130,8 @@ class PredictionPipeline:
                 mlflow=True
             )
             
-            # Include credentials in tracking URI for MLflow authentication
             if dagshub_token:
+                dagshub.auth.add_app_token(dagshub_token) 
                 tracking_uri = mlflow_config.tracking_uri.replace(
                     "https://",
                     f"https://{mlflow_config.dagshub_username}:{dagshub_token}@"
@@ -141,7 +139,7 @@ class PredictionPipeline:
             else:
                 tracking_uri = mlflow_config.tracking_uri
             mlflow.set_tracking_uri(tracking_uri)
-            mlflow.set_experiment(mlflow_config.prediction_experiment_name)  
+            mlflow.set_experiment(mlflow_config.prediction_experiment_name)   
             with mlflow.start_run(run_name=f"prediction_run_{time_str}"):
                 data_ingestion = DataIngestion(config=data_ingestion_config)
                 df = data_ingestion.load_data()

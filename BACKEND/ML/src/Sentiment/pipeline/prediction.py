@@ -10,7 +10,6 @@ import joblib
 import mlflow
 from src.Sentiment.utils.logging import logger
 from src.Sentiment.utils.visualize_ouput import rating_distribution
-import tensorflow as tf
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from datetime import datetime
 import time
@@ -18,6 +17,7 @@ import os
 import dagshub
 import tempfile
 import os
+import dagshub.auth
 import boto3
 def calculate_rating(ratings):
     return [min(5.0, max(0.5, round(r[0] * 10) / 2)) for r in ratings]
@@ -26,9 +26,9 @@ class PredictionPipeline:
         try:
             config = ConfigurationManager().get_mlflow_config()
             # Get DagsHub token from environment
-            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
+            dagshub_token = os.getenv("DAGSHUB_USER_TOKEN")
             if dagshub_token:
-                # Include credentials in tracking URI
+                dagshub.auth.add_app_token(dagshub_token) 
                 tracking_uri = config.tracking_uri.replace(
                     "https://",
                     f"https://{config.dagshub_username}:{dagshub_token}@"
@@ -111,21 +111,16 @@ class PredictionPipeline:
             data_ingestion_config = config_manager.get_data_ingestion_config()
             mlflow_config = config_manager.get_mlflow_config()
             threshold_config = config_manager.get_threshold_config()
-            
-            # Get DagsHub token from environment and set it for dagshub.get_token()
-            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
-            if dagshub_token:
-                # Set token in environment for dagshub.get_token() to find
-                os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
-            
+            dagshub_token = os.getenv("DAGSHUB_USER_TOKEN")
+
             dagshub.init(
                 repo_owner=mlflow_config.dagshub_username,
                 repo_name=mlflow_config.dagshub_repo_name,
                 mlflow=True
             )
             
-            # Include credentials in tracking URI for MLflow authentication
             if dagshub_token:
+                dagshub.auth.add_app_token(dagshub_token) 
                 tracking_uri = mlflow_config.tracking_uri.replace(
                     "https://",
                     f"https://{mlflow_config.dagshub_username}:{dagshub_token}@"

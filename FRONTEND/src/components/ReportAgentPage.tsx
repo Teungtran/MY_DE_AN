@@ -4,7 +4,6 @@ import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { FPTLogo } from './FPTLogo';
@@ -351,7 +350,7 @@ I'm here to help once you're ready to try again!`
           </div>
 
         {/* Messages */}
-        <ScrollArea className="flex-1 p-4 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -495,7 +494,7 @@ I'm here to help once you're ready to try again!`
             )}
             <div ref={messagesEndRef} />
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Message Input */}
         <div className="p-4 border-t border-gray-200 bg-white">

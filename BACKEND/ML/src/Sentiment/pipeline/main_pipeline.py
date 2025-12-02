@@ -10,6 +10,7 @@ from pathlib import Path
 from fastapi import UploadFile
 import mlflow
 import dagshub
+import dagshub.auth
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -43,20 +44,15 @@ class WorkflowRunner:
         try:
             mlflow_config = self.config_manager.get_mlflow_config()
             logger.info(f"MLflow configured with experiment: {mlflow_config.experiment_name}")
-            # Get DagsHub token from environment and set it for dagshub.get_token()
-            dagshub_token = os.getenv("MLFLOW_TRACKING_PASSWORD")
-            if dagshub_token:
-                # Set token in environment for dagshub.get_token() to find
-                os.environ["DAGSHUB_USER_TOKEN"] = dagshub_token
-            
+            dagshub_token = os.getenv("DAGSHUB_USER_TOKEN")
             dagshub.init(
                 repo_owner=mlflow_config.dagshub_username,
                 repo_name=mlflow_config.dagshub_repo_name,
                 mlflow=True
             )
-            
-            # Include credentials in tracking URI for MLflow authentication
+            dagshub_token = os.getenv("DAGSHUB_USER_TOKEN")
             if dagshub_token:
+                dagshub.auth.add_app_token(dagshub_token) 
                 tracking_uri = mlflow_config.tracking_uri.replace(
                     "https://",
                     f"https://{mlflow_config.dagshub_username}:{dagshub_token}@"
