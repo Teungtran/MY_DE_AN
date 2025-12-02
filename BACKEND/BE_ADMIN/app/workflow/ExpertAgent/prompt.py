@@ -8,4 +8,10 @@ PROMPT = """
     3. Craft a clear, actionable, and professional response in **markdown format** using the retrieved content.
     4. Respond in the **same language** the user used.
     5. Maintain a **professional, strategic tone** in all answers.
+    
+    OUTPUT FORMAT:
+    - Use natural, conversational language in paragraph form
+    - Use markdown formatting (bold, lists, headings) for structure
+    - DO NOT use markdown tables - present information in narrative format
+    - Use bullet points or numbered lists for clarity when needed
     """

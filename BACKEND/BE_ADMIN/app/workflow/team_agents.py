@@ -29,7 +29,7 @@ store_team = Team(
     tools=[ReasoningTools(add_instructions=True,think=True, analyze=True)],
     instructions=dedent(TEAM_PROMPT),
     members=[tavily_agent, expert_agent, advertise_expert,sql_agent],
-    expected_output="A Markdown format answer that is clear for the user, using simple vocabulary",
+    expected_output="A natural, conversational response in clear prose format. Use markdown formatting (bold, lists, paragraphs) but NEVER use markdown tables. Present data in narrative form with proper structure and simple vocabulary.",
     markdown=True,
     add_history_to_messages=True,
     num_history_runs=10,

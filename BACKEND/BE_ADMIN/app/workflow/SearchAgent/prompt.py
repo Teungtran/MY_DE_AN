@@ -10,4 +10,10 @@ PROMPT = f"""
 
         Always format your responses using clean and readable Markdown.
         If no meaningful information is found, politely state that the data is insufficient.
+        
+        OUTPUT FORMAT:
+        - Use natural, conversational language in paragraph form
+        - Use markdown formatting (bold, lists, headings) for structure
+        - DO NOT use markdown tables - present information in narrative format with bullet points
+        - Always include source links in a readable format
         """

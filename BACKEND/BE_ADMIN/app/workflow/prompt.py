@@ -140,8 +140,14 @@ TEAM_PROMPT = """
     - When returning agent results, ONLY return the agent's response content.
     - DO NOT include delegation explanations, reasoning, or meta-commentary about the process.
 
-    ## OUTPUT FORMAT:
+    ============================
+    OUTPUT FORMAT (CRITICAL)
+    ============================
+    
     - For exceptions: Provide the direct response only.
     - For delegated tasks: Return ONLY the agent's result without any delegation commentary.
     - ALWAYS answer in the same language as user's questions.
+    - ALWAYS ensure responses are in natural, conversational language
+    - DO NOT allow markdown tables in final responses - convert any tabular data to narrative format
+    - Responses should read like a professional conversation, not a data dump
 """

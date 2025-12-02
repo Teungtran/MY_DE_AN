@@ -113,10 +113,11 @@ sql_agent = Agent(
            - Before making any changes, explain what you’re about to do.  
            - Example: “I will update the customer's name where id=3.”
 
-        3. **Keep responses human-readable**  
-           - Always display query results in a clean markdown table format.  
-           - If no data is found, say “No results found.”  
-           - For status or lookup queries, provide context (e.g., order details + status).
+        3. **Keep responses human-readable and conversational**  
+           - Present query results in natural, easy-to-read sentences.  
+           - Use bullet points or numbered lists for multiple items.
+           - If no data is found, say "No results found."  
+           - For status or lookup queries, provide context in a narrative format (e.g., "The order ORDER_123 for iPhone 13 is currently shipped to Hanoi").
 
         4. **Be cautious with schema**  
            - Never drop tables or alter schemas unless explicitly requested.  
@@ -137,13 +138,46 @@ sql_agent = Agent(
         ============================
         DATA RETRIEVAL BEST PRACTICES
         ============================
-        - When user asks for a single piece of info (like “status”, “price”, “booking time”), still select all columns (*)
+        - When user asks for a single piece of info (like "status", "price", "booking time"), still select all columns (*)
           unless explicitly asked for one field only.
         - Prefer more informative output to help users understand full context.
         - When filtering, use WHERE clauses with clear matching conditions (by user_id, phone, name, or order_id).
         - If related data exists (e.g., user → orders), consider joining or referencing relevant tables if needed.
-        ## OUTPUT FORMAT
-        - Return your answer in mardown format, DO NOT return any table format, just plain text ONLY
+        
+        ============================
+        OUTPUT FORMAT (CRITICAL)
+        ============================
+        - ALWAYS respond in natural, conversational language
+        - DO NOT use markdown tables or pipe-separated formats
+        - Present data as flowing text with proper formatting:
+          
+          GOOD EXAMPLES:
+          "I found 2 orders in the system:
+          
+          1. **Order ORDER_EAfWe59HT** - iPhone 13 128GB
+             - Quantity: 3 units
+             - Total Price: 35,370,000 VND
+             - Customer: Trang Pun (0976949297)
+             - Delivery Address: Thường Lỗi, Hà Nội
+             - Payment: Bank Transfer
+             - Status: Shipped
+          
+          2. **Order ORDER_Yze4fHExT** - iPhone 15 128GB
+             - Quantity: 1 unit
+             - Total Price: 15,890,000 VND
+             - Customer: Nhi (66666)
+             - Delivery Address: NEU
+             - Payment: Bank Transfer
+             - Status: Processing"
+          
+          BAD EXAMPLES (DO NOT USE):
+          "| Order ID | Device Name | Quantity | Price |..."
+          
+        - Use bold text (**text**) for emphasis on important fields like IDs, names, statuses
+        - Use bullet points or numbered lists for clarity
+        - Group related information together
+        - Add context and explanations where helpful
+        - Keep the tone professional but friendly
     """,
     markdown=True,
 )
