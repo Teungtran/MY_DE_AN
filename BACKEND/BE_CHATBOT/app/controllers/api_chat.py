@@ -411,8 +411,8 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                     confirmation_message = (
                         f"**Please confirm your request / Vui lòng xác nhận yêu cầu:**\n\n"
                         f"{formatted_args}\n\n"
-                        f"✅ Press **'y'** to confirm / Nhấn **'y'** để xác nhận\n"
-                        f"❌ Press **'n'** to reject / Nhấn **'n'** để từ chối"
+                        f"Type **'y'** to confirm / Gõ **'y'** để xác nhận\n"
+                        f"Type **'n'** to reject / Gõ **'n'** để từ chối"
                     )
                     await save_message_to_redis(conversation_id, "ai", confirmation_message)
                     for char in confirmation_message:
