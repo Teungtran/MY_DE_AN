@@ -237,7 +237,7 @@ async def scoring_logic(
     supported_field
 ):
     """
-    Improved scoring logic that always returns 10 candidates (5 best + 5 similar)
+    Improved scoring logic that always returns 6 candidates (3 best + 3 similar)
     and handles price filtering correctly.
     """
     try:
@@ -329,29 +329,29 @@ async def scoring_logic(
 
                     logger.info(f"[DEBUG] Found {len(seen_names)} unique devices from matching")
 
-                    # === Build initial candidates list (top 5 from matching) ===
+                    # === Build initial candidates list (top 3 from matching) ===
                     sorted_devices = sorted(device_scores.items(), key=lambda x: x[1], reverse=True)
-                    top_5_matched = []
+                    top_3_matched = []
                     
-                    for name, score in sorted_devices[:5]:  # Get only top 5
+                    for name, score in sorted_devices[:3]:  # Get only top 3
                         cand = device_candidates[name]
                         cand["score"] = score
-                        top_5_matched.append(cand)
+                        top_3_matched.append(cand)
 
-                    logger.info(f"[DEBUG] Selected top 5 from matching: {[get_metadata(c['doc'], 'device_name') for c in top_5_matched]}")
+                    logger.info(f"[DEBUG] Selected top 3 from matching: {[get_metadata(c['doc'], 'device_name') for c in top_3_matched]}")
 
-                    # === Get 5 similar candidates using similarity search ===
+                    # === Get 3 similar candidates using similarity search ===
                     similar_candidates = []
-                    existing_names = {get_metadata(c["doc"], "device_name", "") for c in top_5_matched}
+                    existing_names = {get_metadata(c["doc"], "device_name", "") for c in top_3_matched}
                     
-                    if top_5_matched:
+                    if top_3_matched:
                         try:
                             # Use the best matched candidate as reference for similarity
-                            best_candidate = top_5_matched[0]
+                            best_candidate = top_3_matched[0]
                             logger.info(f"[DEBUG] Finding similar products to: {get_metadata(best_candidate['doc'], 'device_name')}")
                             
-                            # Get up to 10 similar candidates (we'll filter to 5 unique)
-                            similar = suggest_similar_candidate(best_candidate, original_candidates, top_k=10)
+                            # Get up to 6 similar candidates (we'll filter to 3 unique)
+                            similar = suggest_similar_candidate(best_candidate, original_candidates, top_k=6)
                             
                             for sim_cand in similar:
                                 try:
@@ -359,7 +359,7 @@ async def scoring_logic(
                                     if name and name not in existing_names:
                                         similar_candidates.append(sim_cand)
                                         existing_names.add(name)
-                                        if len(similar_candidates) >= 5:
+                                        if len(similar_candidates) >= 3:
                                             break
                                 except Exception as e:
                                     logger.warning(f"[WARNING] Error processing similar candidate: {e}")
@@ -369,7 +369,7 @@ async def scoring_logic(
                         except Exception as e:
                             logger.error(f"[ERROR] Error finding similar candidates: {e}", exc_info=True)
 
-                    final_candidates = top_5_matched + similar_candidates
+                    final_candidates = top_3_matched + similar_candidates
                     
                     unique_final = []
                     final_names = set()
@@ -393,11 +393,11 @@ async def scoring_logic(
                 final_candidates = []
 
         # === Pagination for large results (MEDIUM PRIORITY) ===
-        MAX_RESULTS = 100  # Limit to prevent returning too many items
+        MAX_RESULTS = 6  # Limit to 6 items total
         should_return_all = has_price_input and price_input and not has_features and not device_name
         
         if should_return_all:
-            # Pagination: Don't return 10,000 products at once!
+            # Pagination: Limit to 6 products for price-only queries
             limited_points = filtered_points[:MAX_RESULTS]
             logger.info(f"[DEBUG] PRICE-ONLY QUERY - Returning {len(limited_points)} products (limited from {len(filtered_points)}) under price")
             top_matches = [{"doc": doc, "score": 0} for doc in limited_points]
@@ -406,7 +406,7 @@ async def scoring_logic(
             logger.info(f"[DEBUG] Price filter WITH features/device_name - returning top {min(len(final_candidates), MAX_RESULTS)} matched candidates")
             top_matches = final_candidates[:MAX_RESULTS]
         else:
-            top_matches = final_candidates[:10]  # Limit to 10 otherwise
+            top_matches = final_candidates[:MAX_RESULTS]  # Limit to 6 items
             logger.info(f"[DEBUG] No price filter - returning top {len(top_matches)} candidates")
 
         # === Build device names list ===
