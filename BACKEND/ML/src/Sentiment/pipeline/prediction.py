@@ -38,10 +38,22 @@ class PredictionPipeline:
             mlflow.set_tracking_uri(tracking_uri)
             logger.info(f"MLflow tracking URI set to: {mlflow.get_tracking_uri()}")
             self.model = mlflow.pyfunc.load_model(model_uri)
+            logger.info(f"Attempting to download tokenizer from: {tokenizer_uri}")
             tokenizer_path = mlflow.artifacts.download_artifacts(artifact_uri=tokenizer_uri)
             self.tokenizer = joblib.load(tokenizer_path)
         except Exception as e:
-            raise RuntimeError(f"Failed to load model or tokenizer: {e}")
+            error_msg = str(e)
+            if "401" in error_msg or "Unauthorized" in error_msg:
+                logger.error("Authentication failed. Check DAGSHUB_USER_TOKEN permissions.")
+                raise RuntimeError(f"Authentication failed. Your DAGSHUB_USER_TOKEN may not have access to this artifact. Please check token permissions at https://dagshub.com/user/settings/tokens. Error: {e}")
+            elif "403" in error_msg or "Forbidden" in error_msg:
+                logger.error("Access forbidden. Token may lack required permissions.")
+                raise RuntimeError(f"Access forbidden. Your token may not have read permissions for this artifact. Please generate a new token with full MLflow access. Error: {e}")
+            elif "500" in error_msg or "too many" in error_msg.lower():
+                logger.error("DagHub server error. This may be temporary.")
+                raise RuntimeError(f"DagHub server error (may be temporary). Please try again later or use a different model version. Error: {e}")
+            else:
+                raise RuntimeError(f"Failed to load model or tokenizer: {e}")
     
     def preprocess_text(self, df: pd.DataFrame) -> pd.DataFrame:
         """Preprocess text data for sentiment analysis - prefer 'review', else fallback to longest text column."""

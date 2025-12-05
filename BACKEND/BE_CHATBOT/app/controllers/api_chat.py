@@ -103,9 +103,11 @@ def format_tool_args_to_markdown(tool_args: dict) -> str:
     for key, value in tool_args.items():
         # Convert snake_case to Title Case for readability
         readable_key = key.replace('_', ' ').title()
-        formatted_lines.append(f"• **{readable_key}**: {value}")
+        # Add newline at the end of each line to ensure proper line breaks
+        formatted_lines.append(f"• **{readable_key}**: {value}\n")
     
-    return '\n'.join(formatted_lines)
+    # Join lines (each already has \n at the end)
+    return ''.join(formatted_lines)
 
 async def stream_and_save_response(conversation_id: str, user_id: str, user_message: str, 
                             final_response, final_tool_call, prompt_token: int, 
@@ -411,8 +413,8 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                     confirmation_message = (
                         f"**Please confirm your request / Vui lòng xác nhận yêu cầu:**\n\n"
                         f"{formatted_args}\n\n"
-                        f"Type **'y'** to confirm / Gõ **'y'** để xác nhận\n"
-                        f"Type **'n'** to reject / Gõ **'n'** để từ chối"
+                        f"Press **'y'** to confirm / Nhấn **'y'** để xác nhận\n"
+                        f"Press **'n'** to reject / Nhấn **'n'** để từ chối"
                     )
                     await save_message_to_redis(conversation_id, "ai", confirmation_message)
                     for char in confirmation_message:

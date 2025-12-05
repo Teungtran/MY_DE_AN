@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
 import { Input } from './ui/input';
 import { LogOut, Upload, Brain, TrendingUp, RefreshCw, MessageCircle, FileText, Database, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
@@ -54,16 +53,20 @@ export function MLPage({ user, onLogout }: MLPageProps) {
   const [predictionResults, setPredictionResults] = useState<PredictionResult[]>([]);
   const [rawData, setRawData] = useState<SentimentData[] | ChurnData[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [retrainProgress, setRetrainProgress] = useState(0);
-  const [isRetraining, setIsRetraining] = useState(false);
+  
+  // Retraining state
+  const [isSentimentRetraining, setIsSentimentRetraining] = useState(false);
+  const [isChurnRetraining, setIsChurnRetraining] = useState(false);
+  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedSentimentTrainingFile, setSelectedSentimentTrainingFile] = useState<File | null>(null);
   const [selectedChurnTrainingFile, setSelectedChurnTrainingFile] = useState<File | null>(null);
   const [predictionType, setPredictionType] = useState<'sentiment' | 'churn'>('sentiment');
   const [modelVersion, setModelVersion] = useState<string>('1');
-  const [scalerVersion, setScalerVersion] = useState<string>('scaler_churn_version_20250701T105905.pkl');
-  const [runId, setRunId] = useState<string>('b523ba441ea0465085716dcebb916294');
+  const [scalerVersion, setScalerVersion] = useState<string>('tokenizer/tokenizer_version_20250810T020107.pkl');
+  const [runId, setRunId] = useState<string>('e5eb544e473d4a7b9109b98c5255de04');
   const [apiSummary, setApiSummary] = useState<any>(null);
+  const [mlflowUrl, setMlflowUrl] = useState<string | null>(null);
   const [isTableExpanded, setIsTableExpanded] = useState(true);
 
 
@@ -105,7 +108,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
       if (currentType === 'sentiment') {
         response = await mlAPI.sentimentPredict(selectedFile, {
           model_version: modelVersion || undefined,
-          tokenizer_version: undefined,
+          tokenizer_version: scalerVersion || undefined,
           run_id: runId || undefined
         });
       } else {
@@ -118,7 +121,11 @@ export function MLPage({ user, onLogout }: MLPageProps) {
 
       // Store raw data for visualization
       setRawData(response.payload.s3_results_data);
-      setApiSummary(response.payload.summary);
+      setApiSummary({
+        ...response.payload.summary,
+        message: response.payload.message // Add the prediction summary message
+      });
+      setMlflowUrl(response.mlflow_url || null);
 
       // Transform data for prediction results table
       const results: PredictionResult[] = response.payload.s3_results_data.map((item: any, index: number) => ({
@@ -152,27 +159,39 @@ export function MLPage({ user, onLogout }: MLPageProps) {
       return;
     }
 
-    setIsRetraining(true);
-    setRetrainProgress(0);
+    if (isSentimentRetraining) {
+      toast.warning('Training already in progress');
+      return;
+    }
+
+    setIsSentimentRetraining(true);
 
     try {
-      // Simulate progress for UX
-      const progressInterval = setInterval(() => {
-        setRetrainProgress(prev => Math.min(prev + 5, 95));
-      }, 1000);
-
+      toast.info('Training started. This may take several minutes...');
       const response = await mlAPI.sentimentTrain(selectedSentimentTrainingFile || undefined);
       
-      clearInterval(progressInterval);
-      setRetrainProgress(100);
-      setIsRetraining(false);
+      setIsSentimentRetraining(false);
       
-      toast.success('Sentiment model retrained successfully!');
+      // Show success with details
+      if (response.run_id) {
+        toast.success(
+          `Training completed! Run ID: ${response.run_id}. Click to view in MLflow.`,
+          {
+            duration: 10000,
+            action: response.mlflow_url ? {
+              label: 'View MLflow',
+              onClick: () => window.open(response.mlflow_url, '_blank')
+            } : undefined
+          }
+        );
+      } else {
+        toast.success('Sentiment model retrained successfully!');
+      }
+      
       console.log('Training result:', response);
     } catch (error: any) {
       console.error('Training error:', error);
-      setIsRetraining(false);
-      setRetrainProgress(0);
+      setIsSentimentRetraining(false);
       toast.error(error?.message || 'Model retraining failed. Please try again.');
     }
   };
@@ -183,27 +202,39 @@ export function MLPage({ user, onLogout }: MLPageProps) {
       return;
     }
 
-    setIsRetraining(true);
-    setRetrainProgress(0);
+    if (isChurnRetraining) {
+      toast.warning('Training already in progress');
+      return;
+    }
+
+    setIsChurnRetraining(true);
 
     try {
-      // Simulate progress for UX
-      const progressInterval = setInterval(() => {
-        setRetrainProgress(prev => Math.min(prev + 5, 95));
-      }, 1000);
-
+      toast.info('Training started. This may take several minutes...');
       const response = await mlAPI.churnTrain(selectedChurnTrainingFile || undefined);
       
-      clearInterval(progressInterval);
-      setRetrainProgress(100);
-      setIsRetraining(false);
+      setIsChurnRetraining(false);
       
-      toast.success('Churn model retrained successfully!');
+      // Show success with details
+      if (response.run_id) {
+        toast.success(
+          `Training completed! Run ID: ${response.run_id}. Click to view in MLflow.`,
+          {
+            duration: 10000,
+            action: response.mlflow_url ? {
+              label: 'View MLflow',
+              onClick: () => window.open(response.mlflow_url, '_blank')
+            } : undefined
+          }
+        );
+      } else {
+        toast.success('Churn model retrained successfully!');
+      }
+      
       console.log('Training result:', response);
     } catch (error: any) {
       console.error('Training error:', error);
-      setIsRetraining(false);
-      setRetrainProgress(0);
+      setIsChurnRetraining(false);
       toast.error(error?.message || 'Model retraining failed. Please try again.');
     }
   };
@@ -439,12 +470,12 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                     />
                   </div>
                   <div>
-                    <label className="text-sm text-gray-600 mb-1 block">Scaler Version (Optional)</label>
+                    <label className="text-sm text-gray-600 mb-1 block">Scaler/Tokenizer Version (Optional)</label>
                     <Input
                       type="text"
                       value={scalerVersion}
                       onChange={(e) => setScalerVersion(e.target.value)}
-                      placeholder="e.g., scaler_churn_version_..."
+                      placeholder="e.g., tokenizer/tokenizer_version_..."
                       className="bg-white border-gray-300"
                     />
                   </div>
@@ -454,7 +485,7 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                       type="text"
                       value={runId}
                       onChange={(e) => setRunId(e.target.value)}
-                      placeholder="e.g., b523ba441ea0465..."
+                      placeholder="e.g., e5eb544e473d4a7b9109b98c5255de04"
                       className="bg-white border-gray-300"
                     />
                   </div>
@@ -483,7 +514,20 @@ export function MLPage({ user, onLogout }: MLPageProps) {
             {apiSummary && (
               <Card className="bg-white border-gray-200">
                 <CardHeader>
-                  <CardTitle className="text-black">Analysis Summary</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-black">Analysis Summary</CardTitle>
+                    {mlflowUrl && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(mlflowUrl, '_blank')}
+                        className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                      >
+                        <Brain className="h-4 w-4 mr-2" />
+                        View in MLflow
+                      </Button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -504,15 +548,28 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                   </div>
                   {apiSummary.rating_distribution && (
                     <div className="mt-4">
-                      <h4 className="text-sm text-gray-600 mb-2">Rating Distribution</h4>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Rating Distribution</h4>
                       <div className="grid grid-cols-5 gap-2">
                         {Object.entries(apiSummary.rating_distribution).map(([rating, count]) => (
-                          <div key={rating} className="text-center p-2 bg-gray-50 rounded">
+                          <div key={rating} className="text-center p-2 bg-gray-50 rounded border border-gray-200">
                             <div className="text-xs text-gray-600">{rating} Star</div>
-                            <div className="text-lg text-black">{count as number}</div>
+                            <div className="text-lg font-semibold text-black">{count as number}</div>
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Prediction Quality Message */}
+                  {apiSummary.message && (
+                    <div className="mt-4 p-4 rounded-lg border" 
+                         style={{
+                           backgroundColor: apiSummary.message.includes('⚠️') ? '#FEF3C7' : '#D1FAE5',
+                           borderColor: apiSummary.message.includes('⚠️') ? '#F59E0B' : '#10B981'
+                         }}>
+                      <p className="text-sm whitespace-pre-line" style={{ color: '#000' }}>
+                        {apiSummary.message}
+                      </p>
                     </div>
                   )}
                 </CardContent>
@@ -725,27 +782,27 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                         accept=".csv"
                         onChange={handleSentimentTrainingFileSelect}
                         className="mb-4"
+                        disabled={isSentimentRetraining}
                       />
-                      <p className="text-black mb-2">{selectedSentimentTrainingFile ? selectedSentimentTrainingFile.name : 'Upload sentiment training data (CSV)'}</p>
-                      <p className="text-sm text-gray-500">Training datasets up to 50MB</p>
+                      <p className="text-black mb-2">
+                        {selectedSentimentTrainingFile ? selectedSentimentTrainingFile.name : 'Upload sentiment training data (CSV)'}
+                      </p>
+                      <p className="text-sm text-gray-500">CSV files up to 500MB</p>
                     </div>
-
-                    {isRetraining && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Training Progress</span>
-                          <span className="text-black">{retrainProgress}%</span>
-                        </div>
-                        <Progress value={retrainProgress} className="h-2" />
-                      </div>
-                    )}
 
                     <Button
                       onClick={handleSentimentRetrain}
-                      disabled={isRetraining || !selectedSentimentTrainingFile}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      disabled={isSentimentRetraining || !selectedSentimentTrainingFile}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
                     >
-                      {isRetraining ? 'Training...' : 'Retrain Sentiment Model'}
+                      {isSentimentRetraining ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Training in progress...
+                        </>
+                      ) : (
+                        'Start Training'
+                      )}
                     </Button>
                   </CardContent>
                 </Card>
@@ -769,27 +826,27 @@ export function MLPage({ user, onLogout }: MLPageProps) {
                         accept=".csv"
                         onChange={handleChurnTrainingFileSelect}
                         className="mb-4"
+                        disabled={isChurnRetraining}
                       />
-                      <p className="text-black mb-2">{selectedChurnTrainingFile ? selectedChurnTrainingFile.name : 'Upload churn training data (CSV)'}</p>
-                      <p className="text-sm text-gray-500">Training datasets up to 50MB</p>
+                      <p className="text-black mb-2">
+                        {selectedChurnTrainingFile ? selectedChurnTrainingFile.name : 'Upload churn training data (CSV)'}
+                      </p>
+                      <p className="text-sm text-gray-500">CSV files up to 500MB</p>
                     </div>
-
-                    {isRetraining && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-gray-600">Training Progress</span>
-                          <span className="text-black">{retrainProgress}%</span>
-                        </div>
-                        <Progress value={retrainProgress} className="h-2" />
-                      </div>
-                    )}
 
                     <Button
                       onClick={handleChurnRetrain}
-                      disabled={isRetraining || !selectedChurnTrainingFile}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      disabled={isChurnRetraining || !selectedChurnTrainingFile}
+                      className="w-full bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
                     >
-                      {isRetraining ? 'Training...' : 'Retrain Churn Model'}
+                      {isChurnRetraining ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Training in progress...
+                        </>
+                      ) : (
+                        'Start Training'
+                      )}
                     </Button>
                   </CardContent>
                 </Card>

@@ -84,7 +84,15 @@ class WorkflowRunner:
             
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"Churn_model_training_cycle_{timestamp}"
-        with mlflow.start_run(run_name=run_name):
+        
+        # Initialize variables to store run info
+        run_id = None
+        metrics = {}
+        final_model_path = None
+        
+        with mlflow.start_run(run_name=run_name) as run:
+            # Capture run_id inside the context
+            run_id = run.info.run_id
             
             logger.info("=" * 50)
             logger.info("STAGE 1: Data Preparation")
@@ -162,5 +170,12 @@ class WorkflowRunner:
         logger.info("=" * 50)
         logger.info(f"WORKFLOW COMPLETED SUCCESSFULLY")
         logger.info("=" * 50)
-
-        return final_model_path
+        
+        return {
+            "status": "success",
+            "message": "Workflow completed successfully",
+            "run_id": run_id,
+            "metrics": metrics,
+            "run_name": run_name,
+            "model_path": final_model_path
+        }

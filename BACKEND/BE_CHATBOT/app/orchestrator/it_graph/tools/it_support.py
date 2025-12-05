@@ -37,6 +37,7 @@ trusted_tech_domains = [
     "appleinsider.com",
     "macrumors.com",
     "reddit.com/r/techsupport",
+    "fpt.com"
 ]
 
 
@@ -78,6 +79,7 @@ def it_support_agent(question):
             "Search Results:\n{search_info}\n\n"
             "ALWAYS end with this line:\n"
             "\"To get more help, call 18006601 to contact an IT personnel or 1800.6616 for customer support service.\""
+            "ALWAYS INCLUDE REFERENCES LINK to your output"
         )),
         ("human", "{user_question}")
     ])

@@ -33,8 +33,8 @@ RUN echo 'server { \
     root /usr/share/nginx/html; \
     index index.html; \
     \
-    # Allow large file uploads (up to 200MB) \
-    client_max_body_size 200M; \
+    # Allow large file uploads (up to 500MB) \
+    client_max_body_size 500M; \
     \
     # SPA fallback - serve index.html for all routes \
     location / { \
@@ -51,15 +51,15 @@ RUN echo 'server { \
         proxy_set_header X-Real-IP $remote_addr; \
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
         proxy_set_header X-Forwarded-Proto $scheme; \
-        proxy_read_timeout 300s; \
-        proxy_connect_timeout 300s; \
-        proxy_send_timeout 300s; \
+        proxy_read_timeout 600s; \
+        proxy_connect_timeout 600s; \
+        proxy_send_timeout 600s; \
         # SSE/Streaming support \
         proxy_buffering off; \
         proxy_cache off; \
         chunked_transfer_encoding on; \
         # Allow large file uploads through proxy \
-        client_max_body_size 200M; \
+        client_max_body_size 500M; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 

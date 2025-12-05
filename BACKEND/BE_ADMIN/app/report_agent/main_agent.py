@@ -142,8 +142,6 @@ Then you MUST provide:
   - **Actionable advice** based on the data analysis
   - **Specific recommendations** derived from the insights
   - **Future-oriented suggestions** if the user asks about future actions
-  - **Strategic insights** that help the user make decisions
-  - **Clear next steps** based on the data findings
 
 If the user did NOT explicitly ask for advice/suggestions, focus on summarizing the findings without adding unsolicited recommendations.
 
