@@ -337,7 +337,7 @@ I'm here to help once you're ready to try again!`
 
       <div className="flex flex-1 bg-gray-50">
         {/* Left Panel - Chat Discussion */}
-        <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white">
+        <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white relative">
           {/* Chat Header */}
           <div className="p-4 border-b border-gray-200 bg-white">
             <div className="flex items-center space-x-3">
@@ -350,7 +350,7 @@ I'm here to help once you're ready to try again!`
           </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50 pb-20">
+        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
           <div className="space-y-4">
             {messages.map((msg) => (
               <div
@@ -508,7 +508,7 @@ I'm here to help once you're ready to try again!`
             />
             <Button 
               type="submit" 
-              className="bg-black hover:bg-gray-800 text-white"
+              className="bg-black hover:bg-gray-800 text-white transform transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
               disabled={isTyping || !message.trim()}
             >
               <Send className="h-4 w-4" />

@@ -56,9 +56,11 @@ def get_reasoning_prompt():
     You interpret natural language queries and decide how best to respond — either by analyzing data or replying conversationally.
 
     ## INPUT
-    You will receive the **CURRENT USER QUESTION** and up to the **last 10 chat messages** (user + assistant) for context.  
-    **CRITICAL**: You MUST focus ONLY on the **CURRENT USER QUESTION** - ignore all previous questions in the chat history.
-    The chat history is provided only for context, but your analysis must be based solely on the current question.
+    You will receive the **CURRENT USER QUESTION** and the **2 most recent human messages and 2 most recent AI messages** for context.  
+    **CRITICAL**: 
+    - If the CURRENT USER QUESTION is **standalone** (complete and self-contained), focus ONLY on it.
+    - If the CURRENT USER QUESTION is **NOT standalone** (incomplete, vague, or needs context like "what about that?", "show me more", "analyze it", "compare them"), use the chat history to understand what the user is referring to and incorporate key information from previous interactions into your user_intention.
+    - When the question is NOT standalone, extract key information from history (columns mentioned, analysis topics, data points discussed) and include them in user_intention to provide full context.
 
     ## AVAILABLE COLUMNS
     {available_columns}
@@ -66,12 +68,15 @@ def get_reasoning_prompt():
     ## TASK
 
     1. **Understand Intent**
-    - **IMPORTANT**: Analyze ONLY the CURRENT USER QUESTION provided above. Do NOT analyze questions from the chat history.
-    - Identify what the user is really asking in the CURRENT USER QUESTION.
+    - **IMPORTANT**: First determine if the CURRENT USER QUESTION is **standalone** (complete and self-contained) or **NOT standalone** (incomplete, vague, or needs context).
+    - **Standalone examples**: "Analyze sales trends", "Show me revenue by product", "What are the top 10 items?"
+    - **NOT standalone examples**: "What about that?", "Show me more", "Analyze it", "Compare them", "Tell me more about it"
+    - If the CURRENT USER QUESTION is **standalone**: Analyze ONLY that question. Do NOT use chat history.
+    - If the CURRENT USER QUESTION is **NOT standalone**: Use chat history to understand what the user is referring to (columns, topics, data points from previous messages) and incorporate that context.
+    - Identify what the user is really asking in the CURRENT USER QUESTION (or what they're referring to from history if NOT standalone).
     - If the CURRENT USER QUESTION is playful, off-topic, or nonsensical (e.g., jokes, emojis, small talk, food requests, compliments, or unrelated tasks), treat it as **out of scope**, even if it includes words that sound analytical.
     - If the CURRENT USER QUESTION asks to explore, summarize, describe, compare, calculate, visualize, or interpret **data**, treat it as **data analysis**.
     - If the CURRENT USER QUESTION asks what the dataset is about, what columns it contains, or requests an overview — that also counts as **analysis**.
-    - If the CURRENT USER QUESTION asks about **devices, products, items, or recommendations** related to the dataset, treat it as **data analysis**.
     - If the CURRENT USER QUESTION asks for **suggestions, solutions, advice, recommendations, or future predictions** related to the data, treat it as **data analysis**.
     - Keywords that indicate data analysis: "suggest", "recommend", "advice", "what should I", "solution", "future", "trend", "device", "product", "item", "best", "improve", "strategy"
 
@@ -102,13 +107,15 @@ def get_reasoning_prompt():
     Return **valid JSON only**, with no other text:
 
     {{
-    "reasoning": "Brief explanation of your reasoning based on the CURRENT USER QUESTION only",
-    "user_intention": "Short rephrasing of what the CURRENT USER QUESTION is asking, including the specific columns to analyze (e.g., 'Analyze sales trends using Revenue and Date columns')",
+    "reasoning": "Brief explanation of your reasoning based on the CURRENT USER QUESTION. If the question is NOT standalone, explain how you used chat history to understand the context.",
+    "user_intention": "Short rephrasing of what the CURRENT USER QUESTION is asking, including the specific columns to analyze. If the question is NOT standalone, incorporate key information from chat history (columns, topics, data points from previous messages) to make the intention complete and clear (e.g., 'Analyze sales trends using Revenue and Date columns' or 'Show more details about the Revenue analysis from previous question using Revenue, Date, and Product columns')",
     "tool_action": "CALL_ANALYZE_TOOL | RESPOND_GREETING | RESPOND_OUT_OF_SCOPE"
     }}
 
-    **REMINDER**: Your "user_intention" must reflect the CURRENT USER QUESTION, not any previous questions from chat history.
-    **IMPORTANT**: Always include the relevant column names in "user_intention" and "columns_to_use".
+    **REMINDER**: 
+    - If CURRENT USER QUESTION is standalone: "user_intention" must reflect ONLY the CURRENT USER QUESTION.
+    - If CURRENT USER QUESTION is NOT standalone: "user_intention" must incorporate key information from chat history to provide complete context.
+    **IMPORTANT**: Always include the relevant column names in "user_intention".
 """
 
 
@@ -158,16 +165,30 @@ def react_agent(state: InputState):
     if not all_messages:
         raise ValueError("No messages found in state")
 
-    recent_messages = all_messages[-10:]
-    user_messages = [m for m in recent_messages if isinstance(m, HumanMessage)]
-    if not user_messages:
+    # Extract 2 most recent human messages and 2 most recent AI messages
+    human_messages = [m for m in all_messages if isinstance(m, HumanMessage)][-2:]
+    ai_messages = [m for m in all_messages if isinstance(m, AIMessage)][-2:]
+    
+    # Combine and sort by position in original list to maintain order
+    recent_messages = []
+    message_positions = {}
+    for idx, msg in enumerate(all_messages):
+        if msg in human_messages or msg in ai_messages:
+            message_positions[msg] = idx
+    
+    recent_messages = sorted(
+        human_messages + ai_messages,
+        key=lambda m: message_positions.get(m, 0)
+    )
+    
+    if not human_messages:
         raise ValueError("No user messages found")
 
-    latest_user_message = user_messages[-1].content.strip()
+    latest_user_message = human_messages[-1].content.strip()
 
     # --- If last message is a tool output, rephrase it ---
-    if isinstance(recent_messages[-1], ToolMessage):
-        tool_output = recent_messages[-1].content
+    if isinstance(all_messages[-1], ToolMessage):
+        tool_output = all_messages[-1].content
         logger.info(f"[DEBUG] Tool output: {tool_output}")
 
         rephrase_input = REPHRASE_PROMPT.format(
@@ -179,9 +200,9 @@ def react_agent(state: InputState):
         return {"messages": [AIMessage(content=llm_response.content)]}
 
     # --- Otherwise, reasoning stage ---
-    logger.info("[DEBUG] Calling analyze_agent with latest 10 messages for reasoning")
+    logger.info("[DEBUG] Calling analyze_agent with 2 most recent human and AI messages for reasoning")
 
-    # Build chat history context
+    # Build chat history context from the 2 most recent human and AI messages
     chat_context = "\n".join(
         f"{type(m).__name__}: {m.content}" for m in recent_messages
     )
@@ -192,12 +213,13 @@ def react_agent(state: InputState):
     === CURRENT USER QUESTION (MOST IMPORTANT - ANSWER THIS ONE) ===
     {latest_user_message}
 
-    === CHAT HISTORY (for context only) ===
+    === CHAT HISTORY (2 most recent human and AI messages - use for context if question is NOT standalone) ===
     {chat_context}
 
     === REMINDER ===
-    The CURRENT USER QUESTION above is what you must analyze. Ignore any previous questions in the chat history.
-    Focus ONLY on: "{latest_user_message}"
+    - If the CURRENT USER QUESTION is standalone (complete and self-contained), analyze ONLY that question.
+    - If the CURRENT USER QUESTION is NOT standalone (incomplete, vague, or needs context), use the chat history above to understand what the user is referring to and incorporate key information (columns, topics, data points) into your user_intention.
+    - Focus on: "{latest_user_message}"
     """
 
     reasoning_result = llm.invoke(reasoning_prompt)
