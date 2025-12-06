@@ -8,6 +8,7 @@ import { Send, Plus, Search, Menu, LogOut, Trash2, ChevronLeft, ChevronRight } f
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { FPTLogo } from './FPTLogo';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { chatAPI, generateConversationId } from '../utils/api';
 
 interface User {
@@ -669,6 +670,7 @@ What can I help you with today?`,
                     {msg.sender === 'ai' ? (
                       <div className="prose prose-sm max-w-none">
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
                             img: ({ src, alt }) => (
                               <img 
