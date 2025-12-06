@@ -33,7 +33,9 @@ def send_ticket(
     try:
         # Generate ticket_id
         ticket_id = f"TICKET_{generate_short_id()}"
-        time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # Use datetime object instead of string for SQLite
+        time_now = datetime.now()
+        time_str = time_now.strftime("%Y-%m-%d %H:%M:%S")
         
         # Create a new Ticket object
         new_ticket = Ticket(
@@ -41,7 +43,7 @@ def send_ticket(
             content=content,
             customer_name=customer_name,
             customer_phone=customer_phone,
-            time=time,
+            time=time_now,  # Use datetime object, not string
             description=description,
             status="Pending",
             user_id=user_id
@@ -62,7 +64,7 @@ def send_ticket(
             
         # Send email confirmation if email is provided
         if email:
-            email_subject, email_body = send_ticket_confirmation(customer_name, ticket_id, description, content, time)
+            email_subject, email_body = send_ticket_confirmation(customer_name, ticket_id, description, content, time_str)
             
             send_email(
                 to_email=email,
@@ -75,7 +77,7 @@ def send_ticket(
             "content": content,
             "customer_name": customer_name,
             "customer_phone": customer_phone,
-            "time": time,
+            "time": time_str,  # Return string for display
             "description": description,
             "status": "Pending",
             "message": f"Ticket {ticket_id} for {content} has been successfully sent, please wait for IT support. Please check your email for confirmation details."
@@ -122,20 +124,28 @@ def update_ticket(
             if description:
                 existing_ticket.description = description
             if time:
-                existing_ticket.time = time
+                # Convert string to datetime object for SQLite
+                try:
+                    time_obj = datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
+                    existing_ticket.time = time_obj
+                except ValueError:
+                    # If parsing fails, use current time
+                    existing_ticket.time = datetime.now()
             if user_id:
                 existing_ticket.user_id = user_id
                 
             # Commit the changes
             db.commit()
             
-            # Get updated values for the response
+            # Get updated values for the response (convert datetime to string for display)
+            time_display = existing_ticket.time.strftime("%Y-%m-%d %H:%M:%S") if isinstance(existing_ticket.time, datetime) else str(existing_ticket.time)
+            
             updated = {
                 "content": existing_ticket.content,
                 "customer_name": existing_ticket.customer_name,
                 "customer_phone": existing_ticket.customer_phone,
                 "description": existing_ticket.description,
-                "time": existing_ticket.time,
+                "time": time_display,
                 "ticket_id": ticket_id
             }
         except Exception as e:
@@ -182,6 +192,9 @@ def track_ticket(ticket_id: str) -> list[dict]:
             
             if not ticket:
                 return f"Ticket with ID {ticket_id} not found."
+            
+            # Convert datetime to string for display
+            time_display = ticket.time.strftime("%Y-%m-%d %H:%M:%S") if isinstance(ticket.time, datetime) else str(ticket.time)
                 
             # Convert to dictionary for response
             result = {
@@ -189,7 +202,7 @@ def track_ticket(ticket_id: str) -> list[dict]:
                 "content": ticket.content,
                 "customer_name": ticket.customer_name,
                 "customer_phone": ticket.customer_phone,
-                "time": ticket.time,
+                "time": time_display,
                 "description": ticket.description,
                 "status": ticket.status,
                 "user_id": ticket.user_id

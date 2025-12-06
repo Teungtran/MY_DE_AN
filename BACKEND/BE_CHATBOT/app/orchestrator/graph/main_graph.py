@@ -45,24 +45,24 @@ def setup_agentic_graph():
     builder = StateGraph(AgenticState)
     
     # Add nodes
-    builder.add_node("primary_assistant", Assistant(assistant_runnable))
+    builder.add_node("primary_assistant", Assistant(assistant_runnable, "Primary Assistant"))
 
     # shop assistant nodes
     builder.add_node("enter_shop_node", create_entry_node("Shop Assistant", "call_shop_agent"))
-    builder.add_node("call_shop_agent", Assistant(update_shop_runnable))
+    builder.add_node("call_shop_agent", Assistant(update_shop_runnable, "Shop Assistant"))
     builder.add_node("update_shop_sensitive_tools", create_tool_node_with_fallback(shop_sensitive_tools))
     builder.add_node("update_shop_safe_tools", create_tool_node_with_fallback(shop_safe_tools))
     builder.add_node("leave_skill", pop_dialog_state)
     
     # it assistant nodes
     builder.add_node("enter_it_node", create_entry_node("IT Assistant", "call_it_agent"))
-    builder.add_node("call_it_agent", Assistant(update_it_runnable))
+    builder.add_node("call_it_agent", Assistant(update_it_runnable, "IT Assistant"))
     builder.add_node("update_it_sensitive_tools", create_tool_node_with_fallback(it_sensitive_tools))
     builder.add_node("update_it_safe_tools", create_tool_node_with_fallback(it_safe_tools))
     
     # appointment assistant nodes
     builder.add_node("enter_appointment_node", create_entry_node("Appointment Assistant", "call_appointment_agent"))
-    builder.add_node("call_appointment_agent", Assistant(update_appointment_runnable))
+    builder.add_node("call_appointment_agent", Assistant(update_appointment_runnable, "Appointment Assistant"))
     builder.add_node("update_appointment_sensitive_tools", create_tool_node_with_fallback(appointment_sensitive_tools))
     builder.add_node("update_appointment_safe_tools", create_tool_node_with_fallback(appointment_safe_tools))
     

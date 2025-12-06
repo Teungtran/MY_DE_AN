@@ -51,6 +51,7 @@ assistant_runnable = RunnableLambda(assistant_runnable_with_user_info)
 def route_primary_assistant(state: AgenticState):
     route = tools_condition(state)
     if route == END:
+        logger.info("[ROUTING] Primary assistant routing to END (no tool calls)")
         return END
     
     last_message = state["messages"][-1] if state["messages"] else None
@@ -58,59 +59,192 @@ def route_primary_assistant(state: AgenticState):
     if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
         tool_calls = last_message.tool_calls
         tool_name = tool_calls[0]["name"]
+        tool_args = tool_calls[0].get("args", {})
+        
+        conversation_id = state.get("conversation_id", "N/A")
+        user_id = state.get("user_id", "N/A")
         
         if tool_name == ToShopAssistant.__name__:
+            logger.info(
+                f"[ROUTING] Primary assistant routing to Shop Assistant | "
+                f"Conversation ID: {conversation_id} | "
+                f"User ID: {user_id} | "
+                f"Tool args: {tool_args}"
+            )
             return "enter_shop_node"
         elif tool_name == ToAppointmentAssistant.__name__:
+            logger.info(
+                f"[ROUTING] Primary assistant routing to Appointment Assistant | "
+                f"Conversation ID: {conversation_id} | "
+                f"User ID: {user_id} | "
+                f"Tool args: {tool_args}"
+            )
             return "enter_appointment_node"
         elif tool_name == ToITAssistant.__name__:
+            logger.info(
+                f"[ROUTING] Primary assistant routing to IT Assistant | "
+                f"Conversation ID: {conversation_id} | "
+                f"User ID: {user_id} | "
+                f"Tool args: {tool_args}"
+            )
             return "enter_it_node"
         elif tool_name == "rag_agent":
+            logger.info(
+                f"[ROUTING] Primary assistant routing to RAG Agent tool | "
+                f"Conversation ID: {conversation_id} | "
+                f"User ID: {user_id} | "
+                f"Tool args: {tool_args}"
+            )
             return "rag_agent_node"
         elif tool_name == "url_extraction":
+            logger.info(
+                f"[ROUTING] Primary assistant routing to URL Extraction tool | "
+                f"Conversation ID: {conversation_id} | "
+                f"User ID: {user_id} | "
+                f"Tool args: {tool_args}"
+            )
             return "url_agent_node"
         elif tool_name == "url_followup":
+            logger.info(
+                f"[ROUTING] Primary assistant routing to URL Followup tool | "
+                f"Conversation ID: {conversation_id} | "
+                f"User ID: {user_id} | "
+                f"Tool args: {tool_args}"
+            )
             return "url_followup_node"
+        
+        logger.warning(
+            f"[ROUTING] Primary assistant received unknown tool: {tool_name} | "
+            f"Conversation ID: {conversation_id}"
+        )
         return END
     
+    logger.info("[ROUTING] Primary assistant routing to END (no valid tool calls)")
     return END
 
 def route_update_shop(state: AgenticState):
     route = tools_condition(state)
     if route == END:
+        logger.info("[ROUTING] Shop Assistant routing to END (no tool calls)")
         return END
+    
     tool_calls = state["messages"][-1].tool_calls
+    conversation_id = state.get("conversation_id", "N/A")
+    user_id = state.get("user_id", "N/A")
+    
+    # Log all tool calls
+    tool_names = [tc.get("name", "unknown") for tc in tool_calls]
+    logger.info(
+        f"[ROUTING] Shop Assistant tool calls: {tool_names} | "
+        f"Conversation ID: {conversation_id} | "
+        f"User ID: {user_id}"
+    )
+    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
+        logger.info(
+            f"[ROUTING] Shop Assistant routing to leave_skill (CompleteOrEscalate called) | "
+            f"Conversation ID: {conversation_id}"
+        )
         return "leave_skill"
+    
     safe_toolnames = [t.name for t in shop_safe_tools]
     if all(tc["name"] in safe_toolnames for tc in tool_calls):
+        logger.info(
+            f"[ROUTING] Shop Assistant routing to update_shop_safe_tools | "
+            f"Tools: {tool_names} | "
+            f"Conversation ID: {conversation_id}"
+        )
         return "update_shop_safe_tools"
+    
+    logger.info(
+        f"[ROUTING] Shop Assistant routing to update_shop_sensitive_tools | "
+        f"Tools: {tool_names} | "
+        f"Conversation ID: {conversation_id}"
+    )
     return "update_shop_sensitive_tools"
 
 def route_update_appointment(state: AgenticState):
     route = tools_condition(state)
     if route == END:
+        logger.info("[ROUTING] Appointment Assistant routing to END (no tool calls)")
         return END
+    
     tool_calls = state["messages"][-1].tool_calls
+    conversation_id = state.get("conversation_id", "N/A")
+    user_id = state.get("user_id", "N/A")
+    
+    # Log all tool calls
+    tool_names = [tc.get("name", "unknown") for tc in tool_calls]
+    logger.info(
+        f"[ROUTING] Appointment Assistant tool calls: {tool_names} | "
+        f"Conversation ID: {conversation_id} | "
+        f"User ID: {user_id}"
+    )
+    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
+        logger.info(
+            f"[ROUTING] Appointment Assistant routing to leave_skill (CompleteOrEscalate called) | "
+            f"Conversation ID: {conversation_id}"
+        )
         return "leave_skill"
+    
     safe_toolnames = [t.name for t in appointment_safe_tools]
     if all(tc["name"] in safe_toolnames for tc in tool_calls):
+        logger.info(
+            f"[ROUTING] Appointment Assistant routing to update_appointment_safe_tools | "
+            f"Tools: {tool_names} | "
+            f"Conversation ID: {conversation_id}"
+        )
         return "update_appointment_safe_tools"
+    
+    logger.info(
+        f"[ROUTING] Appointment Assistant routing to update_appointment_sensitive_tools | "
+        f"Tools: {tool_names} | "
+        f"Conversation ID: {conversation_id}"
+    )
     return "update_appointment_sensitive_tools"
 
 
 def route_update_it(state: AgenticState):
     route = tools_condition(state)
     if route == END:
+        logger.info("[ROUTING] IT Assistant routing to END (no tool calls)")
         return END
+    
     tool_calls = state["messages"][-1].tool_calls
+    conversation_id = state.get("conversation_id", "N/A")
+    user_id = state.get("user_id", "N/A")
+    
+    # Log all tool calls
+    tool_names = [tc.get("name", "unknown") for tc in tool_calls]
+    logger.info(
+        f"[ROUTING] IT Assistant tool calls: {tool_names} | "
+        f"Conversation ID: {conversation_id} | "
+        f"User ID: {user_id}"
+    )
+    
     did_cancel = any(tc["name"] == CompleteOrEscalate.__name__ for tc in tool_calls)
     if did_cancel:
+        logger.info(
+            f"[ROUTING] IT Assistant routing to leave_skill (CompleteOrEscalate called) | "
+            f"Conversation ID: {conversation_id}"
+        )
         return "leave_skill"
+    
     safe_toolnames = [t.name for t in it_safe_tools]
     if all(tc["name"] in safe_toolnames for tc in tool_calls):
+        logger.info(
+            f"[ROUTING] IT Assistant routing to update_it_safe_tools | "
+            f"Tools: {tool_names} | "
+            f"Conversation ID: {conversation_id}"
+        )
         return "update_it_safe_tools"
+    
+    logger.info(
+        f"[ROUTING] IT Assistant routing to update_it_sensitive_tools | "
+        f"Tools: {tool_names} | "
+        f"Conversation ID: {conversation_id}"
+    )
     return "update_it_sensitive_tools"

@@ -10,9 +10,10 @@ from app.workflow.team_agents import store_team
 from pydantic import BaseModel, Field
 from app.controllers.login_page import require_store_role 
 from app.report_agent.execute import trigger
-from app.report_agent.main_agent import llm
+from app.report_agent.main_agent import llm, clear_data_info_cache
 
 from app.report_agent.parse_file import import_data
+from app.report_agent.agent import clear_data_cache
 from app.utils.logging.logger import get_logger
 logger = get_logger(__name__)
 import pandas as pd
@@ -203,6 +204,11 @@ async def upload_file(
         raise HTTPException(status_code=500, detail="Failed to save uploaded file")
     
     logger.info(f"File saved successfully: {file_path.name}, size: {file_path.stat().st_size} bytes")
+    
+    # Clear data caches since new file was uploaded
+    clear_data_cache()
+    clear_data_info_cache()
+    logger.info("Data caches cleared after new file upload")
     
     try:
         df = import_data()  

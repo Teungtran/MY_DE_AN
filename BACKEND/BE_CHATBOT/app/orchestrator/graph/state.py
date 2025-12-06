@@ -85,26 +85,57 @@ class AgenticState(InputState):
     user_id: Annotated[str, "The unique identifier for the user"]
     email: Annotated[EmailStr,"The email of the customer ordering"]
 class Assistant:
-    def __init__(self, runnable: Runnable):
+    def __init__(self, runnable: Runnable, agent_name: str = "Unknown Agent"):
         self.runnable = runnable
+        self.agent_name = agent_name
 
     def __call__(self, state: AgenticState):
+        conversation_id = state.get("conversation_id", "N/A")
+        user_id = state.get("user_id", "N/A")
+        dialog_state = state.get("dialog_state", [])
+        
+        logger.info(
+            f"[AGENT PROCESSING] Agent: {self.agent_name} | "
+            f"Conversation ID: {conversation_id} | "
+            f"User ID: {user_id} | "
+            f"Dialog state: {dialog_state}"
+        )
+        
         while True:
             # Get recent messages safely (handles tool call chains)
             recent_messages = get_safe_recent_messages(state["messages"], limit=5)
             limited_state = {**state, "messages": recent_messages}
-            logger.info(f"Processing with {len(recent_messages)}/{len(state['messages'])} messages")
+            logger.info(
+                f"[AGENT PROCESSING] {self.agent_name} processing with {len(recent_messages)}/{len(state['messages'])} messages"
+            )
             result = self.runnable.invoke(limited_state)
+
+            # Log tool calls if any
+            if hasattr(result, "tool_calls") and result.tool_calls:
+                tool_names = [tc.get("name", "unknown") for tc in result.tool_calls]
+                logger.info(
+                    f"[AGENT PROCESSING] {self.agent_name} generated tool calls: {tool_names} | "
+                    f"Conversation ID: {conversation_id}"
+                )
 
             if not result.tool_calls and (
                 not result.content
                 or isinstance(result.content, list)
                 and not result.content[0].get("text")
             ):
+                logger.warning(
+                    f"[AGENT PROCESSING] {self.agent_name} generated empty response, retrying | "
+                    f"Conversation ID: {conversation_id}"
+                )
                 messages = get_safe_recent_messages(state["messages"], limit=5) + [("user", "Respond with a real output.")]
                 state = {**state, "messages": messages}
             else:
                 break
+        
+        logger.info(
+            f"[AGENT PROCESSING] {self.agent_name} completed processing | "
+            f"Conversation ID: {conversation_id}"
+        )
         return {"messages": result}
     
     

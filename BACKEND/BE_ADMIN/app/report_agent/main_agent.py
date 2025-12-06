@@ -11,6 +11,7 @@ from langgraph.prebuilt import tools_condition
 from .state import create_tool_node_with_fallback
 from langchain_core.messages import ToolMessage
 from langgraph.graph.state import StateGraph,CompiledStateGraph
+import io
 
 from langgraph.checkpoint.memory import MemorySaver
 chat_config = OpenAIConfig()
@@ -31,21 +32,60 @@ tools = [analyze_agent]
 
 logger = get_logger("AI Data Analyst")
 
-def get_reasoning_prompt():
-    """Generate reasoning prompt with current data info"""
+# Cache for data info to avoid repeated processing
+_data_info_cache = {
+    'df_sample': None,
+    'df_info': None,
+    'available_columns': None,
+    'data_id': None  # Track which data this info belongs to
+}
+
+def get_data_info():
+    """
+    Get data info with caching.
+    Returns tuple of (df_sample, df_info, available_columns)
+    """
     df_time = get_data()
+    
     if df_time is None:
-        df_sample = "No data uploaded yet"
-        df_info = "No data uploaded yet"
-        available_columns = "No columns available"
-    else:
-        df_sample = df_time.head(5).to_string()
-        # Capture df.info() output as string
-        import io
-        buffer = io.StringIO()
-        df_time.info(buf=buffer)
-        df_info = buffer.getvalue()
-        available_columns = ", ".join(df_time.columns.tolist())
+        return "No data uploaded yet", "No data uploaded yet", "No columns available"
+    
+    # Create a unique identifier for the current data (using shape and column names)
+    data_id = f"{df_time.shape}_{','.join(df_time.columns.tolist())}"
+    
+    # Check if cache is valid
+    if _data_info_cache['data_id'] == data_id and _data_info_cache['df_sample'] is not None:
+        return (
+            _data_info_cache['df_sample'],
+            _data_info_cache['df_info'],
+            _data_info_cache['available_columns']
+        )
+    
+    # Generate fresh data info
+    df_sample = df_time.head(5).to_string()
+    buffer = io.StringIO()
+    df_time.info(buf=buffer)
+    df_info = buffer.getvalue()
+    available_columns = ", ".join(df_time.columns.tolist())
+    
+    # Update cache
+    _data_info_cache['df_sample'] = df_sample
+    _data_info_cache['df_info'] = df_info
+    _data_info_cache['available_columns'] = available_columns
+    _data_info_cache['data_id'] = data_id
+    
+    return df_sample, df_info, available_columns
+
+def clear_data_info_cache():
+    """Clear the data info cache"""
+    _data_info_cache['df_sample'] = None
+    _data_info_cache['df_info'] = None
+    _data_info_cache['available_columns'] = None
+    _data_info_cache['data_id'] = None
+
+def get_reasoning_prompt():
+    """Generate reasoning prompt with current data info (cached)"""
+    df_sample, df_info, available_columns = get_data_info()
     
     return f"""
     You are **SAGE**, an AI Data Analyst.

@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Avatar, AvatarFallback } from './ui/avatar';
-import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
+import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { FPTLogo } from './FPTLogo';
 import { adminAPI } from '../utils/api';
 import { toast } from 'sonner';
@@ -51,6 +51,8 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
   const [reports, setReports] = useState<Report[]>([]);
   const [uploadedData, setUploadedData] = useState<UploadResponse | null>(null);
   const [showDataTable, setShowDataTable] = useState(false);
+  const [chatCollapsed, setChatCollapsed] = useState(false);
+  const [dataCollapsed, setDataCollapsed] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -335,23 +337,39 @@ I'm here to help once you're ready to try again!`
         </div>
       </div>
 
-      <div className="flex flex-1 bg-gray-50">
+      <div className="flex flex-1 bg-gray-50 overflow-hidden">
         {/* Left Panel - Chat Discussion */}
-        <div className="w-1/2 border-r border-gray-200 flex flex-col bg-white relative">
+        <div className={`border-r border-gray-200 flex flex-col bg-white relative transition-all duration-300 ${
+          chatCollapsed ? 'w-12' : dataCollapsed ? 'w-full' : 'w-1/2'
+        }`}>
           {/* Chat Header */}
-          <div className="p-4 border-b border-gray-200 bg-white">
+          <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <FileText className="h-6 w-6 text-green-600" />
-              <div>
-                <h2 className="text-lg font-semibold text-black">Report Discussion</h2>
-                <p className="text-sm text-gray-600">Collaborative analysis</p>
-              </div>
+              {!chatCollapsed && (
+                <>
+                  <FileText className="h-6 w-6 text-green-600" />
+                  <div>
+                    <h2 className="text-lg font-semibold text-black">Report Discussion</h2>
+                    <p className="text-sm text-gray-600">Collaborative analysis</p>
+                  </div>
+                </>
+              )}
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setChatCollapsed(!chatCollapsed)}
+              className="text-gray-600 hover:text-black hover:bg-gray-100"
+              title={chatCollapsed ? "Expand chat" : "Collapse chat"}
+            >
+              {chatCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
           </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
-          <div className="space-y-4">
+        {!chatCollapsed && (
+          <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            <div className="space-y-4">
             {messages.map((msg) => (
               <div
                 key={msg.id}
@@ -492,12 +510,14 @@ I'm here to help once you're ready to try again!`
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} />
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Message Input - Sticky at bottom */}
-        <div className="sticky bottom-0 left-0 right-0 p-4 border-t border-gray-200 bg-white shadow-lg z-10">
+        {/* Message Input - Fixed at bottom */}
+        {!chatCollapsed && (
+          <div className="p-4 border-t border-gray-200 bg-white shadow-lg">
           <form onSubmit={sendMessage} className="flex space-x-2">
             <Input
               value={message}
@@ -514,25 +534,41 @@ I'm here to help once you're ready to try again!`
               <Send className="h-4 w-4" />
             </Button>
           </form>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Right Panel - Report Upload & Insights */}
-      <div className="w-1/2 flex flex-col bg-white overflow-hidden">
+      <div className={`flex flex-col bg-white overflow-hidden transition-all duration-300 ${
+        dataCollapsed ? 'w-12' : chatCollapsed ? 'w-full' : 'w-1/2'
+      }`}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 bg-white">
-          <div className="flex items-center space-x-3">
-            <BarChart3 className="h-6 w-6 text-purple-600" />
-            <div>
-              <h1 className="text-lg font-semibold text-black">Report Agent</h1>
-              <p className="text-sm text-gray-600">Upload & analyze reports</p>
+        <div className="p-4 border-b border-gray-200 bg-white flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDataCollapsed(!dataCollapsed)}
+            className="text-gray-600 hover:text-black hover:bg-gray-100"
+            title={dataCollapsed ? "Expand data panel" : "Collapse data panel"}
+          >
+            {dataCollapsed ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </Button>
+          {!dataCollapsed && (
+            <div className="flex items-center space-x-3">
+              <BarChart3 className="h-6 w-6 text-purple-600" />
+              <div>
+                <h1 className="text-lg font-semibold text-black">Report Agent</h1>
+                <p className="text-sm text-gray-600">Upload & analyze reports</p>
+              </div>
             </div>
-          </div>
+          )}
+          <div className="w-8"></div> {/* Spacer for alignment */}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50">
-          {/* File Upload */}
-          <Card className="bg-white border-gray-200">
+        {!dataCollapsed && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-50">
+            {/* File Upload */}
+            <Card className="bg-white border-gray-200">
             <CardHeader>
               <CardTitle className="flex items-center text-black">
                 <Upload className="h-5 w-5 mr-2" />
@@ -694,8 +730,9 @@ I'm here to help once you're ready to try again!`
             </Card>
           )}
 
-        </div>
-        </div>
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );

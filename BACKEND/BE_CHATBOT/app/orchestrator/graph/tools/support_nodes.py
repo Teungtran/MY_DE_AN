@@ -10,8 +10,28 @@ from typing import Callable
 
 
 def create_entry_node(assistant_name: str, new_dialog_state: str) -> Callable:
+    from app.utils.logging.logger import get_logger
+    logger = get_logger(__name__)
+    
     def entry_node(state: AgenticState) -> dict:
         tool_call_id = state["messages"][-1].tool_calls[0]["id"]
+        
+        # Extract tool call arguments for logging
+        last_message = state["messages"][-1]
+        tool_args = {}
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            tool_call = last_message.tool_calls[0]
+            tool_args = tool_call.get("args", {})
+        
+        # Log agent call
+        logger.info(
+            f"[AGENT CALL] Calling agent: {assistant_name} | "
+            f"Dialog state: {new_dialog_state} | "
+            f"Conversation ID: {state.get('conversation_id', 'N/A')} | "
+            f"User ID: {state.get('user_id', 'N/A')} | "
+            f"Tool args: {tool_args}"
+        )
+        
         return {
             "messages": [
                 ToolMessage(
@@ -39,14 +59,51 @@ def create_tool_node_with_fallback(tools: list) -> dict:
     from app.utils.logging.logger import get_logger
     logger = get_logger(__name__)
     
+    # Get tool names for logging
+    tool_names = [tool.name if hasattr(tool, 'name') else str(tool) for tool in tools]
+    
     def log_tool_result(state):
         """Wrapper to log tool execution results"""
+        # Extract tool call information before execution
+        last_message = state.get("messages", [])[-1] if state.get("messages") else None
+        tool_calls_info = []
+        
+        if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            for tool_call in last_message.tool_calls:
+                tool_name = tool_call.get("name", "unknown")
+                tool_args = tool_call.get("args", {})
+                tool_id = tool_call.get("id", "unknown")
+                
+                # Log tool call before execution
+                logger.info(
+                    f"[TOOL CALL] Calling tool: {tool_name} | "
+                    f"Tool ID: {tool_id} | "
+                    f"Conversation ID: {state.get('conversation_id', 'N/A')} | "
+                    f"User ID: {state.get('user_id', 'N/A')} | "
+                    f"Arguments: {tool_args}"
+                )
+                
+                tool_calls_info.append({
+                    "name": tool_name,
+                    "id": tool_id,
+                    "args": tool_args
+                })
+        
+        # Execute the tool
         result = ToolNode(tools).invoke(state)
+        
+        # Log tool execution results
         if "messages" in result:
-            for msg in result["messages"]:
+            for idx, msg in enumerate(result["messages"]):
                 if hasattr(msg, "content"):
                     content_preview = str(msg.content)[:200] if msg.content else "None"
-                    logger.info(f"[TOOL NODE] Tool returned message: {content_preview}...")
+                    tool_info = tool_calls_info[idx] if idx < len(tool_calls_info) else {}
+                    logger.info(
+                        f"[TOOL RESULT] Tool: {tool_info.get('name', 'unknown')} | "
+                        f"Tool ID: {tool_info.get('id', 'unknown')} | "
+                        f"Result preview: {content_preview}..."
+                    )
+        
         return result
     
     tool_node_with_logging = RunnableLambda(log_tool_result)
