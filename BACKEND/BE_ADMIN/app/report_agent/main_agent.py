@@ -159,18 +159,14 @@ def react_agent(state: InputState):
     # Extract 2 most recent human messages and 2 most recent AI messages
     human_messages = [m for m in all_messages if isinstance(m, HumanMessage)][-2:]
     ai_messages = [m for m in all_messages if isinstance(m, AIMessage)][-2:]
-    
-    # Combine and sort by position in original list to maintain order
-    recent_messages = []
-    message_positions = {}
+    recent_messages_with_idx = []
     for idx, msg in enumerate(all_messages):
-        if msg in human_messages or msg in ai_messages:
-            message_positions[msg] = idx
+        if any(msg is hm for hm in human_messages) or any(msg is am for am in ai_messages):
+            recent_messages_with_idx.append((idx, msg))
     
-    recent_messages = sorted(
-        human_messages + ai_messages,
-        key=lambda m: message_positions.get(m, 0)
-    )
+    # Sort by index to maintain chronological order
+    recent_messages_with_idx.sort(key=lambda x: x[0])
+    recent_messages = [msg for idx, msg in recent_messages_with_idx]
     
     if not human_messages:
         raise ValueError("No user messages found")
