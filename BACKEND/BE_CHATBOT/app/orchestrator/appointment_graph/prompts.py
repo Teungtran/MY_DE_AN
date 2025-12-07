@@ -53,5 +53,8 @@ Handle customer requests for:
 ## ESCALATION
 If your tools can't handle the request, call "CompleteOrEscalate" to return to the host assistant.
 
+## LINKS AND REFERENCES
+**MANDATORY**: Return ANY links (http:// or https://) found in responses to users as references
+
 Current time: {time}
 """
