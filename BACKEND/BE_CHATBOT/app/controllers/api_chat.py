@@ -316,7 +316,8 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                 all_messages = []
                 all_tool_calls = []
                 
-                if user_message.strip().lower() == "y":
+                confirmation_inputs = {"y", "yes", "ok", "confirm", "đồng ý", "dong y"}
+                if user_message.strip().lower() in confirmation_inputs:
                     logger.debug("User confirmed tool call")
                     result = graph.invoke(None, config)
                 else:
@@ -445,9 +446,12 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                     tool_args = last_message.tool_calls[0]["args"]
                     logger.debug(f"New tool call request: {tool_args}")
                     
-                    # Format tool args to markdown
-                    formatted_args = format_tool_args_to_markdown(tool_args)
+                    # Remove user_id from tool_args before formatting
+                    args_to_display = {k: v for k, v in tool_args.items() if k != "user_id"}
                     
+                    # Format tool args to markdown (without user_id)
+                    formatted_args = format_tool_args_to_markdown(args_to_display)
+
                     confirmation_message = (
                         f"**Please confirm your request / Vui lòng xác nhận yêu cầu:**\n\n"
                         f"{formatted_args}\n\n"
