@@ -295,12 +295,22 @@ export const chatAPI = {
     const response = await apiRequest(`/chat/v1/chat/${conversationId}/messages`);
     return response.json();
   },
+
+  getAllConversations: async () => {
+    const response = await apiRequest('/chat/v1/chat/messages');
+    return response.json();
+  },
 };
 
 // Admin API functions
 export const adminAPI = {
   getChatHistory: async (id: string) => {
     const response = await apiRequest(`/admin/v1/chat/${id}/messages`);
+    return response.json();
+  },
+
+  getAllConversations: async (userId: string) => {
+    const response = await apiRequest(`/admin/v1/chat/messages?user_id=${userId}`);
     return response.json();
   },
 

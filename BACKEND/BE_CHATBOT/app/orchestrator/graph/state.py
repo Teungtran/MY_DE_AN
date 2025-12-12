@@ -16,7 +16,7 @@ def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[st
     return right
 
 
-def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 5) -> List[AnyMessage]:
+def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 3) -> List[AnyMessage]:
     """
     Get the last N messages, but if the first message is a ToolMessage,
     extend backwards to include its parent AIMessage with tool_calls.
@@ -103,7 +103,7 @@ class Assistant:
         
         while True:
             # Get recent messages safely (handles tool call chains)
-            recent_messages = get_safe_recent_messages(state["messages"], limit=5)
+            recent_messages = get_safe_recent_messages(state["messages"], limit=3)
             limited_state = {**state, "messages": recent_messages}
             logger.info(
                 f"[AGENT PROCESSING] {self.agent_name} processing with {len(recent_messages)}/{len(state['messages'])} messages"
@@ -127,7 +127,7 @@ class Assistant:
                     f"[AGENT PROCESSING] {self.agent_name} generated empty response, retrying | "
                     f"Conversation ID: {conversation_id}"
                 )
-                messages = get_safe_recent_messages(state["messages"], limit=5) + [("user", "Respond with a real output.")]
+                messages = get_safe_recent_messages(state["messages"], limit=3) + [("user", "Respond with a real output.")]
                 state = {**state, "messages": messages}
             else:
                 break

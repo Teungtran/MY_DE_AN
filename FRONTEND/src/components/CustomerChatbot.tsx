@@ -63,6 +63,64 @@ export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
 
     const loadConversationsFromStorage = async () => {
       try {
+        // Fetch all conversations from backend
+        const allConversationsData = await chatAPI.getAllConversations();
+        
+        if (Object.keys(allConversationsData).length > 0) {
+          // We have conversations in backend
+          const loadedConversations: Conversation[] = [];
+          
+          for (const [convId, messages] of Object.entries(allConversationsData)) {
+            const messageList = messages as any[];
+            const conversationMessages: Message[] = messageList.map((msg: any, idx: number) => ({
+              id: `${convId}-${idx}`,
+              content: msg.content,
+              sender: msg.role === 'human' ? 'user' : 'ai',
+              timestamp: new Date()
+            }));
+
+            // Get title from localStorage or use default
+            let title = 'New Conversation';
+            let lastMessage = conversationMessages.length > 0 ? conversationMessages[conversationMessages.length - 1].content : '';
+            
+            const storedConversations = localStorage.getItem('customer_conversations');
+            if (storedConversations) {
+              const conversationMetadata = JSON.parse(storedConversations);
+              const meta = conversationMetadata.find((m: any) => m.id === convId);
+              if (meta) {
+                title = meta.title;
+                lastMessage = meta.lastMessage;
+              }
+            }
+
+            loadedConversations.push({
+              id: convId,
+              title: title,
+              lastMessage: lastMessage.substring(0, 50),
+              timestamp: new Date(),
+              messages: conversationMessages
+            });
+          }
+
+          setConversations(loadedConversations);
+          if (loadedConversations.length > 0) {
+            setActiveConversation(loadedConversations[0].id);
+          }
+          
+          // Update localStorage with backend data
+          const conversationMetadata = loadedConversations.map(conv => ({
+            id: conv.id,
+            title: conv.title,
+            lastMessage: conv.lastMessage,
+            timestamp: conv.timestamp.toISOString()
+          }));
+          localStorage.setItem('customer_conversations', JSON.stringify(conversationMetadata));
+          
+          setIsInitialized(true);
+          return;
+        }
+        
+        // No conversations in backend, check localStorage
         const storedConversations = localStorage.getItem('customer_conversations');
         if (storedConversations) {
           const conversationMetadata = JSON.parse(storedConversations);
@@ -110,80 +168,6 @@ What can I help you with today?`,
             
             setIsInitialized(true);
             return;
-          }
-          
-          // Load history for each conversation
-          const loadedConversations = await Promise.all(
-            conversationMetadata.map(async (meta: { id: string; title: string; timestamp: string; lastMessage: string }) => {
-              try {
-                const history = await chatAPI.getChatHistory(meta.id);
-                const messages: Message[] = history.map((msg: any, idx: number) => ({
-                  id: `${meta.id}-${idx}`,
-                  content: msg.content,
-                  sender: msg.role === 'human' ? 'user' : 'ai',
-                  timestamp: new Date()
-                }));
-
-                return {
-                  id: meta.id,
-                  title: meta.title,
-                  lastMessage: meta.lastMessage,
-                  timestamp: new Date(meta.timestamp),
-                  messages: messages.length > 0 ? messages : [{
-                    id: 'welcome',
-                    content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart shopping assistant at FPT Shop
-
-
-I'm here to help you:
-
-Find the right products that fit your needs
-Recommend the best deals & promotions  
-Assist with order processing and tracking
-
-Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
-
-What can I help you with today?`,
-                    sender: 'ai' as const,
-                    timestamp: new Date()
-                  }]
-                };
-              } catch (error) {
-                console.error(`Failed to load history for conversation ${meta.id}:`, error);
-                // Return conversation with just welcome message if history fails to load
-                return {
-                  id: meta.id,
-                  title: meta.title,
-                  lastMessage: meta.lastMessage,
-                  timestamp: new Date(meta.timestamp),
-                  messages: [{
-                    id: 'welcome',
-                    content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart shopping assistant at FPT Shop
-
-
-I'm here to help you:
-
-Find the right products that fit your needs
-Recommend the best deals & promotions  
-Assist with order processing and tracking
-
-Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
-
-What can I help you with today?`,
-                    sender: 'ai' as const,
-                    timestamp: new Date()
-                  }]
-                };
-              }
-            })
-          );
-
-          setConversations(loadedConversations);
-          if (loadedConversations.length > 0) {
-            setActiveConversation(loadedConversations[0].id);
           }
         } else {
           // No stored conversations, create initial one

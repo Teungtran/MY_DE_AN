@@ -68,6 +68,72 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
 
     const loadSessionsFromStorage = async () => {
       try {
+        // Fetch all conversations from backend using user ID
+        const allSessionsData = await adminAPI.getAllConversations(user.id);
+        
+        if (Object.keys(allSessionsData).length > 0) {
+          // We have sessions in backend
+          const loadedSessions: Session[] = [];
+          
+          for (const [sessionId, messages] of Object.entries(allSessionsData)) {
+            const messageList = messages as any[];
+            const sessionMessages: Message[] = messageList.map((msg: any, idx: number) => ({
+              id: `${sessionId}-${idx}`,
+              content: msg.content,
+              sender: msg.role === 'human' ? 'user' : 'ai',
+              timestamp: new Date()
+            }));
+
+            // Get title and metadata from localStorage or use default
+            let title = 'New Session';
+            let lastMessage = sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].content : '';
+            let status: 'active' | 'closed' = 'active';
+            let participants = [user.email.split('@')[0]];
+            
+            const storedSessions = localStorage.getItem('employee_sessions');
+            if (storedSessions) {
+              const sessionMetadata = JSON.parse(storedSessions);
+              const meta = sessionMetadata.find((m: any) => m.id === sessionId);
+              if (meta) {
+                title = meta.title;
+                lastMessage = meta.lastMessage;
+                status = meta.status || 'active';
+                participants = meta.participants || participants;
+              }
+            }
+
+            loadedSessions.push({
+              id: sessionId,
+              title: title,
+              lastMessage: lastMessage.substring(0, 50),
+              timestamp: new Date(),
+              status: status,
+              participants: participants,
+              messages: sessionMessages
+            });
+          }
+
+          setSessions(loadedSessions);
+          if (loadedSessions.length > 0) {
+            setActiveSession(loadedSessions[0].id);
+          }
+          
+          // Update localStorage with backend data
+          const sessionMetadata = loadedSessions.map(session => ({
+            id: session.id,
+            title: session.title,
+            lastMessage: session.lastMessage,
+            timestamp: session.timestamp.toISOString(),
+            status: session.status,
+            participants: session.participants
+          }));
+          localStorage.setItem('employee_sessions', JSON.stringify(sessionMetadata));
+          
+          setIsInitialized(true);
+          return;
+        }
+        
+        // No sessions in backend, check localStorage
         const storedSessions = localStorage.getItem('employee_sessions');
         if (storedSessions) {
           const sessionMetadata = JSON.parse(storedSessions);
@@ -119,84 +185,6 @@ What can I help you explore today?`,
             
             setIsInitialized(true);
             return;
-          }
-          
-          // Load history for each session
-          const loadedSessions = await Promise.all(
-            sessionMetadata.map(async (meta: { id: string; title: string; timestamp: string; lastMessage: string; status: 'active' | 'closed'; participants: string[] }) => {
-              try {
-                const history = await adminAPI.getChatHistory(meta.id);
-                const messages: Message[] = history.map((msg: any, idx: number) => ({
-                  id: `${meta.id}-${idx}`,
-                  content: msg.content,
-                  sender: msg.role === 'human' ? 'user' : 'ai',
-                  timestamp: new Date()
-                }));
-
-                return {
-                  id: meta.id,
-                  title: meta.title,
-                  lastMessage: meta.lastMessage,
-                  timestamp: new Date(meta.timestamp),
-                  status: meta.status,
-                  participants: meta.participants,
-                  messages: messages.length > 0 ? messages : [{
-                    id: 'welcome',
-                    content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart business assistant at FPT
-
-Ready to assist you with:
-      
-Competitor insights & market analysis
-Strategic planning & decision support  
-Business intelligence & data insights
-Research & knowledge discovery
-
-Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
-
-What can I help you explore today?`,
-                    sender: 'ai' as const,
-                    timestamp: new Date()
-                  }]
-                };
-              } catch (error) {
-                console.error(`Failed to load history for session ${meta.id}:`, error);
-                // Return session with just welcome message if history fails to load
-                return {
-                  id: meta.id,
-                  title: meta.title,
-                  lastMessage: meta.lastMessage,
-                  timestamp: new Date(meta.timestamp),
-                  status: meta.status,
-                  participants: meta.participants,
-                  messages: [{
-                    id: 'welcome',
-                    content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart business assistant at FPT
-
-Ready to assist you with:
-      
-Competitor insights & market analysis
-Strategic planning & decision support  
-Business intelligence & data insights
-Research & knowledge discovery
-
-Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
-
-What can I help you explore today?`,
-                    sender: 'ai' as const,
-                    timestamp: new Date()
-                  }]
-                };
-              }
-            })
-          );
-
-          setSessions(loadedSessions);
-          if (loadedSessions.length > 0) {
-            setActiveSession(loadedSessions[0].id);
           }
         } else {
           // No stored sessions, create initial one

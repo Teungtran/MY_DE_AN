@@ -51,7 +51,7 @@ async def publish_to_channel(channel: str, message: dict):
     except Exception as e:
         logger.error(f"Error publishing to channel {channel}: {str(e)}")
 
-async def save_message_to_redis(id: str, role: str, message: str):
+async def save_message_to_redis(id: str, role: str, message: str, user_id: str = None):
     if not id or not redis_connect:
         logger.warning("Redis not available or no id, skipping message save")
         return
@@ -61,31 +61,82 @@ async def save_message_to_redis(id: str, role: str, message: str):
     try:
         await asyncio.to_thread(redis_connect.rpush, f"chat:{id}", message_json)
         await asyncio.to_thread(redis_connect.ltrim, f"chat:{id}", -100, -1)
-        await asyncio.to_thread(redis_connect.expire, f"chat:{id}", 86400)  
+        await asyncio.to_thread(redis_connect.expire, f"chat:{id}", 86400)
+        
+        # Store user_id mapping to track all conversations per user
+        if user_id:
+            # Add conversation_id to user's conversation set
+            await asyncio.to_thread(redis_connect.sadd, f"user:{user_id}:conversations", id)
+            await asyncio.to_thread(redis_connect.expire, f"user:{user_id}:conversations", 86400)
+            # Store user_id for conversation (for reverse lookup/verification)
+            await asyncio.to_thread(redis_connect.set, f"conversation:{id}:user_id", user_id, ex=86400)
+        
         await publish_to_channel(f"chat:{id}", message_data)
     except Exception as e:
         logger.error(f"Error saving message to Redis: {str(e)}")
 
-@router.get("/{id}/messages")
-async def get_chat_history(id: str):
+@router.get("/messages")
+async def get_chat_history(
+    user_id: Optional[str] = Query(None, description="User ID to fetch all conversations")
+):
+    """Get all chat histories for a user, or single conversation if user_id not provided"""
     try:
         if not redis_connect:
             logger.warning("Redis not available, returning empty history")
-            return []
+            return {}
+        
+        if not user_id:
+            logger.warning("No user_id provided, returning empty history")
+            return {}
+        
+        # Get all conversation_ids for this user
+        conversation_ids = await asyncio.to_thread(
+            redis_connect.smembers, 
+            f"user:{user_id}:conversations"
+        )
+        
+        # Convert bytes to strings if needed
+        conversation_ids = [
+            conv_id.decode('utf-8') if isinstance(conv_id, bytes) else conv_id 
+            for conv_id in conversation_ids
+        ]
+        
+        if not conversation_ids:
+            logger.info(f"No conversations found for user_id={user_id}")
+            return {}
+        
+        # Get history for each conversation
+        all_conversations = {}
+        for conv_id in conversation_ids:
+            # Verify conversation belongs to user (security check)
+            stored_user_id = await asyncio.to_thread(
+                redis_connect.get, 
+                f"conversation:{conv_id}:user_id"
+            )
             
-        exists = await asyncio.to_thread(redis_connect.exists, f"chat:{id}")
-        if exists:
-            history = await asyncio.to_thread(redis_connect.lrange, f"chat:{id}", 0, -1)
-            messages = []
-            for msg in history:
-                try:
-                    msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
-                    message_data = json.loads(msg_str)
-                    messages.append(message_data)
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping invalid JSON in history: {msg}")
-            return messages
-        return []
+            if stored_user_id:
+                stored_user_id = stored_user_id.decode('utf-8') if isinstance(stored_user_id, bytes) else stored_user_id
+                if stored_user_id != user_id:
+                    logger.warning(f"Conversation {conv_id} does not belong to user {user_id}, skipping")
+                    continue
+            
+            # Get messages for this conversation
+            exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conv_id}")
+            if exists:
+                history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conv_id}", 0, -1)
+                messages = []
+                for msg in history:
+                    try:
+                        msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
+                        message_data = json.loads(msg_str)
+                        messages.append(message_data)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Skipping invalid JSON in history: {msg}")
+                
+                if messages:
+                    all_conversations[conv_id] = messages
+        
+        return all_conversations
     except Exception as e:
         logger.error(f"Error retrieving chat history: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error retrieving chat history: {str(e)}")
@@ -106,7 +157,7 @@ async def stream_team_chat(
         user_id = "id" #current_user["user_id"]
         logger.info(f"Starting team chat for user {user_id}, session {id}")
         ui_message = _get_ui_title_for_session(id, request.message)
-        await save_message_to_redis(id, "human", request.message) 
+        await save_message_to_redis(id, "human", request.message, user_id) 
 
         # Run the store team
         result = store_team.run(
@@ -133,7 +184,7 @@ async def stream_team_chat(
         
         # Save to Redis
         if complete_ai_response:
-            await save_message_to_redis(id, "ai", complete_ai_response)
+            await save_message_to_redis(id, "ai", complete_ai_response, user_id)
         
         # Return response directly
         return {

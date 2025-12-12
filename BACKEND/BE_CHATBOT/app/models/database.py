@@ -11,9 +11,7 @@ Base = declarative_base()
 # -------------------------
 
 def get_db_uri():
-    # Use a local SQLite database file shared within BE_CHATBOT service
-    # In Docker, this will be on a shared volume at /app/data
-    # Locally, use a shared path in BACKEND directory
+
     import os
     from pathlib import Path
     

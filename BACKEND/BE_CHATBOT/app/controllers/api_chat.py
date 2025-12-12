@@ -115,7 +115,7 @@ async def stream_and_save_response(conversation_id: str, user_id: str, user_mess
                             tool_call_name, tool_call_args, tool_call_id, tool_call_type):
     """Helper function to stream response and save to database."""
     content = extract_content_from_response(final_response)
-    await save_message_to_redis(conversation_id, "ai", content)
+    await save_message_to_redis(conversation_id, "ai", content, user_id)
     
     chunk_size = 15
     for i in range(0, len(content), chunk_size):
@@ -175,7 +175,7 @@ async def publish_to_channel(channel: str, message: dict):
     except Exception as e:
         logger.error(f"Error publishing to channel {channel}: {str(e)}")
 
-async def save_message_to_redis(conversation_id: str, role: str, message: str):
+async def save_message_to_redis(conversation_id: str, role: str, message: str, user_id: str = None):
     if not conversation_id or not redis_connect:
         logger.warning("Redis not available or no conversation_id, skipping message save")
         return
@@ -185,42 +185,80 @@ async def save_message_to_redis(conversation_id: str, role: str, message: str):
     try:
         await asyncio.to_thread(redis_connect.rpush, f"chat:{conversation_id}", message_json)
         await asyncio.to_thread(redis_connect.ltrim, f"chat:{conversation_id}", -100, -1)
-        await asyncio.to_thread(redis_connect.expire, f"chat:{conversation_id}", 86400)  
+        await asyncio.to_thread(redis_connect.expire, f"chat:{conversation_id}", 86400)
+        
+        # Store user_id mapping to track all conversations per user
+        if user_id:
+            # Add conversation_id to user's conversation set
+            await asyncio.to_thread(redis_connect.sadd, f"user:{user_id}:conversations", conversation_id)
+            await asyncio.to_thread(redis_connect.expire, f"user:{user_id}:conversations", 86400)
+            # Store user_id for conversation (for reverse lookup/verification)
+            await asyncio.to_thread(redis_connect.set, f"conversation:{conversation_id}:user_id", user_id, ex=86400)
+        
         await publish_to_channel(f"chat:{conversation_id}", message_data)
     except Exception as e:
         logger.error(f"Error saving message to Redis: {str(e)}")
 
 
-@router.get("/{conversation_id}/messages")
+@router.get("/messages")
 async def get_chat_history(
-    conversation_id: str,
     current_user: dict = Depends(require_user_role)
 ):
-    """Get chat history for a conversation with authentication"""
-    # Mock user for testing (commented out - use for future tests if needed)
-    # mock_user_id = "test_user_123"
-    
+    """Get all chat histories for the authenticated user"""
     try:
         if not redis_connect:
             logger.warning("Redis not available, returning empty history")
-            return []
+            return {}
         
-        # TODO: Add verification that conversation_id belongs to current_user['user_id']
-        # This ensures users can only access their own conversations
+        user_id = current_user['user_id']
         
-        exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conversation_id}")
-        if exists:
-            history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conversation_id}", 0, -1)
-            messages = []
-            for msg in history:
-                try:
-                    msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
-                    message_data = json.loads(msg_str)
-                    messages.append(message_data)
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping invalid JSON in history: {msg}")
-            return messages
-        return []
+        # Get all conversation_ids for this user
+        conversation_ids = await asyncio.to_thread(
+            redis_connect.smembers, 
+            f"user:{user_id}:conversations"
+        )
+        
+        # Convert bytes to strings if needed
+        conversation_ids = [
+            conv_id.decode('utf-8') if isinstance(conv_id, bytes) else conv_id 
+            for conv_id in conversation_ids
+        ]
+        
+        if not conversation_ids:
+            logger.info(f"No conversations found for user_id={user_id}")
+            return {}
+        
+        # Get history for each conversation
+        all_conversations = {}
+        for conv_id in conversation_ids:
+            stored_user_id = await asyncio.to_thread(
+                redis_connect.get, 
+                f"conversation:{conv_id}:user_id"
+            )
+            
+            if stored_user_id:
+                stored_user_id = stored_user_id.decode('utf-8') if isinstance(stored_user_id, bytes) else stored_user_id
+                if stored_user_id != user_id:
+                    logger.warning(f"Conversation {conv_id} does not belong to user {user_id}, skipping")
+                    continue
+            
+            # Get messages for this conversation
+            exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conv_id}")
+            if exists:
+                history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conv_id}", 0, -1)
+                messages = []
+                for msg in history:
+                    try:
+                        msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
+                        message_data = json.loads(msg_str)
+                        messages.append(message_data)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Skipping invalid JSON in history: {msg}")
+                
+                if messages:
+                    all_conversations[conv_id] = messages
+        
+        return all_conversations
     except Exception as e:
         logger.error(f"Error retrieving chat history: {str(e)}, user_id={current_user['user_id']}")
         raise HTTPException(status_code=500, detail=f"Error retrieving chat history: {str(e)}")
@@ -248,7 +286,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
         logger.debug(f"Initial snapshot: {initial_snapshot}")
         
         user_message = user_inputs.message
-        await save_message_to_redis(conversation_id, "human", user_message) 
+        await save_message_to_redis(conversation_id, "human", user_message, user_id) 
         tool_call_name = None
         tool_call_args = None
         tool_call_id = None
@@ -416,7 +454,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                         f"Press **'y'** to confirm / Nhấn **'y'** để xác nhận\n"
                         f"Press **'n'** to reject / Nhấn **'n'** để từ chối"
                     )
-                    await save_message_to_redis(conversation_id, "ai", confirmation_message)
+                    await save_message_to_redis(conversation_id, "ai", confirmation_message, user_id)
                     for char in confirmation_message:
                         print(char, end="|")
                         payload = ChunkMessage(
