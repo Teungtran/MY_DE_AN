@@ -16,13 +16,17 @@ def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[st
     return right
 
 
-def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 3) -> List[AnyMessage]:
+def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> List[AnyMessage]:
     """
-    Get the last N messages, but if the first message is a ToolMessage,
-    extend backwards to include its parent AIMessage with tool_calls.
+    Get the last N messages while ensuring tool_call/tool_response pairs are never broken.
     
     This prevents OpenAI API error: "messages with role 'tool' must be 
     a response to a preceeding message with 'tool_calls'."
+    
+    Strategy:
+    1. Keep last 10 messages (balanced between context and token usage)
+    2. If first message is ToolMessage, extend backwards to include parent AIMessage
+    3. Remove any orphaned AIMessages with tool_calls at the end (no responses)
     """
     if not messages or len(messages) <= limit:
         return messages
@@ -30,16 +34,37 @@ def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 3) -> List
     # Start with last N messages
     recent = messages[-limit:]
     
+    # Check if first message is a ToolMessage - need to include parent AIMessage
     if isinstance(recent[0], ToolMessage):
-
+        # Find the parent AIMessage with tool_calls
         for i in range(len(messages) - limit - 1, -1, -1):
             msg = messages[i]
             if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
-                recent = messages[i:]
-                logger.info(f"Extended context to include tool call: {len(messages)} -> {len(recent)} messages")
-                break
+                # Check if this AIMessage's tool_call_id matches our ToolMessage
+                tool_call_ids = [tc.get('id') for tc in msg.tool_calls if tc.get('id')]
+                if hasattr(recent[0], 'tool_call_id') and recent[0].tool_call_id in tool_call_ids:
+                    recent = messages[i:]
+                    logger.info(f"Extended context to include parent tool call: {len(messages)} -> {len(recent)} messages")
+                    break
         else:
             logger.warning(f"Could not find parent AIMessage for ToolMessage, using {len(recent)} messages")
+    
+    # Check if last message is AIMessage with tool_calls but no responses
+    # This can cause the error when the conversation continues
+    if recent and isinstance(recent[-1], AIMessage) and hasattr(recent[-1], 'tool_calls') and recent[-1].tool_calls:
+        # Check if there are any ToolMessages responding to this AIMessage
+        tool_call_ids = {tc.get('id') for tc in recent[-1].tool_calls if tc.get('id')}
+        has_responses = any(
+            isinstance(msg, ToolMessage) and 
+            hasattr(msg, 'tool_call_id') and 
+            msg.tool_call_id in tool_call_ids
+            for msg in messages[messages.index(recent[-1]) + 1:]
+        )
+        
+        if not has_responses:
+            # This AIMessage with tool_calls has no responses yet - remove it to avoid API error
+            logger.info(f"Removing orphaned AIMessage with tool_calls from context (no responses yet)")
+            recent = recent[:-1]
     
     return recent
 

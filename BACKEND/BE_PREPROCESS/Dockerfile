@@ -32,5 +32,5 @@ ENV PYTHONPATH="/app:/app/app"
 # Expose FastAPI default port
 EXPOSE 8888
 
-# Run FastAPI using uvicorn
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8888"]
+# Run FastAPI using uvicorn with extended timeouts for long-running operations
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8888", "--timeout-keep-alive", "3600", "--timeout-graceful-shutdown", "600"]

@@ -174,7 +174,7 @@ class RecommendProcessingPipeline:
             logger.error(f"Error processing fpt content: {e}")
             raise
 
-    async def _get_document(self, url: str) -> tuple[str, str] | str:
+    async def _get_document(self, url: str, skip_guardrails: bool = False) -> tuple[str, str] | str:
         """Convert tour URL to markdown content and return content with source URL."""
         try:
             logger.info(f"Starting processing for URL: {url}")
@@ -185,14 +185,18 @@ class RecommendProcessingPipeline:
                 return "Error in converting URL to markdown."
 
             content, source_url = result
-            words = content.split()
-            first_100_words = " ".join(words[:50]) + ("..." if len(words) > 100 else "")
-            verify_content = data_guardrails(first_100_words, GUARDRAIL_PROMPT)
-            if verify_content.get("result") != "VALID DATA":
-                logger.error("Guardrail verification failed: INVALID DATA")
-                return "Error: Guardrail verification failed - INVALID DATA"
+            
+            if not skip_guardrails:
+                words = content.split()
+                first_15_words = " ".join(words[:15]) + ("..." if len(words) > 15 else "")
+                verify_content = data_guardrails(first_15_words, GUARDRAIL_PROMPT)
+                if verify_content.get("result") != "VALID DATA":
+                    logger.error("Guardrail verification failed: INVALID DATA")
+                    return "Error: Guardrail verification failed - INVALID DATA"
+                else:
+                    logger.info(f"Successfully converted URL to markdown: {source_url}")
             else:
-                logger.info(f"Successfully converted URL to markdown: {source_url}")
+                logger.info(f"Skipping guardrails for URL: {source_url} (replacement mode)")
 
             return content, source_url
 
@@ -235,9 +239,9 @@ class RecommendProcessingPipeline:
                 }
             )
             
-    async def _get_documents(self, urls: List[str]) -> List[tuple]:
+    async def _get_documents(self, urls: List[str], skip_guardrails: bool = False) -> List[tuple]:
         """Process multiple tour URLs concurrently."""
-        tasks = [self._get_document(url) for url in urls]
+        tasks = [self._get_document(url, skip_guardrails=skip_guardrails) for url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
         valid_results = []
@@ -279,6 +283,49 @@ class RecommendProcessingPipeline:
             
         return all_documents
 
+    def _check_device_exists_in_db(self, device_name: str) -> bool:
+        """
+        Check if device_name exists in the database.
+        
+        Args:
+            device_name: The device name to check
+            
+        Returns:
+            True if device exists, False otherwise
+        """
+        try:
+            if not self.client or not self.collection_name:
+                logger.error("Qdrant client or collection not initialized")
+                return False
+            
+            search_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="device_name",
+                        match=MatchValue(value=device_name)
+                    )
+                ]
+            )
+            
+            scroll_result = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=search_filter,
+                limit=1,
+                with_payload=True
+            )
+            
+            exists = scroll_result and len(scroll_result[0]) > 0
+            if exists:
+                logger.info(f"Device '{device_name}' exists in database")
+            else:
+                logger.info(f"Device '{device_name}' does not exist in database")
+            
+            return exists
+            
+        except Exception as e:
+            logger.error(f"Error checking if device exists in DB: {e}", exc_info=True)
+            return False
+
     def _delete_chunks_by_device_name(self, device_name: str) -> int:
         """
         Delete all chunks from Qdrant vector DB that match the given device_name.
@@ -289,63 +336,32 @@ class RecommendProcessingPipeline:
         Returns:
             Number of points deleted (or 0 if operation failed)
         """
-        try:
-            if not self.client or not self.collection_name:
+        if not self.client or not self.collection_name:
                 logger.error("Qdrant client or collection not initialized")
                 return 0
             
-            logger.info(f"Attempting to delete chunks for device_name '{device_name}' from collection '{self.collection_name}'")
-            
-            # First, check if any points exist with this device_name
-            try:
-                search_filter = Filter(
-                    must=[
-                        FieldCondition(
-                            key="device_name",
-                            match=MatchValue(value=device_name)
-                        )
-                    ]
-                )
-                
-                # Scroll to count existing points
-                scroll_result = self.client.scroll(
-                    collection_name=self.collection_name,
-                    scroll_filter=search_filter,
-                    limit=1,
-                    with_payload=True
-                )
-                
-                if scroll_result and scroll_result[0]:
-                    logger.info(f"Found existing points for device_name '{device_name}', proceeding with deletion")
-                else:
-                    logger.warning(f"No existing points found for device_name '{device_name}' - nothing to delete")
-                    return 0
-                    
-            except Exception as search_error:
-                logger.warning(f"Could not verify existing points for '{device_name}': {search_error}")
-                # Continue with deletion attempt anyway
-            
-            # Create filter for device_name
+        logger.info(f"Attempting to delete chunks for device_name '{device_name}' from collection '{self.collection_name}'")
+        
+        try:
             delete_filter = Filter(
                 must=[
                     FieldCondition(
-                        key="device_name",
-                        match=MatchValue(value=device_name)
+                        key="metadata.device_name",  
+                        match=MatchValue(value=device_name),
                     )
                 ]
             )
-            
-            # Delete points matching the filter
-            result = self.client.delete(
+
+            self.client.delete(
                 collection_name=self.collection_name,
-                points_selector=FilterSelector(filter=delete_filter)
+                points_selector=FilterSelector(filter=delete_filter),
+                wait=True,   
+
             )
-            
-            logger.info(f"Successfully deleted chunks for device_name '{device_name}' from Qdrant. Result: {result}")
-            return 1  # Qdrant doesn't return count, so return 1 to indicate success
-            
+
+            return 1
+
         except Exception as e:
-            logger.error(f"Error deleting chunks for device_name '{device_name}': {e}", exc_info=True)
             return 0
 
     async def _run(
@@ -376,24 +392,33 @@ class RecommendProcessingPipeline:
             logger.error("Qdrant client or collection not initialized.")
             return None
 
-        # Step 1: Delete existing chunks if device_names_to_replace is provided
+        # Step 1: Check if replacing chunks and verify data exists in DB
+        skip_guardrails = False
         if device_names_to_replace:
+            skip_guardrails = True
+            logger.info(f"Replacement mode: Skipping guardrails for {len(device_names_to_replace)} device(s)")
+            
+            # Check if devices exist in DB before deletion
             for device_name in device_names_to_replace:
-                logger.info(f"Deleting existing chunks for device_name: {device_name}")
-                deleted_count = self._delete_chunks_by_device_name(device_name)
-                if deleted_count > 0:
-                    logger.info(f"Successfully deleted existing chunks for '{device_name}'")
+                exists = self._check_device_exists_in_db(device_name)
+                if exists:
+                    logger.info(f"Device '{device_name}' exists in DB, proceeding with replacement")
+                    deleted_count = self._delete_chunks_by_device_name(device_name)
+                    if deleted_count > 0:
+                        logger.info(f"Successfully deleted existing chunks for '{device_name}'")
+                    else:
+                        logger.warning(f"No chunks deleted or deletion failed for '{device_name}'")
                 else:
-                    logger.warning(f"No chunks deleted or deletion failed for '{device_name}'")
+                    logger.warning(f"Device '{device_name}' does not exist in DB - skipping deletion")
 
         # Step 2: Use preloaded documents or fetch documents from URLs
         if preloaded_documents:
             documents = preloaded_documents
             logger.info(f"Using {len(documents)} preloaded documents")
         else:
-            # Fetch raw document content
+            # Fetch raw document content (skip guardrails if in replacement mode)
             start_fetch = time.time()
-            raw_tuples = await self._get_documents(paths)
+            raw_tuples = await self._get_documents(paths, skip_guardrails=skip_guardrails)
             logger.info(f"Fetched {len(raw_tuples)} documents in {time.time() - start_fetch:.2f}s")
             
             # Process documents in batches with dynamic batch size based on input length

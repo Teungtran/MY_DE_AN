@@ -59,8 +59,15 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
 
     try:
         pipeline_url = RecommendProcessingPipeline()
+        
+        # Determine if we should skip guardrails and expensive processing
+        skip_guardrails = skip_duplicate_check or replace_existing
+        devices_to_replace_list = None
+        
         logger.info("Start URL processing pipeline", url=paths)
-        raw_data = await pipeline_url._get_documents(urls=paths)
+        
+        # Fetch documents with appropriate guardrail settings
+        raw_data = await pipeline_url._get_documents(urls=paths, skip_guardrails=skip_guardrails)
         documents = await pipeline_url._batch_process_documents(raw_data)
         
         # Separate valid documents from failed ones (guardrail failures, etc.)
@@ -88,9 +95,6 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
             logger.error("No valid documents were processed")
             failed_list.extend(paths)
             return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
-        
-        # Determine which device names to replace (if any)
-        devices_to_replace_list = None
         
         # Check if any devices already exist in database (only if not replacing and not skipping check)
         if not replace_existing and not skip_duplicate_check:
