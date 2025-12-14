@@ -61,50 +61,117 @@ export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
   useEffect(() => {
     if (isInitialized) return; // Prevent multiple initializations
 
+    const createInitialConversation = () => {
+      const conversationId = generateConversationId();
+      const welcomeMessage: Message = {
+        id: 'welcome',
+        content: `Hello, ${user.email.split('@')[0]}!
+
+I'm SAGE – your smart shopping assistant at FPT Shop
+
+
+I'm here to help you:
+
+Find the right products that fit your needs
+Recommend the best deals & promotions  
+Assist with order processing and tracking
+
+Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
+
+What can I help you with today?`,
+        sender: 'ai',
+        timestamp: new Date()
+      };
+
+      const newConv: Conversation = {
+        id: conversationId,
+        title: 'New Conversation',
+        lastMessage: 'Welcome to SAGE!',
+        timestamp: new Date(),
+        messages: [welcomeMessage]
+      };
+      
+      setConversations([newConv]);
+      setActiveConversation(newConv.id);
+      
+      try {
+        localStorage.setItem('customer_conversations', JSON.stringify([{
+          id: conversationId,
+          title: 'New Conversation',
+          lastMessage: 'Welcome to SAGE!',
+          timestamp: newConv.timestamp.toISOString()
+        }]));
+      } catch (e) {
+        console.error('Failed to save to localStorage:', e);
+      }
+    };
+
     const loadConversationsFromStorage = async () => {
       try {
         // Fetch all conversations from backend
+        console.log('Fetching all conversations from backend...');
         const allConversationsData = await chatAPI.getAllConversations();
+        console.log(`Received ${Object.keys(allConversationsData || {}).length} conversations from backend`);
         
-        if (Object.keys(allConversationsData).length > 0) {
+        if (allConversationsData && Object.keys(allConversationsData).length > 0) {
           // We have conversations in backend
           const loadedConversations: Conversation[] = [];
           
           for (const [convId, messages] of Object.entries(allConversationsData)) {
             const messageList = messages as any[];
+            // Include conversations even if empty (they might have been created but no messages yet)
+            if (!Array.isArray(messageList)) {
+              console.warn(`Conversation ${convId} has invalid message format, skipping`);
+              continue;
+            }
+            
             const conversationMessages: Message[] = messageList.map((msg: any, idx: number) => ({
               id: `${convId}-${idx}`,
-              content: msg.content,
+              content: msg.content || '',
               sender: msg.role === 'human' ? 'user' : 'ai',
               timestamp: new Date()
             }));
 
             // Get title from localStorage or use default
             let title = 'New Conversation';
-            let lastMessage = conversationMessages.length > 0 ? conversationMessages[conversationMessages.length - 1].content : '';
+            let lastMessage = conversationMessages.length > 0 ? conversationMessages[conversationMessages.length - 1].content : 'No messages yet';
             
             const storedConversations = localStorage.getItem('customer_conversations');
             if (storedConversations) {
-              const conversationMetadata = JSON.parse(storedConversations);
-              const meta = conversationMetadata.find((m: any) => m.id === convId);
-              if (meta) {
-                title = meta.title;
-                lastMessage = meta.lastMessage;
+              try {
+                const conversationMetadata = JSON.parse(storedConversations);
+                const meta = conversationMetadata.find((m: any) => m.id === convId);
+                if (meta) {
+                  title = meta.title || title;
+                  lastMessage = meta.lastMessage || (conversationMessages.length > 0 ? conversationMessages[conversationMessages.length - 1].content : 'No messages yet');
+                }
+              } catch (e) {
+                console.error('Error parsing stored conversations:', e);
               }
             }
+
+            console.log(`Loading conversation ${convId}: ${conversationMessages.length} messages, title: ${title}`);
 
             loadedConversations.push({
               id: convId,
               title: title,
-              lastMessage: lastMessage.substring(0, 50),
+              lastMessage: lastMessage ? lastMessage.substring(0, 50) : 'No messages yet',
               timestamp: new Date(),
               messages: conversationMessages
             });
           }
 
+          // Sort conversations by timestamp (most recent first)
+          loadedConversations.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
           setConversations(loadedConversations);
           if (loadedConversations.length > 0) {
             setActiveConversation(loadedConversations[0].id);
+          } else {
+            // No valid conversations found, create initial one
+            createInitialConversation();
+            setIsInitialized(true);
+            return;
           }
           
           // Update localStorage with backend data
@@ -123,141 +190,27 @@ export function CustomerChatbot({ user, onLogout }: CustomerChatbotProps) {
         // No conversations in backend, check localStorage
         const storedConversations = localStorage.getItem('customer_conversations');
         if (storedConversations) {
-          const conversationMetadata = JSON.parse(storedConversations);
-          
-          if (conversationMetadata.length === 0) {
-            // Empty array in storage, create initial conversation
-            const conversationId = generateConversationId();
-            const welcomeMessage: Message = {
-              id: 'welcome',
-              content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart shopping assistant at FPT Shop
-
-
-I'm here to help you:
-
-Find the right products that fit your needs
-Recommend the best deals & promotions  
-Assist with order processing and tracking
-
-Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
-
-What can I help you with today?`,
-              sender: 'ai',
-              timestamp: new Date()
-            };
-
-            const newConv: Conversation = {
-              id: conversationId,
-              title: 'New Conversation',
-              lastMessage: 'Welcome to SAGE!',
-              timestamp: new Date(),
-              messages: [welcomeMessage]
-            };
+          try {
+            const conversationMetadata = JSON.parse(storedConversations);
             
-            setConversations([newConv]);
-            setActiveConversation(newConv.id);
-            
-            localStorage.setItem('customer_conversations', JSON.stringify([{
-              id: conversationId,
-              title: 'New Conversation',
-              lastMessage: 'Welcome to SAGE!',
-              timestamp: newConv.timestamp.toISOString()
-            }]));
-            
-            setIsInitialized(true);
-            return;
+            if (Array.isArray(conversationMetadata) && conversationMetadata.length > 0) {
+              // We have stored conversations but no backend data, create initial one anyway
+              createInitialConversation();
+              setIsInitialized(true);
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing stored conversations:', e);
           }
-        } else {
-          // No stored conversations, create initial one
-          const conversationId = generateConversationId();
-          const welcomeMessage: Message = {
-            id: 'welcome',
-            content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart shopping assistant at FPT Shop
-
-
-I'm here to help you:
-
-Find the right products that fit your needs
-Recommend the best deals & promotions  
-Assist with order processing and tracking
-
-Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
-
-What can I help you with today?`,
-            sender: 'ai',
-            timestamp: new Date()
-          };
-
-          const newConv: Conversation = {
-            id: conversationId,
-            title: 'New Conversation',
-            lastMessage: 'Welcome to SAGE!',
-            timestamp: new Date(),
-            messages: [welcomeMessage]
-          };
-          
-          setConversations([newConv]);
-          setActiveConversation(newConv.id);
-          
-          localStorage.setItem('customer_conversations', JSON.stringify([{
-            id: conversationId,
-            title: 'New Conversation',
-            lastMessage: 'Welcome to SAGE!',
-            timestamp: newConv.timestamp.toISOString()
-          }]));
         }
         
+        // No conversations anywhere, create initial one
+        createInitialConversation();
         setIsInitialized(true);
       } catch (error) {
         console.error('Failed to load conversations from storage:', error);
         // Create initial conversation on error
-        const conversationId = generateConversationId();
-        const welcomeMessage: Message = {
-          id: 'welcome',
-          content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart shopping assistant at FPT Shop
-
-
-I'm here to help you:
-
-Find the right products that fit your needs
-Recommend the best deals & promotions  
-Assist with order processing and tracking
-
-Just tell me what you're looking for – whether it's a new phone, laptop, or accessories – and I'll make sure your shopping experience is fast, simple, and enjoyable.
-
-What can I help you with today?`,
-          sender: 'ai',
-          timestamp: new Date()
-        };
-
-        const newConv: Conversation = {
-          id: conversationId,
-          title: 'New Conversation',
-          lastMessage: 'Welcome to SAGE!',
-          timestamp: new Date(),
-          messages: [welcomeMessage]
-        };
-        
-        setConversations([newConv]);
-        setActiveConversation(newConv.id);
-        
-        try {
-          localStorage.setItem('customer_conversations', JSON.stringify([{
-            id: conversationId,
-            title: 'New Conversation',
-            lastMessage: 'Welcome to SAGE!',
-            timestamp: newConv.timestamp.toISOString()
-          }]));
-        } catch (e) {
-          console.error('Failed to save to localStorage:', e);
-        }
-        
+        createInitialConversation();
         setIsInitialized(true);
       }
     };
@@ -568,17 +521,15 @@ What can I help you with today?`,
                 >
                   <div className="flex items-center justify-between">
                     <div className="font-medium truncate flex-1">{conv.title}</div>
-                    {conversations.length > 1 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteConversation(conv.id, e)}
-                        className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 ml-2 flex-shrink-0"
-                        title="Delete conversation"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteConversation(conv.id, e)}
+                      className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 ml-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Delete conversation"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
                   </div>
                   <div className="text-sm opacity-70 truncate mt-1">{conv.lastMessage}</div>
                   <div className="text-xs opacity-50 mt-1">

@@ -723,11 +723,14 @@ def order_purchase(
         db = get_shop_db()
         
         try:
-            # Get item for price calculation
+            # Check if the item exists and has enough stock
             item = db.query(Item).filter(Item.device_name == device_name).first()
             
             if not item:
                 return {"error": f"Product '{device_name}' not found in inventory."}
+                
+            if item.in_store < quantity_int:
+                return {"error": f"Not enough stock for '{device_name}'."}
                 
             # Create a new order
             new_order = OrderModel(
@@ -826,6 +829,16 @@ def update_order(
                     quantity_int = int(quantity)
                 except ValueError:
                     return {"error": "Quantity must be a valid number."}
+                    
+                # Check stock if device_name is changed or quantity is updated
+                check_device_name = device_name or existing_order.device_name
+                item = db.query(Item).filter(Item.device_name == check_device_name).first()
+                
+                if not item:
+                    return {"error": f"Device '{check_device_name}' not found in inventory."}
+                    
+                if item.in_store < quantity_int:
+                    return {"error": f"Not enough stock for '{check_device_name}'."}
             
             # Update fields if provided
             if device_name:

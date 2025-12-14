@@ -21,10 +21,14 @@ def redis_caching() -> Optional[redis.Redis]:
         try:
             # Quick health check
             _redis_client.ping()
+            logger.debug(f"Redis connection check successful - reusing existing connection to {REDIS_HOST}:11899")
             return _redis_client
-        except (redis.ConnectionError, redis.TimeoutError):
-            logger.warning("Redis connection lost, attempting to reconnect...")
+        except (redis.ConnectionError, redis.TimeoutError) as e:
+            logger.warning(f"Redis connection lost to {REDIS_HOST}:11899, attempting to reconnect... Error: {e}")
             _redis_client = None
+    
+    # Log connection attempt
+    logger.info(f"Attempting to connect to Redis at {REDIS_HOST}:11899...")
     
     try:
         # Create connection pool with proper settings
@@ -40,16 +44,21 @@ def redis_caching() -> Optional[redis.Redis]:
             health_check_interval=30
         )
         
-        _redis_client = redis.Redis(connection_pool=pool,username="default")
+        logger.debug(f"Redis connection pool created for {REDIS_HOST}:11899 with max_connections=50")
+        
+        _redis_client = redis.Redis(connection_pool=pool, username="default")
         
         # Test the connection
         _redis_client.ping()
-        logger.info("Redis connection established successfully with connection pooling")
+        logger.info(f"Redis connection established successfully to {REDIS_HOST}:11899 with connection pooling (max_connections=50, health_check_interval=30s)")
         return _redis_client
         
     except redis.exceptions.ConnectionError as e:
-        logger.error(f"Redis connection failed: {e}")
+        logger.error(f"Redis connection failed to {REDIS_HOST}:11899 - ConnectionError: {e}")
+        return None
+    except redis.exceptions.TimeoutError as e:
+        logger.error(f"Redis connection timeout to {REDIS_HOST}:11899 - TimeoutError: {e}")
         return None
     except Exception as e:
-        logger.error(f"Unexpected error connecting to Redis: {e}")
+        logger.error(f"Unexpected error connecting to Redis at {REDIS_HOST}:11899: {type(e).__name__}: {e}")
         return None

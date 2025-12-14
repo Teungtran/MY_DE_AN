@@ -23,10 +23,10 @@ def extend_query(question: str, llm) -> str:
     """Generate multiple query variations for a question using cached results."""
     QUERY_PROMPT = PromptTemplate(
         input_variables=["question"],
-        template="""You are an AI language model assistant, understand both Vietnamese and English. You only support answering questions about FPT Shop.
-        Your task is to generate four different versions of the given user question to retrieve relevant documents from a vector database.
-        Provide these alternative questions separated by newlines.
-        Always generate questions that refer back to FPT Shop, all the questions must be related to FPT Shop.
+        template="""You are an AI assistant that understands both Vietnamese and English. You only support answering questions about FPT Shop.
+        Generate four different versions of the given user question to retrieve relevant documents from a vector database.
+        Provide alternative questions separated by newlines.
+        All questions must be related to FPT Shop.
         Original question: {question}"""
     )
     llm_chain = QUERY_PROMPT | llm

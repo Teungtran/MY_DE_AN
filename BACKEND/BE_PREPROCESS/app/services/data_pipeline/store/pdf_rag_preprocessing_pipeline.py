@@ -16,9 +16,16 @@ from app.services.data_pipeline.splitter import DocumentSplitter
 from app.services.data_pipeline.vector_store import create_policy_store
 from app.services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
 from app.utils.logger.logger import get_logger
+from app.services.guardrails import data_guardrails
 
 logger = get_logger(__name__)
 
+GUARDRAIL_PROMPT = """
+You are an expert at verifying FPT data policy.
+Your task is to verify if the input data related to FPT Shop policy or mention FPT shop rules.
+If yes , return "VALID DATA".
+If the input data is unrelated to FPT Shop, OR NOT from FPT SHOP product OR NOT related to policy/rules return "INVALID DATA".
+"""
 
 class PDFRAGPreprocessingPipeline:
     def __init__(self, config: BaseConfiguration = APP_CONFIG):
@@ -56,8 +63,17 @@ class PDFRAGPreprocessingPipeline:
 
         # Use the PDF loader to get documents
         documents = await self.loader.get_converted_document(pdf_file)
+        content = " ".join([doc.page_content for doc in documents])
+        words = content.split()
+        first_100_words = " ".join(words[:100]) + ("..." if len(words) > 100 else "")
+        verify_content = data_guardrails(first_100_words, GUARDRAIL_PROMPT)
         
-        # Add metadata to each document
+        if verify_content.get("result") != "VALID DATA":
+            logger.error("Guardrail verification failed: INVALID DATA")
+            return "Error: Guardrail verification failed - INVALID DATA"
+        else:
+            logger.info(f"Successfully converted URL to markdown: {pdf_file.filename}")
+            
         for doc in documents:
             doc.metadata.update(document_metadata)
             

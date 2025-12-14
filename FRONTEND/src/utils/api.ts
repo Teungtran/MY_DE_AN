@@ -397,13 +397,14 @@ export const preprocessAPI = {
     description: string;
     type: string;
     is_active: boolean;
-  }>) => {
+  }>, skipDuplicateCheck: boolean = false) => {
     const response = await apiRequest('/preprocess/internal/v1/url/recommend/', {
       method: 'POST',
-      body: JSON.stringify({ urls }),
+      body: JSON.stringify({ urls, skip_duplicate_check: skipDuplicateCheck }),
     });
     return response.json();
   },
+
 
   processRagPdfs: async (files: File[]) => {
     const formData = new FormData();

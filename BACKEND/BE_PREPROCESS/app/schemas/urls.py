@@ -7,12 +7,16 @@ from app.schemas.document_metadata import DocumentMetadata
 
 class UrlsRequest(BaseModel):
     urls: List[DocumentMetadata]
+    skip_duplicate_check: Optional[bool] = False  # If True, skip device existence check
 
 
 class UrlsResponse(BaseModel):
     """Response body after accepting URLs for processing."""
 
     message: str
+    status: Literal["success", "confirmation_required", "cancelled"] = "success"
+    device_name: Optional[str] = None  # Only present when confirmation_required (first device)
+    existing_devices: Optional[List[str]] = None  # All existing devices when confirmation_required
 
 
 class WebhookRequest(BaseModel):

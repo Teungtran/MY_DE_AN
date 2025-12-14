@@ -6,7 +6,7 @@ import time
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import Document
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance
+from qdrant_client.models import VectorParams, Distance, Filter, FieldCondition, MatchValue, FilterSelector
 from app.config.base_config import APP_CONFIG, BaseConfiguration
 from app.utils.logger.logger import get_logger
 from app.services.data_pipeline.loaders.urls import FPTCrawler
@@ -14,7 +14,7 @@ from app.schemas.urls import FPTData
 from app.services.data_pipeline.embeddings import create_embedding_model
 from app.services.data_pipeline.chat_model.factory import create_chat_model
 from app.services.data_pipeline.vector_store import create_recommend_store
-
+from app.services.guardrails import data_guardrails
 logger = get_logger(__name__)
 
 # Optimized prompt - more concise while preserving intent
@@ -29,6 +29,13 @@ TEXT_SUMMARIZE_PROMPT = """
     - Device comparisons
     Preserve image links with original format.
     Text: {input}
+"""
+
+GUARDRAIL_PROMPT = """
+You are an expert at verifying product information extracted from FPT SHOP websites.
+Your task is to verify if the input data related to FPT Shop products like laptop, phones and other FPT Shop electronics.
+If yes , return "VALID DATA".
+If the input data is unrelated to FPT Shop products, OR NOT from FPT SHOP product OR NOT related to electronic return "INVALID DATA".
 """
 
 class RecommendProcessingPipeline:
@@ -48,7 +55,6 @@ class RecommendProcessingPipeline:
         if self.client and self.collection_name:
             self._apply_payload_schema(self.client, self.collection_name)
         
-    # Store extraction prompt as a class variable to avoid recreating it
     METADATA_PROMPT = ChatPromptTemplate.from_messages([
         (("system", """Extract FPT Shop product data with these rules:
             - Extract sales_perks from "Quà tặng và ưu đãi khác"/"Khuyến mãi được hưởng" 
@@ -179,7 +185,14 @@ class RecommendProcessingPipeline:
                 return "Error in converting URL to markdown."
 
             content, source_url = result
-            logger.info(f"Successfully converted URL to markdown: {source_url}")
+            words = content.split()
+            first_100_words = " ".join(words[:50]) + ("..." if len(words) > 100 else "")
+            verify_content = data_guardrails(first_100_words, GUARDRAIL_PROMPT)
+            if verify_content.get("result") != "VALID DATA":
+                logger.error("Guardrail verification failed: INVALID DATA")
+                return "Error: Guardrail verification failed - INVALID DATA"
+            else:
+                logger.info(f"Successfully converted URL to markdown: {source_url}")
 
             return content, source_url
 
@@ -194,12 +207,33 @@ class RecommendProcessingPipeline:
             return None
             
         content, source_url = document_tuple
+        
+        # Check if content is an error message (guardrail failure)
+        if isinstance(content, str) and content.startswith("Error:"):
+            logger.error(f"Document processing skipped due to error: {content} for URL: {source_url}")
+            # Return a special error document that can be tracked
+            return Document(
+                page_content="",
+                metadata={
+                    "source": source_url,
+                    "error": content,
+                    "processing_failed": True
+                }
+            )
+        
         try:
             summary, metadata = await self._process_content(content, source_url)
             return Document(page_content=summary, metadata=metadata)
         except Exception as e:
             logger.error(f"Error processing document {source_url}: {e}")
-            return None
+            return Document(
+                page_content="",
+                metadata={
+                    "source": source_url,
+                    "error": str(e),
+                    "processing_failed": True
+                }
+            )
             
     async def _get_documents(self, urls: List[str]) -> List[tuple]:
         """Process multiple tour URLs concurrently."""
@@ -210,8 +244,14 @@ class RecommendProcessingPipeline:
         for idx, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Error processing URL {urls[idx]}: {result}")
-            else:
+            elif isinstance(result, str) and result.startswith("Error:"):
+                # Guardrail or other validation error - return as tuple with error message
+                logger.error(f"Guardrail/validation error for URL {urls[idx]}: {result}")
+                valid_results.append((result, urls[idx]))  # Return error as tuple for proper handling
+            elif isinstance(result, tuple):
                 valid_results.append(result)
+            else:
+                logger.warning(f"Unexpected result type for URL {urls[idx]}: {type(result)}")
                 
         return valid_results
 
@@ -239,10 +279,80 @@ class RecommendProcessingPipeline:
             
         return all_documents
 
+    def _delete_chunks_by_device_name(self, device_name: str) -> int:
+        """
+        Delete all chunks from Qdrant vector DB that match the given device_name.
+        
+        Args:
+            device_name: The device name to filter by
+            
+        Returns:
+            Number of points deleted (or 0 if operation failed)
+        """
+        try:
+            if not self.client or not self.collection_name:
+                logger.error("Qdrant client or collection not initialized")
+                return 0
+            
+            logger.info(f"Attempting to delete chunks for device_name '{device_name}' from collection '{self.collection_name}'")
+            
+            # First, check if any points exist with this device_name
+            try:
+                search_filter = Filter(
+                    must=[
+                        FieldCondition(
+                            key="device_name",
+                            match=MatchValue(value=device_name)
+                        )
+                    ]
+                )
+                
+                # Scroll to count existing points
+                scroll_result = self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=search_filter,
+                    limit=1,
+                    with_payload=True
+                )
+                
+                if scroll_result and scroll_result[0]:
+                    logger.info(f"Found existing points for device_name '{device_name}', proceeding with deletion")
+                else:
+                    logger.warning(f"No existing points found for device_name '{device_name}' - nothing to delete")
+                    return 0
+                    
+            except Exception as search_error:
+                logger.warning(f"Could not verify existing points for '{device_name}': {search_error}")
+                # Continue with deletion attempt anyway
+            
+            # Create filter for device_name
+            delete_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="device_name",
+                        match=MatchValue(value=device_name)
+                    )
+                ]
+            )
+            
+            # Delete points matching the filter
+            result = self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=FilterSelector(filter=delete_filter)
+            )
+            
+            logger.info(f"Successfully deleted chunks for device_name '{device_name}' from Qdrant. Result: {result}")
+            return 1  # Qdrant doesn't return count, so return 1 to indicate success
+            
+        except Exception as e:
+            logger.error(f"Error deleting chunks for device_name '{device_name}': {e}", exc_info=True)
+            return 0
+
     async def _run(
         self,
         paths: List[str],
         preloaded_documents: Optional[List[Document]] = None,
+        device_names_to_replace: Optional[List[str]] = None,
         **kwargs,
     ) -> Optional[List[str]]:
         """
@@ -254,6 +364,7 @@ class RecommendProcessingPipeline:
         Args:
             paths: List of URLs to process.
             preloaded_documents: Optional pre-fetched documents to use instead of loading from URLs.
+            device_names_to_replace: If provided, delete existing chunks with these device_names before adding new ones.
 
         Returns:
             List of status messages for each processed URL or None if the pipeline failed.
@@ -264,6 +375,16 @@ class RecommendProcessingPipeline:
         if not self.client or not self.collection_name:
             logger.error("Qdrant client or collection not initialized.")
             return None
+
+        # Step 1: Delete existing chunks if device_names_to_replace is provided
+        if device_names_to_replace:
+            for device_name in device_names_to_replace:
+                logger.info(f"Deleting existing chunks for device_name: {device_name}")
+                deleted_count = self._delete_chunks_by_device_name(device_name)
+                if deleted_count > 0:
+                    logger.info(f"Successfully deleted existing chunks for '{device_name}'")
+                else:
+                    logger.warning(f"No chunks deleted or deletion failed for '{device_name}'")
 
         # Step 2: Use preloaded documents or fetch documents from URLs
         if preloaded_documents:

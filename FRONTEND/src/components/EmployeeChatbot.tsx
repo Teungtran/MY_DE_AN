@@ -69,43 +69,57 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
     const loadSessionsFromStorage = async () => {
       try {
         // Fetch all conversations from backend using user ID
+        console.log(`Fetching all sessions from backend for user ${user.id}...`);
         const allSessionsData = await adminAPI.getAllConversations(user.id);
+        console.log(`Received ${Object.keys(allSessionsData || {}).length} sessions from backend`);
         
-        if (Object.keys(allSessionsData).length > 0) {
+        if (allSessionsData && Object.keys(allSessionsData).length > 0) {
           // We have sessions in backend
           const loadedSessions: Session[] = [];
           
           for (const [sessionId, messages] of Object.entries(allSessionsData)) {
             const messageList = messages as any[];
+            // Include sessions even if empty (they might have been created but no messages yet)
+            if (!Array.isArray(messageList)) {
+              console.warn(`Session ${sessionId} has invalid message format, skipping`);
+              continue;
+            }
+            
             const sessionMessages: Message[] = messageList.map((msg: any, idx: number) => ({
               id: `${sessionId}-${idx}`,
-              content: msg.content,
+              content: msg.content || '',
               sender: msg.role === 'human' ? 'user' : 'ai',
               timestamp: new Date()
             }));
 
             // Get title and metadata from localStorage or use default
             let title = 'New Session';
-            let lastMessage = sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].content : '';
+            let lastMessage = sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].content : 'No messages yet';
             let status: 'active' | 'closed' = 'active';
             let participants = [user.email.split('@')[0]];
             
             const storedSessions = localStorage.getItem('employee_sessions');
             if (storedSessions) {
-              const sessionMetadata = JSON.parse(storedSessions);
-              const meta = sessionMetadata.find((m: any) => m.id === sessionId);
-              if (meta) {
-                title = meta.title;
-                lastMessage = meta.lastMessage;
-                status = meta.status || 'active';
-                participants = meta.participants || participants;
+              try {
+                const sessionMetadata = JSON.parse(storedSessions);
+                const meta = sessionMetadata.find((m: any) => m.id === sessionId);
+                if (meta) {
+                  title = meta.title || title;
+                  lastMessage = meta.lastMessage || (sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].content : 'No messages yet');
+                  status = meta.status || 'active';
+                  participants = meta.participants || participants;
+                }
+              } catch (e) {
+                console.error('Error parsing stored sessions:', e);
               }
             }
+
+            console.log(`Loading session ${sessionId}: ${sessionMessages.length} messages, title: ${title}`);
 
             loadedSessions.push({
               id: sessionId,
               title: title,
-              lastMessage: lastMessage.substring(0, 50),
+              lastMessage: lastMessage ? lastMessage.substring(0, 50) : 'No messages yet',
               timestamp: new Date(),
               status: status,
               participants: participants,
@@ -113,9 +127,16 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
             });
           }
 
+          // Sort sessions by timestamp (most recent first)
+          loadedSessions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
           setSessions(loadedSessions);
           if (loadedSessions.length > 0) {
             setActiveSession(loadedSessions[0].id);
+          } else {
+            // No valid sessions found, create initial one
+            createInitialSession();
+            return;
           }
           
           // Update localStorage with backend data
@@ -136,110 +157,36 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
         // No sessions in backend, check localStorage
         const storedSessions = localStorage.getItem('employee_sessions');
         if (storedSessions) {
-          const sessionMetadata = JSON.parse(storedSessions);
-          
-          if (sessionMetadata.length === 0) {
-            // Empty array in storage, create initial session
-            const sessionId = generateConversationId();
-            const welcomeMessage: Message = {
-              id: 'welcome',
-              content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart business assistant at FPT
-
-Ready to assist you with:
-      
-Competitor insights & market analysis
-Strategic planning & decision support  
-Business intelligence & data insights
-Research & knowledge discovery
-
-Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
-
-What can I help you explore today?`,
-              sender: 'ai',
-              timestamp: new Date()
-            };
-
-            const newSession: Session = {
-              id: sessionId,
-              title: 'New Session',
-              lastMessage: 'Welcome to SAGE!',
-              timestamp: new Date(),
-              status: 'active',
-              participants: [user.email.split('@')[0]],
-              messages: [welcomeMessage]
-            };
+          try {
+            const sessionMetadata = JSON.parse(storedSessions);
             
-            setSessions([newSession]);
-            setActiveSession(newSession.id);
-            
-            localStorage.setItem('employee_sessions', JSON.stringify([{
-              id: sessionId,
-              title: 'New Session',
-              lastMessage: 'Welcome to SAGE!',
-              timestamp: newSession.timestamp.toISOString(),
-              status: 'active',
-              participants: [user.email.split('@')[0]]
-            }]));
-            
-            setIsInitialized(true);
-            return;
+            if (Array.isArray(sessionMetadata) && sessionMetadata.length > 0) {
+              // We have stored sessions but no backend data, create initial one anyway
+              createInitialSession();
+              setIsInitialized(true);
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing stored sessions:', e);
           }
-        } else {
-          // No stored sessions, create initial one
-          const sessionId = generateConversationId();
-          const welcomeMessage: Message = {
-            id: 'welcome',
-            content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart business assistant at FPT
-
-Ready to assist you with:
-      
-Competitor insights & market analysis
-Strategic planning & decision support  
-Business intelligence & data insights
-Research & knowledge discovery
-
-Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
-
-What can I help you explore today?`,
-            sender: 'ai',
-            timestamp: new Date()
-          };
-
-          const newSession: Session = {
-            id: sessionId,
-            title: 'New Session',
-            lastMessage: 'Welcome to SAGE!',
-            timestamp: new Date(),
-            status: 'active',
-            participants: [user.email.split('@')[0]],
-            messages: [welcomeMessage]
-          };
-          
-          setSessions([newSession]);
-          setActiveSession(newSession.id);
-          
-          localStorage.setItem('employee_sessions', JSON.stringify([{
-            id: sessionId,
-            title: 'New Session',
-            lastMessage: 'Welcome to SAGE!',
-            timestamp: newSession.timestamp.toISOString(),
-            status: 'active',
-            participants: [user.email.split('@')[0]]
-          }]));
         }
         
+        // No sessions anywhere, create initial one
+        createInitialSession();
         setIsInitialized(true);
       } catch (error) {
         console.error('Failed to load sessions from storage:', error);
         // Create initial session on error
-        const sessionId = generateConversationId();
-        const welcomeMessage: Message = {
-          id: 'welcome',
-          content: `Hello, ${user.email.split('@')[0]}!
+        createInitialSession();
+        setIsInitialized(true);
+      }
+    };
+
+    const createInitialSession = () => {
+      const sessionId = generateConversationId();
+      const welcomeMessage: Message = {
+        id: 'welcome',
+        content: `Hello, ${user.email.split('@')[0]}!
 
 I'm SAGE – your smart business assistant at FPT
 
@@ -253,42 +200,39 @@ Research & knowledge discovery
 Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
 
 What can I help you explore today?`,
-          sender: 'ai',
-          timestamp: new Date()
-        };
+        sender: 'ai',
+        timestamp: new Date()
+      };
 
-        const newSession: Session = {
+      const newSession: Session = {
+        id: sessionId,
+        title: 'New Session',
+        lastMessage: 'Welcome to SAGE!',
+        timestamp: new Date(),
+        status: 'active',
+        participants: [user.email.split('@')[0]],
+        messages: [welcomeMessage]
+      };
+      
+      setSessions([newSession]);
+      setActiveSession(newSession.id);
+      
+      try {
+        localStorage.setItem('employee_sessions', JSON.stringify([{
           id: sessionId,
           title: 'New Session',
           lastMessage: 'Welcome to SAGE!',
-          timestamp: new Date(),
+          timestamp: newSession.timestamp.toISOString(),
           status: 'active',
-          participants: [user.email.split('@')[0]],
-          messages: [welcomeMessage]
-        };
-        
-        setSessions([newSession]);
-        setActiveSession(newSession.id);
-        
-        try {
-          localStorage.setItem('employee_sessions', JSON.stringify([{
-            id: sessionId,
-            title: 'New Session',
-            lastMessage: 'Welcome to SAGE!',
-            timestamp: newSession.timestamp.toISOString(),
-            status: 'active',
-            participants: [user.email.split('@')[0]]
-          }]));
-        } catch (e) {
-          console.error('Failed to save to localStorage:', e);
-        }
-        
-        setIsInitialized(true);
+          participants: [user.email.split('@')[0]]
+        }]));
+      } catch (e) {
+        console.error('Failed to save to localStorage:', e);
       }
     };
 
     loadSessionsFromStorage();
-  }, [isInitialized, user.email]); // Only run on mount or when user changes
+  }, [isInitialized, user.email, user.id]); // Only run on mount or when user changes
 
   const getCurrentSession = () => {
     return sessions.find(session => session.id === activeSession);
@@ -599,17 +543,15 @@ What can I help you explore today?`,
                       >
                         {session.status}
                       </Badge>
-                      {sessions.length > 1 && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteSession(session.id, e)}
-                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 flex-shrink-0"
-                          title="Delete session"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteSession(session.id, e)}
+                        className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Delete session"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                   <div className="text-sm opacity-70 truncate mb-2">{session.lastMessage}</div>

@@ -34,9 +34,9 @@ def get_context(context: str, user_question: str) -> str:
     QUERY_PROMPT = PromptTemplate(
         input_variables=["question", "context"],
         template=(
-            "You are an AI assistant fluent in both Vietnamese and English.\n"
+            "**CRITICAL - LANGUAGE MATCHING**: You MUST respond in the EXACT SAME language as the user's question. Vietnamese question → Vietnamese response ONLY. English question → English response ONLY. Never translate or switch languages.\n\n"
             "ONLY use the provided context to answer the user's question.\n\n"
-            "always return image URLs if any\n\n"
+            "Always return image URLs if any.\n\n"
             "Context:\n{context}\n\n"
             "Question:\n{question}"
         )

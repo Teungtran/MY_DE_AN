@@ -27,7 +27,12 @@ class TeamChatRequest(BaseModel):
 prompt = """
 give the intention of the given message in less than 5 words
 """
+logger.info("Initializing Redis connection for admin service...")
 redis_connect = redis_caching()
+if redis_connect:
+    logger.info("Redis connection initialized successfully for admin service")
+else:
+    logger.warning("Redis connection initialization failed for admin service - some features may be unavailable")
 
 # Cache for per-session UI titles to ensure we compute it only once per session
 _ui_title_cache: Dict[str, str] = {}
@@ -107,35 +112,51 @@ async def get_chat_history(
         
         # Get history for each conversation
         all_conversations = {}
-        for conv_id in conversation_ids:
-            # Verify conversation belongs to user (security check)
-            stored_user_id = await asyncio.to_thread(
-                redis_connect.get, 
-                f"conversation:{conv_id}:user_id"
-            )
-            
-            if stored_user_id:
-                stored_user_id = stored_user_id.decode('utf-8') if isinstance(stored_user_id, bytes) else stored_user_id
-                if stored_user_id != user_id:
-                    logger.warning(f"Conversation {conv_id} does not belong to user {user_id}, skipping")
-                    continue
-            
-            # Get messages for this conversation
-            exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conv_id}")
-            if exists:
-                history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conv_id}", 0, -1)
-                messages = []
-                for msg in history:
-                    try:
-                        msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
-                        message_data = json.loads(msg_str)
-                        messages.append(message_data)
-                    except json.JSONDecodeError:
-                        logger.warning(f"Skipping invalid JSON in history: {msg}")
-                
-                if messages:
-                    all_conversations[conv_id] = messages
+        logger.info(f"Retrieving chat history for user_id={user_id}, found {len(conversation_ids)} conversation_ids")
         
+        for conv_id in conversation_ids:
+            try:
+                # Verify conversation belongs to user (security check)
+                stored_user_id = await asyncio.to_thread(
+                    redis_connect.get, 
+                    f"conversation:{conv_id}:user_id"
+                )
+                
+                if stored_user_id:
+                    stored_user_id = stored_user_id.decode('utf-8') if isinstance(stored_user_id, bytes) else stored_user_id
+                    if stored_user_id != user_id:
+                        logger.warning(f"Conversation {conv_id} does not belong to user {user_id} (belongs to {stored_user_id}), skipping")
+                        continue
+                else:
+                    # If no user_id stored, log but still include it (might be old data)
+                    logger.debug(f"Conversation {conv_id} has no stored user_id, but is in user's conversation set - including it")
+                
+                # Get messages for this conversation
+                exists = await asyncio.to_thread(redis_connect.exists, f"chat:{conv_id}")
+                if exists:
+                    history = await asyncio.to_thread(redis_connect.lrange, f"chat:{conv_id}", 0, -1)
+                    messages = []
+                    for msg in history:
+                        try:
+                            msg_str = msg.decode('utf-8') if isinstance(msg, bytes) else msg
+                            message_data = json.loads(msg_str)
+                            messages.append(message_data)
+                        except json.JSONDecodeError:
+                            logger.warning(f"Skipping invalid JSON in history for conversation {conv_id}: {msg}")
+                    
+                    # Include conversation even if empty (to show all conversations)
+                    all_conversations[conv_id] = messages
+                    logger.debug(f"Retrieved {len(messages)} messages for conversation {conv_id}")
+                else:
+                    # Conversation exists in user's set but has no messages - include as empty
+                    logger.debug(f"Conversation {conv_id} exists in user's set but has no messages - including as empty")
+                    all_conversations[conv_id] = []
+            except Exception as e:
+                logger.error(f"Error retrieving conversation {conv_id} for user {user_id}: {str(e)}")
+                # Continue processing other conversations even if one fails
+                continue
+        
+        logger.info(f"Returning {len(all_conversations)} conversations for user_id={user_id}")
         return all_conversations
     except Exception as e:
         logger.error(f"Error retrieving chat history: {str(e)}")

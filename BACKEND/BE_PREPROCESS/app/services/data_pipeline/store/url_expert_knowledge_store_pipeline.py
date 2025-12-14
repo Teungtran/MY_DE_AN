@@ -12,9 +12,16 @@ from app.services.data_pipeline.loaders.urls import FPTCrawler
 from app.services.data_pipeline.splitter import DocumentSplitter
 from app.services.data_pipeline.vector_store import create_expert_store
 from app.utils.logger import get_logger
+from app.services.guardrails import data_guardrails
 
 logger = get_logger(__name__)
 
+GUARDRAIL_PROMPT = """
+You are an expert at verifying Marketing, Business, and E-commerce related information.
+Your task is to verify if the input data related to the above scope.
+If yes , return "VALID DATA".
+If the input data is unrelated Marketing, Business, and E-commerce related information. to return "INVALID DATA".
+"""
 
 class URLExpertPreprocessingPipeline:
     def __init__(self, config: BaseConfiguration = APP_CONFIG,type="urls"):
@@ -40,11 +47,17 @@ class URLExpertPreprocessingPipeline:
             ),
         }
 
-        text = await self.loader.get_converted_document(path)
-
+        text, _ = await self.loader.get_converted_document(path)
         if isinstance(text, tuple):
             text = " ".join(str(item) for item in text)
-
+        words = text.split()
+        first_100_words = " ".join(words[:100]) + ("..." if len(words) > 100 else "")
+        verify_content = data_guardrails(first_100_words, GUARDRAIL_PROMPT)
+        if verify_content.get("result") != "VALID DATA":
+            logger.error("Guardrail verification failed: INVALID DATA")
+            return "Error: Guardrail verification failed - INVALID DATA"
+        else:
+            logger.info(f"Successfully converted URL to markdown: {path}")
         document = Document(page_content=text, metadata=document_metadata)
         return document
 
