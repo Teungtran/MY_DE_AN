@@ -34,7 +34,7 @@ def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> Lis
     recent = messages[-limit:]
     
     if isinstance(recent[0], ToolMessage):
-=        for i in range(len(messages) - limit - 1, -1, -1):
+        for i in range(len(messages) - limit - 1, -1, -1):
             msg = messages[i]
             if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
                 tool_call_ids = [tc.get('id') for tc in msg.tool_calls if tc.get('id')]
