@@ -17,51 +17,6 @@ def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[st
     return right
 
 
-def get_safe_recent_messages(messages: List[AnyMessage], limit: int = 10) -> List[AnyMessage]:
-    """
-    Get the last N messages while ensuring tool_call/tool_response pairs are never broken.
-    
-    This prevents OpenAI API error: "messages with role 'tool' must be 
-    a response to a preceeding message with 'tool_calls'."
-    
-    Strategy:
-    1. Keep last 10 messages (balanced between context and token usage)
-    2. If first message is ToolMessage, extend backwards to include parent AIMessage
-    3. Remove any orphaned AIMessages with tool_calls at the end (no responses)
-    """
-    if not messages or len(messages) <= limit:
-        return messages
-    
-    recent = messages[-limit:]
-    
-    if isinstance(recent[0], ToolMessage):
-        for i in range(len(messages) - limit - 1, -1, -1):
-            msg = messages[i]
-            if isinstance(msg, AIMessage) and hasattr(msg, 'tool_calls') and msg.tool_calls:
-                tool_call_ids = [tc.get('id') for tc in msg.tool_calls if tc.get('id')]
-                if hasattr(recent[0], 'tool_call_id') and recent[0].tool_call_id in tool_call_ids:
-                    recent = messages[i:]
-                    logger.info(f"Extended context to include parent tool call: {len(messages)} -> {len(recent)} messages")
-                    break
-        else:
-            logger.warning(f"Could not find parent AIMessage for ToolMessage, using {len(recent)} messages")
-    
-    if recent and isinstance(recent[-1], AIMessage) and hasattr(recent[-1], 'tool_calls') and recent[-1].tool_calls:
-        tool_call_ids = {tc.get('id') for tc in recent[-1].tool_calls if tc.get('id')}
-        has_responses = any(
-            isinstance(msg, ToolMessage) and 
-            hasattr(msg, 'tool_call_id') and 
-            msg.tool_call_id in tool_call_ids
-            for msg in messages[messages.index(recent[-1]) + 1:]
-        )
-        
-        if not has_responses:
-            logger.info(f"Removing orphaned AIMessage with tool_calls from context (no responses yet)")
-            recent = recent[:-1]
-    
-    return recent
-
-
 class InputState(TypedDict):
     """Represents the input state for the agent.
 
@@ -103,7 +58,6 @@ def get_limited_conversation_pairs(state, num_pairs: int = 3) -> list:
     while i < len(all_messages):
         if isinstance(all_messages[i], HumanMessage):
             pair = [all_messages[i]]
-            # Look for following AI message(s)
             j = i + 1
             while j < len(all_messages) and isinstance(all_messages[j], AIMessage):
                 pair.append(all_messages[j])
