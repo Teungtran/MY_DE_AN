@@ -7,7 +7,6 @@ from app.schemas.chunk_message import ChunkMessage
 from typing import Dict
 from fastapi import APIRouter, HTTPException,Request,Depends
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
-from langdetect import detect
 from app.orchestrator.graph.main_graph import setup_agentic_graph
 from app.orchestrator.graph.tools.support_nodes import format_message,extract_content_from_response
 from sse_starlette.sse import EventSourceResponse
@@ -313,7 +312,7 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
         tool_call_args = None
         tool_call_id = None
         tool_call_type = None
-        history_lang = detect(user_message) if user_message else None
+        history_lang = "en" if user_message and len(user_message.strip()) > 0 else None
         
         initial_chat_history = initial_snapshot.get("messages", []) if hasattr(initial_snapshot, 'get') else []
         initial_prompt_token = tiktoken_counter(initial_chat_history) if initial_chat_history else 0
@@ -339,18 +338,37 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                 all_tool_calls = []
                 
                 confirmation_inputs = {"y", "yes", "ok", "confirm", "đồng ý", "dong y"}
+                rejection_inputs = {"n", "no", "không", "khong", "cancel", "stop", "hủy", "huy"}
+                
                 if user_message.strip().lower() in confirmation_inputs:
                     logger.debug("User confirmed tool call")
                     result = graph.invoke(None, config)
-                else:
-                    logger.debug("User rejected tool call")
+                elif user_message.strip().lower() in rejection_inputs:
+                    logger.debug("User explicitly rejected tool call")
                     tool_call_id = last_toolcall_message.tool_calls[0]["id"]
+                    tool_name = last_toolcall_message.tool_calls[0]["name"]
                     result = graph.invoke(
                         {
                             "messages": [
                                 ToolMessage(
                                     tool_call_id=tool_call_id,
-                                    content=f"API call denied by user. Reasoning: '{user_message}'. Continue assisting, accounting for the user's input.",
+                                    content=f"User explicitly rejected the {tool_name} action. DO NOT proceed with this action. The process has been CANCELLED by the user. Ask if they want to try again with different information or if they need something else.",
+                                )
+                            ]
+                        },
+                        config,
+                    )
+                else:
+                    logger.debug("User provided additional information or modification request")
+                    tool_call_id = last_toolcall_message.tool_calls[0]["id"]
+                    tool_name = last_toolcall_message.tool_calls[0]["name"]
+                    tool_args = last_toolcall_message.tool_calls[0]["args"]
+                    result = graph.invoke(
+                        {
+                            "messages": [
+                                ToolMessage(
+                                    tool_call_id=tool_call_id,
+                                    content=f"User wants to modify the request. User said: '{user_message}'. DO NOT call {tool_name} yet. Update the parameters based on user's feedback and ask for confirmation again with the SAME tool '{tool_name}' (not update tool). Previous parameters were: {tool_args}",
                                 )
                             ]
                         },
