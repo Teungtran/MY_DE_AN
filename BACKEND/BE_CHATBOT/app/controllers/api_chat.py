@@ -338,37 +338,20 @@ async def stream_event(user_inputs: UserInputs, config: Dict, user_id:str,email:
                 all_tool_calls = []
                 
                 confirmation_inputs = {"y", "yes", "ok", "confirm", "đồng ý", "dong y"}
-                rejection_inputs = {"n", "no", "không", "khong", "cancel", "stop", "hủy", "huy"}
                 
                 if user_message.strip().lower() in confirmation_inputs:
                     logger.debug("User confirmed tool call")
                     result = graph.invoke(None, config)
-                elif user_message.strip().lower() in rejection_inputs:
-                    logger.debug("User explicitly rejected tool call")
-                    tool_call_id = last_toolcall_message.tool_calls[0]["id"]
-                    tool_name = last_toolcall_message.tool_calls[0]["name"]
-                    result = graph.invoke(
-                        {
-                            "messages": [
-                                ToolMessage(
-                                    tool_call_id=tool_call_id,
-                                    content=f"User explicitly rejected the {tool_name} action. DO NOT proceed with this action. The process has been CANCELLED by the user. Ask if they want to try again with different information or if they need something else.",
-                                )
-                            ]
-                        },
-                        config,
-                    )
+
                 else:
                     logger.debug("User provided additional information or modification request")
                     tool_call_id = last_toolcall_message.tool_calls[0]["id"]
-                    tool_name = last_toolcall_message.tool_calls[0]["name"]
-                    tool_args = last_toolcall_message.tool_calls[0]["args"]
                     result = graph.invoke(
                         {
                             "messages": [
                                 ToolMessage(
                                     tool_call_id=tool_call_id,
-                                    content=f"User wants to modify the request. User said: '{user_message}'. DO NOT call {tool_name} yet. Update the parameters based on user's feedback and ask for confirmation again with the SAME tool '{tool_name}' (not update tool). Previous parameters were: {tool_args}",
+                                    content=f"User wants to modify the request or STOP the process. Reason'{user_message}'. Continue assisting, accounting for the user's input",
                                 )
                             ]
                         },
