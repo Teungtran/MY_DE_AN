@@ -6,6 +6,7 @@ from typing import List
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, status
+from langchain.schema import Document
 
 from app.config.base_config import APP_CONFIG
 from app.schemas.urls import DocumentMetadata, UrlsRequest, UrlsResponse
@@ -60,18 +61,51 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
         pipeline_url = URLRAGPreprocessingPipeline(type="urls")
         logger.info("Start URL processing pipeline", url=paths)
         # get content from URLs
-        documents = await pipeline_url._get_documents(paths=paths, metadatas=doc_metadata)
+        raw_documents = await pipeline_url._get_documents(paths=paths, metadatas=doc_metadata)
 
-        if not documents:
+        if not raw_documents:
             logger.error("No documents were processed")
             failed_list.extend(paths)
             return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
 
-        # Process complete pipeline - both S3 and Vector DB in a single transaction
+        # Separate valid documents from failed ones (guardrail failures, etc.)
+        valid_documents = []
+        failed_documents = []
+        
+        for idx, doc in enumerate(raw_documents):
+            if isinstance(doc, str):
+                # This is an error string (guardrail failure, etc.)
+                source_url = paths[idx] if idx < len(paths) else "Unknown URL"
+                error_msg = doc
+                failed_documents.append({"url": source_url, "error": error_msg})
+                failed_list.append(source_url)
+                error_messages.append({"url": source_url, "error": error_msg})
+                logger.warning(f"Document processing failed for {source_url}: {error_msg}")
+            elif isinstance(doc, Document):
+                valid_documents.append(doc)
+            else:
+                # Unknown type
+                source_url = paths[idx] if idx < len(paths) else "Unknown URL"
+                error_msg = "Unknown document type returned"
+                failed_documents.append({"url": source_url, "error": error_msg})
+                failed_list.append(source_url)
+                error_messages.append({"url": source_url, "error": error_msg})
+                logger.warning(f"Document processing failed for {source_url}: {error_msg}")
+        
+        if not valid_documents and failed_documents:
+            # All documents failed
+            logger.error(f"All {len(failed_documents)} documents failed processing")
+            return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
+        
+        if not valid_documents:
+            logger.error("No valid documents were processed")
+            failed_list.extend(paths)
+            return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
+
         try:
             # Save documents to S3
-            logger.info("Starting S3 upload process")
-            for idx, doc in enumerate(documents):
+            logger.info(f"Starting S3 upload process for {len(valid_documents)} valid documents")
+            for idx, doc in enumerate(valid_documents):
                 url_md = doc.metadata.get("source")
                 content_md = doc.page_content
                 metadata = {
@@ -99,10 +133,23 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
                         tmp_file=md_file_path,
                         error=str(cleanup_error),
                     )
+            
+            # Get valid URLs for pipeline
+            valid_urls = [doc.metadata.get("source") for doc in valid_documents if doc.metadata.get("source")]
+            # Match metadata by finding the index of each valid URL in the original paths
+            valid_metadatas = []
+            for url in valid_urls:
+                try:
+                    idx = paths.index(url)
+                    if idx < len(doc_metadata):
+                        valid_metadatas.append(doc_metadata[idx])
+                except ValueError:
+                    pass
+            
             # save to Vector DB
-            await pipeline_url._run(paths=paths, metadatas=doc_metadata, preloaded_documents=documents)
+            await pipeline_url._run(paths=valid_urls, metadatas=valid_metadatas, preloaded_documents=valid_documents)
 
-            for idx, doc in enumerate(documents):
+            for doc in valid_documents:
                 url_md = doc.metadata.get("source")
                 if url_md is not None:
                     succeeded_list.append(url_md)
@@ -160,13 +207,32 @@ async def url_processing(
         # Process URLs synchronously to get results
         result = await process_urls(request.urls, s3_client)
         
+        guardrail_errors = [e for e in result.get("error_messages", []) if "Guardrail" in str(e.get("error", "")) or "INVALID DATA" in str(e.get("error", ""))]
+        other_errors = [e for e in result.get("error_messages", []) if e not in guardrail_errors]
+        
         # Create success message with processed URLs
         if not result["succeeded"] and not result["failed"]:
             message = "Processing attempted but resulted in no successes or failures recorded."
         elif result["failed"] and not result["succeeded"]:
-            message = f"Processing failed for all requested URLs: {', '.join(result['failed'])}"
+            # All failed
+            if guardrail_errors:
+                guardrail_urls = [e.get("url", "Unknown") for e in guardrail_errors]
+                message = f"Guardrail verification failed for all URLs: {', '.join(guardrail_urls)}. Content does not match requirements."
+            else:
+                error_details = [f"{e.get('url', 'Unknown')}: {e.get('error', 'Unknown error')}" for e in result.get("error_messages", [])]
+                message = f"Processing failed for all requested URLs: {', '.join(result['failed'])}. Errors: {'; '.join(error_details)}"
         elif result["failed"]:
-            message = f"Processing completed with some errors. Succeeded: {', '.join(result['succeeded'])}. Failed: {', '.join(result['failed'])}"
+            # Some succeeded, some failed
+            success_msg = f"Succeeded: {', '.join(result['succeeded'])}"
+            if guardrail_errors:
+                guardrail_urls = [e.get("url", "Unknown") for e in guardrail_errors]
+                message = f"{success_msg}. Guardrail verification failed for: {', '.join(guardrail_urls)} (Content does not match requirements)."
+                if other_errors:
+                    other_details = [f"{e.get('url', 'Unknown')}: {e.get('error', 'Unknown error')}" for e in other_errors]
+                    message += f" Other errors: {'; '.join(other_details)}"
+            else:
+                error_details = [f"{e.get('url', 'Unknown')}: {e.get('error', 'Unknown error')}" for e in result.get("error_messages", [])]
+                message = f"{success_msg}. Failed: {', '.join(result['failed'])}. Errors: {'; '.join(error_details)}"
         else:
             message = f"Successfully processed URLs: {', '.join(result['succeeded'])}"
 

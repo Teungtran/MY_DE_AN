@@ -6,6 +6,7 @@ import tempfile
 from typing import List
 
 from fastapi import APIRouter, Depends, status, UploadFile, File
+from langchain.schema import Document
 
 from app.config.base_config import APP_CONFIG
 from app.schemas.document_metadata import DocumentMetadata
@@ -55,18 +56,57 @@ async def process_pdfs(files: List[UploadFile], doc_metadata: List[DocumentMetad
         pipeline = PDFRAGPreprocessingPipeline()
         logger.info("Start PDF processing pipeline", files=file_names)
         
+        # Get documents first to check for guardrail failures - process each file individually
+        valid_documents = []
+        valid_files = []
+        valid_metadatas = []
+        
+        for idx, file in enumerate(files):
+            metadata = doc_metadata[idx] if idx < len(doc_metadata) else None
+            docs = await pipeline._get_document(file, metadata)
+            
+            if isinstance(docs, str):
+                # This is an error string (guardrail failure, etc.)
+                file_name = file_names[idx]
+                error_msg = docs
+                failed_list.append(file_name)
+                error_messages.append({"file": file_name, "error": error_msg})
+                logger.warning(f"Document processing failed for {file_name}: {error_msg}")
+            elif isinstance(docs, list) and all(isinstance(doc, Document) for doc in docs):
+                # Valid list of Document objects
+                valid_documents.extend(docs)
+                valid_files.append(file)
+                valid_metadatas.append(metadata)
+            else:
+                # Unknown type
+                file_name = file_names[idx]
+                error_msg = "Unknown document type returned"
+                failed_list.append(file_name)
+                error_messages.append({"file": file_name, "error": error_msg})
+                logger.warning(f"Document processing failed for {file_name}: {error_msg}")
+        
+        if not valid_documents and failed_list:
+            # All documents failed
+            logger.error(f"All {len(failed_list)} documents failed processing")
+            return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
+        
+        if not valid_documents:
+            logger.error("No valid documents were processed")
+            failed_list.extend(file_names)
+            return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
+        
         # Process complete pipeline - both S3 and Vector DB in a single transaction
         try:
-            # Process PDFs through the pipeline
-            chunks = await pipeline._run(pdf_files=files, metadatas=doc_metadata, s3_client=s3_client)
+            # Process PDFs through the pipeline with valid documents
+            chunks = await pipeline._run(pdf_files=valid_files, metadatas=valid_metadatas, preloaded_documents=valid_documents, s3_client=s3_client)
             
             if not chunks:
                 logger.error("No documents were processed")
-                failed_list.extend(file_names)
+                failed_list.extend([f.filename for f in valid_files])
                 return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
             
             # Record successful processing
-            for file in files:
+            for file in valid_files:
                 succeeded_list.append(file.filename)
 
         except Exception as processing_error:
@@ -135,13 +175,32 @@ async def upload_pdfs(
         # Process PDFs synchronously to get results
         result = await process_pdfs(files, doc_metadata, s3_client)
         
+        guardrail_errors = [e for e in result.get("error_messages", []) if "Guardrail" in str(e.get("error", "")) or "INVALID DATA" in str(e.get("error", ""))]
+        other_errors = [e for e in result.get("error_messages", []) if e not in guardrail_errors]
+        
         # Create success message with processed files
         if not result["succeeded"] and not result["failed"]:
             message = "Processing attempted but resulted in no successes or failures recorded."
         elif result["failed"] and not result["succeeded"]:
-            message = f"Processing failed for all requested PDF files: {', '.join(result['failed'])}"
+            # All failed
+            if guardrail_errors:
+                guardrail_files = [e.get("file", "Unknown") for e in guardrail_errors]
+                message = f"Guardrail verification failed for all PDF files: {', '.join(guardrail_files)}. Content does not match requirements."
+            else:
+                error_details = [f"{e.get('file', 'Unknown')}: {e.get('error', 'Unknown error')}" for e in result.get("error_messages", [])]
+                message = f"Processing failed for all requested PDF files: {', '.join(result['failed'])}. Errors: {'; '.join(error_details)}"
         elif result["failed"]:
-            message = f"Processing completed with some errors. Succeeded: {', '.join(result['succeeded'])}. Failed: {', '.join(result['failed'])}"
+            # Some succeeded, some failed
+            success_msg = f"Succeeded: {', '.join(result['succeeded'])}"
+            if guardrail_errors:
+                guardrail_files = [e.get("file", "Unknown") for e in guardrail_errors]
+                message = f"{success_msg}. Guardrail verification failed for: {', '.join(guardrail_files)} (Content does not match requirements)."
+                if other_errors:
+                    other_details = [f"{e.get('file', 'Unknown')}: {e.get('error', 'Unknown error')}" for e in other_errors]
+                    message += f" Other errors: {'; '.join(other_details)}"
+            else:
+                error_details = [f"{e.get('file', 'Unknown')}: {e.get('error', 'Unknown error')}" for e in result.get("error_messages", [])]
+                message = f"{success_msg}. Failed: {', '.join(result['failed'])}. Errors: {'; '.join(error_details)}"
         else:
             message = f"Successfully processed PDF files: {', '.join(result['succeeded'])}"
 

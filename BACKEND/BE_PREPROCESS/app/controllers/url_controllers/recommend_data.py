@@ -60,7 +60,6 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
     try:
         pipeline_url = RecommendProcessingPipeline()
         
-        # Determine if we should skip guardrails and expensive processing
         skip_guardrails = skip_duplicate_check or replace_existing
         devices_to_replace_list = None
         
@@ -117,7 +116,6 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
                     "existing_devices": existing_devices  # Return all existing devices
                 }
         elif skip_duplicate_check or replace_existing:
-            # If skipping duplicate check or explicitly replacing, extract device names to replace
             devices_to_replace_list = []
             for doc in valid_documents:
                 device_name = doc.metadata.get("device_name")
@@ -130,9 +128,7 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
             else:
                 logger.warning("No device names found in documents for replacement")
 
-        # Process complete pipeline - both S3 and Vector DB in a single transaction
         try:
-            # Save documents to S3 (only valid documents)
             logger.info(f"Starting S3 upload process for {len(valid_documents)} valid documents")
             for idx, doc in enumerate(valid_documents):
                 url_md = doc.metadata.get("source")
@@ -248,7 +244,6 @@ async def url_processing(
                 existing_devices=existing_devices
             )
         
-        # Create success message with processed URLs
         guardrail_errors = [e for e in result.get("error_messages", []) if "Guardrail" in str(e.get("error", "")) or "INVALID DATA" in str(e.get("error", ""))]
         other_errors = [e for e in result.get("error_messages", []) if e not in guardrail_errors]
         
