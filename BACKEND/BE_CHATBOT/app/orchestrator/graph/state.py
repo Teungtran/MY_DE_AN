@@ -6,6 +6,7 @@ from langchain_core.runnables import Runnable
 from langchain_core.messages import ToolMessage
 from pydantic import EmailStr
 from app.utils.logging.logger import get_logger
+from langchain_core.messages import HumanMessage, AIMessage
 
 logger = get_logger(__name__)
 
@@ -89,6 +90,34 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
         return left[:-1]
     return left + [right]
 
+def get_limited_conversation_pairs(state, num_pairs: int = 3) -> list:
+    """Get the latest N conversation pairs (HumanMessage + AIMessage)."""
+    all_messages = state.get("messages", [])
+    
+    if not all_messages:
+        return all_messages
+    
+    # Group messages into conversation turns
+    pairs = []
+    i = 0
+    while i < len(all_messages):
+        if isinstance(all_messages[i], HumanMessage):
+            pair = [all_messages[i]]
+            # Look for following AI message(s)
+            j = i + 1
+            while j < len(all_messages) and isinstance(all_messages[j], AIMessage):
+                pair.append(all_messages[j])
+                j += 1
+            pairs.append(pair)
+            i = j
+        else:
+            i += 1
+    
+    # Get latest N pairs and flatten
+    latest_pairs = pairs[-num_pairs:] if len(pairs) > num_pairs else pairs
+    limited_messages = [msg for pair in latest_pairs for msg in pair]
+    
+    return limited_messages
 
 class AgenticState(InputState):
     """State of the retrieval graph / agent."""
@@ -118,41 +147,34 @@ class Assistant:
             f"Dialog state: {dialog_state}"
         )
         
+        # Get limited messages
+        limited_messages = get_limited_conversation_pairs(state, num_pairs=3)
+        state_with_limited_messages = {**state, "messages": limited_messages}
+        
         while True:
-            # Get recent messages safely (handles tool call chains)
-            recent_messages = get_safe_recent_messages(state["messages"], limit=3)
-            limited_state = {**state, "messages": recent_messages}
-            logger.info(
-                f"[AGENT PROCESSING] {self.agent_name} processing with {len(recent_messages)}/{len(state['messages'])} messages"
-            )
-            result = self.runnable.invoke(limited_state)
-
-            # Log tool calls if any
-            if hasattr(result, "tool_calls") and result.tool_calls:
-                tool_names = [tc.get("name", "unknown") for tc in result.tool_calls]
-                logger.info(
-                    f"[AGENT PROCESSING] {self.agent_name} generated tool calls: {tool_names} | "
-                    f"Conversation ID: {conversation_id}"
-                )
+            result = self.runnable.invoke(state_with_limited_messages)
 
             if not result.tool_calls and (
                 not result.content
                 or isinstance(result.content, list)
                 and not result.content[0].get("text")
             ):
-                logger.warning(
-                    f"[AGENT PROCESSING] {self.agent_name} generated empty response, retrying | "
-                    f"Conversation ID: {conversation_id}"
-                )
-                messages = get_safe_recent_messages(state["messages"], limit=3) + [("user", "Respond with a real output.")]
-                state = {**state, "messages": messages}
+                # Use limited messages for retry, not original state
+                messages = state_with_limited_messages["messages"] + [("user", "Respond with a real output.")]
+                state_with_limited_messages = {**state_with_limited_messages, "messages": messages}
             else:
                 break
-        
-        logger.info(
-            f"[AGENT PROCESSING] {self.agent_name} completed processing | "
-            f"Conversation ID: {conversation_id}"
-        )
+                
+        if hasattr(result, "tool_calls") and result.tool_calls:
+            for tool_call in result.tool_calls:
+                if tool_call.get("name") == "recommend_system" and tool_call.get("return_value"):
+                    return_value = tool_call.get("return_value")
+                    if isinstance(return_value, tuple) and len(return_value) > 1:
+                        response, device_names = return_value
+                        global recommended_devices_cache
+                        recommended_devices_cache = device_names
+                        if isinstance(state, dict):
+                            state["recommended_devices"] = device_names
         return {"messages": result}
     
     
