@@ -1,11 +1,12 @@
 from typing import Annotated, Optional, List
-from langchain_core.messages import AnyMessage, AIMessage, HumanMessage, ToolMessage, trim_messages
+import os
+from langchain_core.messages import AnyMessage, ToolMessage, trim_messages
 from langgraph.graph import add_messages
 from typing_extensions import TypedDict, Literal
 from langchain_core.runnables import Runnable
 from pydantic import EmailStr
 from app.utils.logging.logger import get_logger
-
+from langchain_openai import ChatOpenAI
 logger = get_logger(__name__)
 
 def merge_recommended_devices(left: Optional[List[str]], right: Optional[List[str]]) -> Optional[List[str]]:
@@ -82,7 +83,12 @@ class Assistant:
                     messages,
                     max_tokens=self.max_tokens,
                     strategy="last",
-                    token_counter=self.runnable, 
+                    token_counter=ChatOpenAI(
+                                                openai_api_key=os.getenv("OPENAI_API_KEY"),   
+                                                model="gpt-4.1-mini",     
+                                                temperature=0,
+                                                max_tokens=3000
+                                            ),
                     start_on="human",
                     include_system=True,
                     allow_partial=False,
