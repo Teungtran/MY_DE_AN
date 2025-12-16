@@ -32,7 +32,7 @@ def get_db_uri():
 
 sql_agent = Agent(
     name="sql_agent",
-    model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
+    model=OpenAIChat(id="gpt-4.1-mini", api_key=api_key),
     role="Access to SQL DB, retrieve DB informations from user request",
     tools=[SQLTools(db_url=get_db_uri())],
     instructions="""

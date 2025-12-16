@@ -19,7 +19,7 @@ if isinstance(api_key, SecretStr):
 advertise_expert =  Agent(
     name="AdvertiseExpert",
     role=ROLE,
-    model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
+    model=OpenAIChat(id="gpt-4.1-mini", api_key=api_key),
     tools=[extract_url_content, draft_advertise_from_input],
     instructions = dedent(ADVERTISE_PROMPT),
     goal=GOAL,

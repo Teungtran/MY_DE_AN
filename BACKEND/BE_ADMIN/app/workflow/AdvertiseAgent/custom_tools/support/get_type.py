@@ -13,7 +13,7 @@ if isinstance(api_key, SecretStr):
 
 get_type = Agent(
     model=OpenAIChat(
-        id="gpt-4o-mini", 
+        id="gpt-4.1-mini", 
         api_key=api_key
     ),
     name="get_type",

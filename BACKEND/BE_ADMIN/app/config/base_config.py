@@ -40,7 +40,7 @@ class MongoDBConfig(BaseModel):
     
 class OpenAIConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: (ensure_env_loaded(), from_env("OPENAI_API_KEY")())[1])
-    model: Optional[str] = Field(default="gpt-4o-mini")
+    model: Optional[str] = Field(default="gpt-4.1-mini")
     kwargs: Dict = Field(default_factory=dict)
     
 

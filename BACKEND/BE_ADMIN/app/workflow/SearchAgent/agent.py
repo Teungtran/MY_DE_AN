@@ -23,7 +23,7 @@ if isinstance(TAVILY_API_KEY, SecretStr):
 tavily_agent = Agent(
     name="TavilyAgent",
     role="Access to Internet, retrieve latest informations from user request",
-    model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
+    model=OpenAIChat(id="gpt-4.1-mini", api_key=api_key),
     tools=[TavilyTools(api_key=TAVILY_API_KEY)],
     instructions=dedent(PROMPT),
     goal="Provide accurate, real-time information",

@@ -24,7 +24,7 @@ if isinstance(api_key, SecretStr):
 def ai_model():
     return ChatOpenAI(
         openai_api_key=api_key,
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         temperature=0
     )
 llm = ai_model()

@@ -24,7 +24,7 @@ memory,storage = get_storage()
 store_team = Team(
     description = "A team of Store Manager Assistants that can answer questions related to store management and sales.",
     name="SAGE- R&D Supporting Team",
-    model=OpenAIChat(id="gpt-4o-mini", api_key=api_key),
+    model=OpenAIChat(id="gpt-4.1-mini", api_key=api_key),
     mode="coordinate",
     tools=[ReasoningTools(add_instructions=True,think=True, analyze=True)],
     instructions=dedent(TEAM_PROMPT),

@@ -42,7 +42,7 @@ class RecommendProcessingPipeline:
     def __init__(self, config: BaseConfiguration = APP_CONFIG):
         self.config = config
         self.openai_api_key = config.chat_model_config.api_key.get_secret_value()
-        self.model = config.chat_model_config.model or "gpt-4o-mini"
+        self.model = config.chat_model_config.model or "gpt-4.1-mini"
         self.qdrant_url = config.recommend_config.url
         self.qdrant_api_key = config.recommend_config.api_key.get_secret_value()
         self.qdrant_collection_name = config.recommend_config.collection_name

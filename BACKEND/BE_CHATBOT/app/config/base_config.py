@@ -39,7 +39,7 @@ class MongoDBConfig(BaseModel):
     url: str = Field(default_factory=lambda: (ensure_env_loaded(), from_env("MONGO_URL", default="....")())[1])
 class OpenAIConfig(BaseModel):
     api_key: SecretStr = Field(default_factory=lambda: ensure_env_loaded() or secret_from_env("OPENAI_API_KEY"))
-    model: Optional[str] = Field(default="gpt-4o-mini")
+    model: Optional[str] = Field(default="gpt-4.1-mini")
     kwargs: Dict = Field(default_factory=dict)
     
 class KeyBERTConfig(BaseModel):

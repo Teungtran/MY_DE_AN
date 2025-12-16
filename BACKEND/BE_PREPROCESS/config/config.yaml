@@ -7,7 +7,7 @@ embedding_model_config:
 
 chat_model_config:
   provider: "openai"
-  model: "gpt-4o-mini"
+  model: "gpt-4.1-mini"
   top_k: 10
   kwargs:
     temperature: 0
