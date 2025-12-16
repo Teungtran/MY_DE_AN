@@ -12,16 +12,30 @@ from .support.get_type import get_type
     add_instructions=True, 
     cache_results=True)
 def extract_url_content(url: str) -> str:
+    """Extract content from URL and format as advertisement context."""
     crawler = URLCrawler()
     
     try:
+        # Get or create event loop
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         except RuntimeError:
+            # No running loop, create a new one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
-        content_and_url = loop.run_until_complete(crawler.get_converted_document(url))
+            
+        # Run the async function
+        try:
+            content_and_url = loop.run_until_complete(crawler.get_converted_document(url))
+        except RuntimeError as e:
+            # If loop is already running, we need to handle it differently
+            if "already running" in str(e).lower():
+                # Create a new loop for this specific call
+                new_loop = asyncio.new_event_loop()
+                content_and_url = new_loop.run_until_complete(crawler.get_converted_document(url))
+                new_loop.close()
+            else:
+                raise
         
         if content_and_url:
             content, final_url = content_and_url
@@ -32,8 +46,12 @@ def extract_url_content(url: str) -> str:
             return ad
         else:
             return "Failed to extract content from the URL."
+            
     except Exception as e:
-        return f"Error extracting content: {str(e)}"
+        # Log the error for debugging
+        import traceback
+        error_details = traceback.format_exc()
+        return f"Error extracting content from URL '{url}': {str(e)}\nDetails: {error_details[:200]}"
     
     
 @tool(name="draft_advertise_from_input", 

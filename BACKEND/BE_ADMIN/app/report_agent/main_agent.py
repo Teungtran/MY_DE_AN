@@ -253,11 +253,24 @@ def react_agent(state: InputState):
     raw = reasoning_result.content
     logger.info(f"[DEBUG] analyze_agent result: {raw}")
 
+    # Strip markdown code blocks if present
+    raw_stripped = raw.strip()
+    if raw_stripped.startswith("```json"):
+        raw_stripped = raw_stripped[7:]  # Remove ```json
+    elif raw_stripped.startswith("```"):
+        raw_stripped = raw_stripped[3:]  # Remove ```
+    
+    if raw_stripped.endswith("```"):
+        raw_stripped = raw_stripped[:-3]  # Remove trailing ```
+    
+    raw_stripped = raw_stripped.strip()
+
     try:
-        parsed = json.loads(raw)
+        parsed = json.loads(raw_stripped)
     except json.JSONDecodeError:
         logger.info("[WARN] Failed to parse reasoning output as JSON.")
-        return {"messages": [AIMessage(content="Sorry, I didn’t understand that request clearly. Could you rephrase?")]}
+        logger.info(f"[DEBUG] Raw content after stripping: {raw_stripped}")
+        return {"messages": [AIMessage(content="Sorry, I didn't understand that request clearly. Could you rephrase?")]}
 
     tool_action = parsed.get("tool_action", "").upper()
 

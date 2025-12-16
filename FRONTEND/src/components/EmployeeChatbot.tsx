@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
@@ -726,6 +727,7 @@ What can I help you explore today?`,
                     {msg.sender === 'ai' ? (
                       <div className="prose prose-sm max-w-none">
                         <ReactMarkdown
+                          remarkPlugins={[remarkGfm]}
                           components={{
                             img: ({ src, alt }) => (
                               <img 
@@ -753,9 +755,6 @@ What can I help you explore today?`,
                             li: ({ children }) => (
                               <li className="text-gray-700">{children}</li>
                             ),
-                            p: ({ children }) => (
-                              <p className="text-gray-800 mb-2 leading-relaxed">{children}</p>
-                            ),
                             strong: ({ children }) => (
                               <strong className="font-semibold text-gray-900">{children}</strong>
                             ),
@@ -774,13 +773,47 @@ What can I help you explore today?`,
                             a: ({ href, children }) => (
                               <a 
                                 href={href} 
-                                className="text-blue-600 hover:text-blue-800 underline"
+                                className="text-blue-600 hover:text-blue-800 underline font-medium"
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
                                 {children}
                               </a>
                             ),
+                            // Auto-linkify plain text URLs
+                            p: ({ children }) => {
+                              const linkifyText = (text: any): any => {
+                                if (typeof text !== 'string') return text;
+                                
+                                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                const parts = text.split(urlRegex);
+                                
+                                return parts.map((part, i) => {
+                                  if (part.match(urlRegex)) {
+                                    return (
+                                      <a 
+                                        key={i}
+                                        href={part} 
+                                        className="text-blue-600 hover:text-blue-800 underline font-medium"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {part}
+                                      </a>
+                                    );
+                                  }
+                                  return part;
+                                });
+                              };
+                              
+                              return (
+                                <p className="text-gray-800 mb-2 leading-relaxed">
+                                  {React.Children.map(children, child => 
+                                    typeof child === 'string' ? linkifyText(child) : child
+                                  )}
+                                </p>
+                              );
+                            },
                             hr: () => (
                               <hr className="my-4 border-gray-300" />
                             ),

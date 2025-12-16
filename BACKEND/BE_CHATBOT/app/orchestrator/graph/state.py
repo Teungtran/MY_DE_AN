@@ -1,12 +1,10 @@
 from typing import Annotated, Optional, List
-from langchain_core.messages import AnyMessage, AIMessage
+from langchain_core.messages import AnyMessage, AIMessage, HumanMessage, ToolMessage, trim_messages
 from langgraph.graph import add_messages
 from typing_extensions import TypedDict, Literal
 from langchain_core.runnables import Runnable
-from langchain_core.messages import ToolMessage
 from pydantic import EmailStr
 from app.utils.logging.logger import get_logger
-from langchain_core.messages import HumanMessage, AIMessage
 
 logger = get_logger(__name__)
 
@@ -45,33 +43,6 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
         return left[:-1]
     return left + [right]
 
-def get_limited_conversation_pairs(state, num_pairs: int = 20) -> list:
-    """Get the latest N conversation pairs (HumanMessage + AIMessage)."""
-    all_messages = state.get("messages", [])
-    
-    if not all_messages:
-        return all_messages
-    
-    # Group messages into conversation turns
-    pairs = []
-    i = 0
-    while i < len(all_messages):
-        if isinstance(all_messages[i], HumanMessage):
-            pair = [all_messages[i]]
-            j = i + 1
-            while j < len(all_messages) and isinstance(all_messages[j], AIMessage):
-                pair.append(all_messages[j])
-                j += 1
-            pairs.append(pair)
-            i = j
-        else:
-            i += 1
-    
-    # Get latest N pairs and flatten
-    latest_pairs = pairs[-num_pairs:] if len(pairs) > num_pairs else pairs
-    limited_messages = [msg for pair in latest_pairs for msg in pair]
-    
-    return limited_messages
 
 class AgenticState(InputState):
     """State of the retrieval graph / agent."""
@@ -84,10 +55,12 @@ class AgenticState(InputState):
     conversation_id: Annotated[str, "The unique identifier for the conversation"]
     user_id: Annotated[str, "The unique identifier for the user"]
     email: Annotated[EmailStr,"The email of the customer ordering"]
+    
 class Assistant:
-    def __init__(self, runnable: Runnable, agent_name: str = "Unknown Agent"):
+    def __init__(self, runnable: Runnable, agent_name: str = "Unknown Agent", max_tokens: int = 100000):
         self.runnable = runnable
         self.agent_name = agent_name
+        self.max_tokens = max_tokens
 
     def __call__(self, state: AgenticState):
         conversation_id = state.get("conversation_id", "N/A")
@@ -101,21 +74,37 @@ class Assistant:
             f"Dialog state: {dialog_state}"
         )
         
-        # Get limited messages
-        limited_messages = get_limited_conversation_pairs(state, num_pairs=3)
-        state_with_limited_messages = {**state, "messages": limited_messages}
+
+        messages = state.get("messages", [])
+        if messages and len(messages) > 10:  # Only trim if there are many messages
+            try:
+                trimmed_messages = trim_messages(
+                    messages,
+                    max_tokens=self.max_tokens,
+                    strategy="last",
+                    token_counter=self.runnable, 
+                    start_on="human",
+                    include_system=True,
+                    allow_partial=False,
+                )
+                state = {**state, "messages": trimmed_messages}
+                logger.debug(
+                    f"Trimmed messages from {len(messages)} to {len(trimmed_messages)} "
+                    f"(max_tokens: {self.max_tokens})"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to trim messages: {e}. Using all messages.")
         
         while True:
-            result = self.runnable.invoke(state_with_limited_messages)
+            result = self.runnable.invoke(state)
 
             if not result.tool_calls and (
                 not result.content
                 or isinstance(result.content, list)
                 and not result.content[0].get("text")
             ):
-                # Use limited messages for retry, not original state
-                messages = state_with_limited_messages["messages"] + [("user", "Respond with a real output.")]
-                state_with_limited_messages = {**state_with_limited_messages, "messages": messages}
+                messages = state["messages"] + [("user", "Respond with a real output.")]
+                state = {**state, "messages": messages}
             else:
                 break
                 

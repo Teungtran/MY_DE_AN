@@ -627,22 +627,53 @@ What can I help you with today?`,
                             li: ({ children }) => (
                               <li className="text-gray-700">{children}</li>
                             ),
-                            p: ({ children }) => (
-                              <p className="text-gray-800 mb-2 leading-relaxed">{children}</p>
-                            ),
                             strong: ({ children }) => (
                               <strong className="font-semibold text-gray-900">{children}</strong>
                             ),
                             a: ({ href, children }) => (
                               <a 
                                 href={href} 
-                                className="text-blue-600 hover:text-blue-800 underline"
+                                className="text-blue-600 hover:text-blue-800 underline font-medium"
                                 target="_blank"
                                 rel="noopener noreferrer"
                               >
                                 {children}
                               </a>
                             ),
+                            // Auto-linkify plain text URLs
+                            p: ({ children }) => {
+                              const linkifyText = (text: any): any => {
+                                if (typeof text !== 'string') return text;
+                                
+                                const urlRegex = /(https?:\/\/[^\s]+)/g;
+                                const parts = text.split(urlRegex);
+                                
+                                return parts.map((part, i) => {
+                                  if (part.match(urlRegex)) {
+                                    return (
+                                      <a 
+                                        key={i}
+                                        href={part} 
+                                        className="text-blue-600 hover:text-blue-800 underline font-medium"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        {part}
+                                      </a>
+                                    );
+                                  }
+                                  return part;
+                                });
+                              };
+                              
+                              return (
+                                <p className="text-gray-800 mb-2 leading-relaxed">
+                                  {React.Children.map(children, child => 
+                                    typeof child === 'string' ? linkifyText(child) : child
+                                  )}
+                                </p>
+                              );
+                            },
                             table: ({ children }) => (
                               <div className="overflow-x-auto my-4">
                                 <table className="min-w-full border-collapse border border-gray-300 text-sm">
