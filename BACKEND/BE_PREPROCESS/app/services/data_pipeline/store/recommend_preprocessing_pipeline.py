@@ -69,21 +69,28 @@ class RecommendProcessingPipeline:
     ])
 
     def _connect_and_create_collection(self):
-        """Connect to Qdrant and create collection if it doesn't exist."""
+        """
+        Connect to Qdrant and create collection ONLY if it doesn't exist.
+        NEVER recreates or deletes existing collections.
+        """
         try:
             client = QdrantClient(url=self.qdrant_url, api_key=self.qdrant_api_key)
             collection_name = self.qdrant_collection_name
             vector_size = 1536  
             
-            if not client.collection_exists(collection_name):
-                client.create_collection(
-                    collection_name=collection_name,
-                    vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
-                )
-                logger.info(f"Created collection '{collection_name}'")
-            else:
-                logger.info(f"Collection '{collection_name}' already exists.")
-
+            # Check if collection exists - NEVER recreate if it exists
+            if client.collection_exists(collection_name):
+                logger.info(f"Collection '{collection_name}' already exists. Connecting to existing collection.")
+                return client, collection_name
+            
+            # Only create if collection does NOT exist
+            logger.info(f"Collection '{collection_name}' does not exist. Creating new collection.")
+            client.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(size=vector_size, distance=Distance.COSINE)
+            )
+            logger.info(f"Successfully created collection '{collection_name}'")
+            
             return client, collection_name
         except Exception as e:
             logger.error(f"Error connecting to Qdrant: {e}")
@@ -248,14 +255,20 @@ class RecommendProcessingPipeline:
         for idx, result in enumerate(results):
             if isinstance(result, Exception):
                 logger.error(f"Error processing URL {urls[idx]}: {result}")
-            elif isinstance(result, str) and result.startswith("Error:"):
-                # Guardrail or other validation error - return as tuple with error message
-                logger.error(f"Guardrail/validation error for URL {urls[idx]}: {result}")
+                # Convert exception to error tuple for proper handling
+                valid_results.append((f"Error: {str(result)}", urls[idx]))
+            elif isinstance(result, str):
+                if result.startswith("Error:"):
+                    logger.error(f"Guardrail/validation error for URL {urls[idx]}: {result}")
+                else:
+                    logger.warning(f"Unexpected string result for URL {urls[idx]}: {result}")
+                    result = f"Error: {result}"
                 valid_results.append((result, urls[idx]))  # Return error as tuple for proper handling
             elif isinstance(result, tuple):
                 valid_results.append(result)
             else:
-                logger.warning(f"Unexpected result type for URL {urls[idx]}: {type(result)}")
+                logger.warning(f"Unexpected result type for URL {urls[idx]}: {type(result)}, value: {result}")
+                valid_results.append((f"Error: Unexpected result type {type(result)}", urls[idx]))
                 
         return valid_results
 
@@ -263,13 +276,23 @@ class RecommendProcessingPipeline:
         """Process documents in batches for better concurrency."""
         all_documents = []
         
+        # Handle empty input
+        if not raw_tuples:
+            logger.warning("No raw tuples to process")
+            return all_documents
+        
         # Determine batch size based on input length
         if batch_size is None:
             input_length = len(raw_tuples)
-            if input_length <= 5:
+            if input_length == 0:
+                return all_documents
+            elif input_length <= 5:
                 batch_size = input_length
             else:
                 batch_size = max(5, input_length // 4)
+        
+        # Ensure batch_size is at least 1 to avoid range() error
+        batch_size = max(1, batch_size)
         
         for i in range(0, len(raw_tuples), batch_size):
             batch = raw_tuples[i:i+batch_size]
@@ -279,7 +302,8 @@ class RecommendProcessingPipeline:
             valid_docs = [doc for doc in processed_batch if doc is not None]
             all_documents.extend(valid_docs)
             
-            logger.info(f"Processed batch {i//batch_size + 1}/{(len(raw_tuples) + batch_size - 1)//batch_size}, got {len(valid_docs)} valid documents")
+            total_batches = (len(raw_tuples) + batch_size - 1) // batch_size
+            logger.info(f"Processed batch {i//batch_size + 1}/{total_batches}, got {len(valid_docs)} valid documents")
             
         return all_documents
 
