@@ -322,23 +322,21 @@ class RecommendProcessingPipeline:
                 logger.error("Qdrant client or collection not initialized")
                 return False
             
-            search_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="device_name",
-                        match=MatchValue(value=device_name)
-                    )
-                ]
-            )
-            
-            scroll_result = self.client.scroll(
+            points, _ = self.client.scroll(
                 collection_name=self.collection_name,
-                scroll_filter=search_filter,
-                limit=1,
-                with_payload=True
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="metadata.device_name",
+                            match=MatchValue(value=device_name),
+                        )
+                    ]
+                ),
+                with_payload=True,
+                limit=1000,  # increase if needed
             )
             
-            exists = scroll_result and len(scroll_result[0]) > 0
+            exists = points and len(points[0]) > 0
             if exists:
                 logger.info(f"Device '{device_name}' exists in database")
             else:

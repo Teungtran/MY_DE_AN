@@ -32,25 +32,22 @@ def connect_to_policy_store(vector_store_config: PolicyConfig, embedding_model: 
     return vector_store
 
 def connect_to_recommend_store(vector_store_config: RecommendConfig, embedding_model: Embeddings) -> VectorStore:
-    """
-    Connect to existing Qdrant vector store.
-    Does NOT create or recreate collections - only connects to existing ones.
-    """
+
+
     # Connect to the Qdrant client
     qdrant_client = QdrantClient(
         url=vector_store_config.url,
         api_key=vector_store_config.api_key.get_secret_value(),
     )
 
-    # Connect to the Qdrant vector store (does not create/recreate collection)
-    # QdrantVectorStore will use existing collection if it exists
+    # Create the Qdrant vector store
     vector_store = QdrantVectorStore(
         client=qdrant_client,
         collection_name=vector_store_config.collection_name,
         embedding=embedding_model,
     )
     
-    logger.info(f"Connected to Qdrant vector store: {vector_store_config.collection_name}")
+    logger.info(f"Created Qdrant vector store: {vector_store}")
     return vector_store
 
 def connect_to_expert_store(vector_store_config: ExpertConfig, embedding_model: Embeddings) -> VectorStore:

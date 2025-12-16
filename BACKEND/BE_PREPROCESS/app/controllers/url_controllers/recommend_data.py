@@ -13,7 +13,6 @@ from app.services.data_pipeline.store.recommend_preprocessing_pipeline import Re
 from app.services.storage.s3 import AsyncS3Client, S3Input, get_s3_client
 from app.utils.helpers.exception_handler import ExceptionHandler, FunctionName, ServiceName
 from app.utils.logger.logger import get_logger
-from app.utils.db_check import check_device_exists
 
 logger = get_logger(__name__)
 recommend_router = APIRouter(prefix="/url")
@@ -95,12 +94,11 @@ async def process_urls(doc_metadata: List[DocumentMetadata], s3_client: AsyncS3C
             failed_list.extend(paths)
             return {"succeeded": succeeded_list, "failed": failed_list, "error_messages": error_messages}
         
-        # Check if any devices already exist in database (only if not replacing and not skipping check)
         if not replace_existing and not skip_duplicate_check:
             existing_devices = []
             for doc in valid_documents:
                 device_name = doc.metadata.get("device_name")
-                if device_name and check_device_exists(device_name):
+                if device_name and pipeline_url._check_device_exists_in_db(device_name):
                     existing_devices.append(device_name)
             
             if existing_devices:
