@@ -45,7 +45,7 @@ def update_dialog_stack(left: list[str], right: Optional[str]) -> list[str]:
         return left[:-1]
     return left + [right]
 
-def get_limited_conversation_pairs(state, num_pairs: int = 3) -> list:
+def get_limited_conversation_pairs(state, num_pairs: int = 20) -> list:
     """Get the latest N conversation pairs (HumanMessage + AIMessage)."""
     all_messages = state.get("messages", [])
     
