@@ -125,10 +125,6 @@ def generate_pandas_code(user_input: str, df_sample: str, data_info):
 
         **CRITICAL**: You MUST only use column names that appear in the data_info above.
         - Match user query keywords to column names (case-insensitive, partial matches OK)
-        - Examples: "VIP" or "customer" → look for columns like "customer_labels", "customer_type", "customer_category"
-        - Examples: "price" or "cost" → look for columns like "price", "cost", "amount", "value"
-        - Examples: "date" or "time" → look for datetime columns or date-related column names
-        - If user mentions specific values (like "VIP", "Regular"), find the column that likely contains these values
         - Use the sample data above to see examples of actual values in columns
         - The sample data shows real values, so you can see what format/names are actually used
 
