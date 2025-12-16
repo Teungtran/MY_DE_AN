@@ -336,7 +336,7 @@ class RecommendProcessingPipeline:
                 limit=1000,  # increase if needed
             )
             
-            exists = points and len(points[0]) > 0
+            exists = points and len(points) > 0
             if exists:
                 logger.info(f"Device '{device_name}' exists in database")
             else:
@@ -350,7 +350,7 @@ class RecommendProcessingPipeline:
 
     def _delete_chunks_by_device_name(self, device_name: str) -> int:
         """
-        Delete all chunks from Qdrant vector DB that match the given device_name.
+        Delete all points (vectors, metadata, page_content) from Qdrant vector DB that match the given device_name.
         
         Args:
             device_name: The device name to filter by
@@ -359,12 +359,35 @@ class RecommendProcessingPipeline:
             Number of points deleted (or 0 if operation failed)
         """
         if not self.client or not self.collection_name:
-                logger.error("Qdrant client or collection not initialized")
-                return 0
+            logger.error("Qdrant client or collection not initialized")
+            return 0
             
-        logger.info(f"Attempting to delete chunks for device_name '{device_name}' from collection '{self.collection_name}'")
+        logger.info(f"Attempting to delete all data for device_name '{device_name}' from collection '{self.collection_name}'")
         
         try:
+            # First, count how many points will be deleted
+            points, _ = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=Filter(
+                    must=[
+                        FieldCondition(
+                            key="metadata.device_name",
+                            match=MatchValue(value=device_name),
+                        )
+                    ]
+                ),
+                limit=10000,  # Get all matching points
+                with_payload=False,  # We only need the count
+            )
+            
+            count_before = len(points)
+            if count_before == 0:
+                logger.info(f"No points found for device_name '{device_name}'")
+                return 0
+            
+            logger.info(f"Found {count_before} points to delete for device_name '{device_name}'")
+            
+            # Delete all matching points (this deletes vectors, metadata, and page_content)
             delete_filter = Filter(
                 must=[
                     FieldCondition(
@@ -374,16 +397,17 @@ class RecommendProcessingPipeline:
                 ]
             )
 
-            self.client.delete(
+            delete_result = self.client.delete(
                 collection_name=self.collection_name,
                 points_selector=FilterSelector(filter=delete_filter),
-                wait=True,   
-
+                wait=True,  # Wait for the operation to complete
             )
-
-            return 1
+            
+            logger.info(f"Successfully deleted {count_before} points for device_name '{device_name}'")
+            return count_before
 
         except Exception as e:
+            logger.error(f"Error deleting chunks for device_name '{device_name}': {e}", exc_info=True)
             return 0
 
     async def _run(
