@@ -146,6 +146,23 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify(userData),
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      let errorMessage = `Registration failed (HTTP ${response.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        // Extract error message from different possible response formats
+        errorMessage = errorJson.detail || errorJson.message || errorJson.msg_log || errorMessage;
+      } catch {
+        // If parsing fails, try to extract meaningful text from the response
+        if (errorText && errorText.length > 0) {
+          errorMessage = errorText;
+        }
+      }
+      throw new Error(errorMessage);
+    }
+    
     return response.json();
   },
 
@@ -157,6 +174,21 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      let errorMessage = `Login failed (HTTP ${response.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.detail || errorJson.message || errorJson.msg_log || errorMessage;
+      } catch {
+        if (errorText && errorText.length > 0) {
+          errorMessage = errorText;
+        }
+      }
+      throw new Error(errorMessage);
+    }
+    
     return response.json();
   },
 
@@ -168,6 +200,21 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      let errorMessage = `Failed to send password reset (HTTP ${response.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.detail || errorJson.message || errorJson.msg_log || errorMessage;
+      } catch {
+        if (errorText && errorText.length > 0) {
+          errorMessage = errorText;
+        }
+      }
+      throw new Error(errorMessage);
+    }
+    
     return response.json();
   },
 
@@ -180,6 +227,21 @@ export const authAPI = {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      let errorMessage = `Failed to change password (HTTP ${response.status})`;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.detail || errorJson.message || errorJson.msg_log || errorMessage;
+      } catch {
+        if (errorText && errorText.length > 0) {
+          errorMessage = errorText;
+        }
+      }
+      throw new Error(errorMessage);
+    }
+    
     return response.json();
   },
 };

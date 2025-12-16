@@ -11,7 +11,7 @@ import { Badge } from './ui/badge';
 import { Send, Plus, Search, Menu, LogOut, Users, MessageCircle, Brain, FileText, Database, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
 import { FPTLogo } from './FPTLogo';
-import { adminAPI, generateConversationId } from '../utils/api';
+import { useChatContext } from '../contexts/ChatContext';
 
 interface User {
   id: string;
@@ -19,23 +19,7 @@ interface User {
   role: string;
 }
 
-interface Message {
-  id: string;
-  content: string;
-  sender: 'user' | 'ai' | 'employee';
-  senderName?: string;
-  timestamp: Date;
-}
 
-interface Session {
-  id: string;
-  title: string;
-  lastMessage: string;
-  timestamp: Date;
-  status: 'active' | 'closed';
-  participants: string[];
-  messages: Message[];
-}
 
 interface EmployeeChatbotProps {
   user: User;
@@ -44,15 +28,23 @@ interface EmployeeChatbotProps {
 
 export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
   const location = useLocation();
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const {
+    sessions,
+    activeSession,
+    setActiveSession,
+    isTyping,
+    isInitialized,
+    initializeSessions,
+    sendMessage: contextSendMessage,
+    createNewSession,
+    deleteSession,
+    clearAllHistory
+  } = useChatContext();
   
-  const [activeSession, setActiveSession] = useState<string>('');
   const [message, setMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -63,177 +55,12 @@ export function EmployeeChatbot({ user, onLogout }: EmployeeChatbotProps) {
     scrollToBottom();
   }, [sessions, activeSession]);
 
-  // Load sessions from localStorage and fetch history from API on mount
+  // Initialize sessions when component mounts
   useEffect(() => {
-    if (isInitialized) return; // Prevent multiple initializations
-
-    const loadSessionsFromStorage = async () => {
-      try {
-        // Fetch all conversations from backend using user ID
-        console.log(`Fetching all sessions from backend for user ${user.id}...`);
-        const allSessionsData = await adminAPI.getAllConversations(user.id);
-        console.log(`Received ${Object.keys(allSessionsData || {}).length} sessions from backend`);
-        
-        if (allSessionsData && Object.keys(allSessionsData).length > 0) {
-          // We have sessions in backend
-          const loadedSessions: Session[] = [];
-          
-          for (const [sessionId, messages] of Object.entries(allSessionsData)) {
-            const messageList = messages as any[];
-            // Include sessions even if empty (they might have been created but no messages yet)
-            if (!Array.isArray(messageList)) {
-              console.warn(`Session ${sessionId} has invalid message format, skipping`);
-              continue;
-            }
-            
-            const sessionMessages: Message[] = messageList.map((msg: any, idx: number) => ({
-              id: `${sessionId}-${idx}`,
-              content: msg.content || '',
-              sender: msg.role === 'human' ? 'user' : 'ai',
-              timestamp: new Date()
-            }));
-
-            // Get title and metadata from localStorage or use default
-            let title = 'New Session';
-            let lastMessage = sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].content : 'No messages yet';
-            let status: 'active' | 'closed' = 'active';
-            let participants = [user.email.split('@')[0]];
-            
-            const storedSessions = localStorage.getItem('employee_sessions');
-            if (storedSessions) {
-              try {
-                const sessionMetadata = JSON.parse(storedSessions);
-                const meta = sessionMetadata.find((m: any) => m.id === sessionId);
-                if (meta) {
-                  title = meta.title || title;
-                  lastMessage = meta.lastMessage || (sessionMessages.length > 0 ? sessionMessages[sessionMessages.length - 1].content : 'No messages yet');
-                  status = meta.status || 'active';
-                  participants = meta.participants || participants;
-                }
-              } catch (e) {
-                console.error('Error parsing stored sessions:', e);
-              }
-            }
-
-            console.log(`Loading session ${sessionId}: ${sessionMessages.length} messages, title: ${title}`);
-
-            loadedSessions.push({
-              id: sessionId,
-              title: title,
-              lastMessage: lastMessage ? lastMessage.substring(0, 50) : 'No messages yet',
-              timestamp: new Date(),
-              status: status,
-              participants: participants,
-              messages: sessionMessages
-            });
-          }
-
-          // Sort sessions by timestamp (most recent first)
-          loadedSessions.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-          setSessions(loadedSessions);
-          if (loadedSessions.length > 0) {
-            setActiveSession(loadedSessions[0].id);
-          } else {
-            // No valid sessions found, create initial one
-            createInitialSession();
-            return;
-          }
-          
-          // Update localStorage with backend data
-          const sessionMetadata = loadedSessions.map(session => ({
-            id: session.id,
-            title: session.title,
-            lastMessage: session.lastMessage,
-            timestamp: session.timestamp.toISOString(),
-            status: session.status,
-            participants: session.participants
-          }));
-          localStorage.setItem('employee_sessions', JSON.stringify(sessionMetadata));
-          
-          setIsInitialized(true);
-          return;
-        }
-        
-        // No sessions in backend, check localStorage
-        const storedSessions = localStorage.getItem('employee_sessions');
-        if (storedSessions) {
-          try {
-            const sessionMetadata = JSON.parse(storedSessions);
-            
-            if (Array.isArray(sessionMetadata) && sessionMetadata.length > 0) {
-              // We have stored sessions but no backend data, create initial one anyway
-              createInitialSession();
-              setIsInitialized(true);
-              return;
-            }
-          } catch (e) {
-            console.error('Error parsing stored sessions:', e);
-          }
-        }
-        
-        // No sessions anywhere, create initial one
-        createInitialSession();
-        setIsInitialized(true);
-      } catch (error) {
-        console.error('Failed to load sessions from storage:', error);
-        // Create initial session on error
-        createInitialSession();
-        setIsInitialized(true);
-      }
-    };
-
-    const createInitialSession = () => {
-      const sessionId = generateConversationId();
-      const welcomeMessage: Message = {
-        id: 'welcome',
-        content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart business assistant at FPT
-
-Ready to assist you with:
-      
-Competitor insights & market analysis
-Strategic planning & decision support  
-Business intelligence & data insights
-Research & knowledge discovery
-
-Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
-
-What can I help you explore today?`,
-        sender: 'ai',
-        timestamp: new Date()
-      };
-
-      const newSession: Session = {
-        id: sessionId,
-        title: 'New Session',
-        lastMessage: 'Welcome to SAGE!',
-        timestamp: new Date(),
-        status: 'active',
-        participants: [user.email.split('@')[0]],
-        messages: [welcomeMessage]
-      };
-      
-      setSessions([newSession]);
-      setActiveSession(newSession.id);
-      
-      try {
-        localStorage.setItem('employee_sessions', JSON.stringify([{
-          id: sessionId,
-          title: 'New Session',
-          lastMessage: 'Welcome to SAGE!',
-          timestamp: newSession.timestamp.toISOString(),
-          status: 'active',
-          participants: [user.email.split('@')[0]]
-        }]));
-      } catch (e) {
-        console.error('Failed to save to localStorage:', e);
-      }
-    };
-
-    loadSessionsFromStorage();
-  }, [isInitialized, user.email, user.id]); // Only run on mount or when user changes
+    if (!isInitialized) {
+      initializeSessions(user.id, user.email);
+    }
+  }, [isInitialized, user.id, user.email, initializeSessions]);
 
   const getCurrentSession = () => {
     return sessions.find(session => session.id === activeSession);
@@ -244,204 +71,22 @@ What can I help you explore today?`,
     if (!message.trim()) return;
 
     const userMessage = message;
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: userMessage,
-      sender: 'user',
-      senderName: user.email.split('@')[0],
-      timestamp: new Date()
-    };
-
-    // Add user message
-    setSessions(prev => prev.map(session => 
-      session.id === activeSession 
-        ? { ...session, messages: [...session.messages, newMessage], lastMessage: userMessage }
-        : session
-    ));
-
     setMessage('');
-    setIsTyping(true);
-
-    // Create AI response message that will be updated with streaming chunks
-    const aiMessageId = (Date.now() + 1).toString();
-    const aiResponse: Message = {
-      id: aiMessageId,
-      content: '',
-      sender: 'ai',
-      timestamp: new Date()
-    };
-
-    // Add empty AI message
-    setSessions(prev => prev.map(session => 
-      session.id === activeSession 
-        ? { ...session, messages: [...session.messages, aiResponse] }
-        : session
-    ));
-
-    try {
-      // Use real admin team chat API (now returns JSON directly, no streaming)
-      const response = await adminAPI.teamChatStream(
-        userMessage,
-        activeSession // Use session ID
-      );
-      
-      // Update AI message with complete response
-      setSessions(prev => prev.map(session => 
-        session.id === activeSession 
-          ? { 
-              ...session, 
-              messages: session.messages.map(msg => 
-                msg.id === aiMessageId 
-                  ? { ...msg, content: response.content || '' }
-                  : msg
-              ),
-              lastMessage: response.content || '',
-              // Update title if provided in response
-              ...(response.title && { title: response.title })
-            }
-          : session
-      ));
-      
-      // Update localStorage with new title if provided
-      if (response.title) {
-        try {
-          const storedSessions = localStorage.getItem('employee_sessions');
-          if (storedSessions) {
-            const sessionMetadata = JSON.parse(storedSessions);
-            const updatedMetadata = sessionMetadata.map((meta: any) => 
-              meta.id === activeSession 
-                ? { ...meta, title: response.title }
-                : meta
-            );
-            localStorage.setItem('employee_sessions', JSON.stringify(updatedMetadata));
-          }
-        } catch (error) {
-          console.error('Failed to update session title in localStorage:', error);
-        }
-      }
-      
-      setIsTyping(false);
-    } catch (error) {
-      console.error('Team chat error:', error);
-      // Update AI message with error
-      setSessions(prev => prev.map(session => 
-        session.id === activeSession 
-          ? { 
-              ...session, 
-              messages: session.messages.map(msg => 
-                msg.id === aiMessageId 
-                  ? { ...msg, content: 'Sorry, I encountered an error. Please try again.' }
-                  : msg
-              )
-            }
-          : session
-      ));
-      setIsTyping(false);
-    }
+    await contextSendMessage(userMessage, user.id, user.email);
   };
 
-  // Note: generateAIResponse function removed - now using real streaming API via adminAPI.teamChatStream()
-
-  const createNewSession = () => {
-    // Generate UUID for new session
-    const sessionId = generateConversationId();
-    
-    const welcomeMessage: Message = {
-      id: 'welcome',
-      content: `Hello, ${user.email.split('@')[0]}!
-
-I'm SAGE – your smart business assistant at FPT
-
-Ready to assist you with:
-      
-Competitor insights & market analysis
-Strategic planning & decision support  
-Business intelligence & data insights
-Research & knowledge discovery
-
-Just ask me what you need – from competitor insights to strategy ideas – and I'll bring the right information to your fingertips.
-
-What can I help you explore today?`,
-      sender: 'ai',
-      timestamp: new Date()
-    };
-
-    const newSession: Session = {
-      id: sessionId,
-      title: 'New Session',
-      lastMessage: 'Welcome to SAGE!',
-      timestamp: new Date(),
-      status: 'active',
-      participants: [user.email.split('@')[0]],
-      messages: [welcomeMessage]
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setActiveSession(newSession.id);
+  const handleCreateNewSession = () => {
+    createNewSession(user.email);
     setSidebarOpen(false);
-
-    // Persist to localStorage
-    try {
-      const storedSessions = localStorage.getItem('employee_sessions');
-      const sessionMetadata = storedSessions ? JSON.parse(storedSessions) : [];
-      sessionMetadata.unshift({
-        id: sessionId,
-        title: 'New Session',
-        lastMessage: 'Welcome to SAGE!',
-        timestamp: newSession.timestamp.toISOString(),
-        status: 'active',
-        participants: [user.email.split('@')[0]]
-      });
-      localStorage.setItem('employee_sessions', JSON.stringify(sessionMetadata));
-    } catch (error) {
-      console.error('Failed to save session to localStorage:', error);
-    }
   };
 
-  const deleteSession = (sessionId: string, e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleDeleteSession = (sessionId: string, e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
-    if (sessions.length <= 1) {
-      alert('Cannot delete the last session. At least one session must remain.');
-      return;
-    }
-    
-    const sessionToDelete = sessions.find(session => session.id === sessionId);
-    if (sessionToDelete && window.confirm(`Are you sure you want to delete "${sessionToDelete.title}"?`)) {
-      setSessions(prev => prev.filter(session => session.id !== sessionId));
-      
-      // Remove from localStorage
-      try {
-        const storedSessions = localStorage.getItem('employee_sessions');
-        if (storedSessions) {
-          const sessionMetadata = JSON.parse(storedSessions);
-          const updatedMetadata = sessionMetadata.filter((meta: any) => meta.id !== sessionId);
-          localStorage.setItem('employee_sessions', JSON.stringify(updatedMetadata));
-        }
-      } catch (error) {
-        console.error('Failed to remove session from localStorage:', error);
-      }
-      
-      // If we're deleting the active session, switch to another one
-      if (activeSession === sessionId) {
-        const remainingSessions = sessions.filter(session => session.id !== sessionId);
-        if (remainingSessions.length > 0) {
-          setActiveSession(remainingSessions[0].id);
-        }
-      }
-    }
+    deleteSession(sessionId);
   };
 
-  const clearAllHistory = () => {
-    if (window.confirm('Are you sure you want to delete all chat history? This action cannot be undone.')) {
-      // Clear localStorage
-      try {
-        localStorage.removeItem('employee_sessions');
-      } catch (error) {
-        console.error('Failed to clear sessions from localStorage:', error);
-      }
-      
-      createNewSession(); // This will create a fresh session
-      setSessions(prev => prev.slice(0, 1)); // Keep only the new session
-    }
+  const handleClearAllHistory = () => {
+    clearAllHistory(user.email);
   };
 
   const filteredSessions = sessions.filter(session =>
@@ -464,7 +109,7 @@ What can I help you explore today?`,
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={clearAllHistory}
+                  onClick={handleClearAllHistory}
                   className="text-gray-600 hover:text-red-600 hover:bg-red-50"
                   title="Clear all chat history"
                 >
@@ -511,7 +156,7 @@ What can I help you explore today?`,
           {/* New Session Button */}
           <div className="p-4">
             <Button
-              onClick={createNewSession}
+              onClick={handleCreateNewSession}
               className="w-full bg-black hover:bg-gray-800 text-white transform transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
             >
               <Plus className="h-4 w-4 mr-2" />
@@ -547,7 +192,7 @@ What can I help you explore today?`,
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => deleteSession(session.id, e)}
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => handleDeleteSession(session.id, e)}
                         className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 h-6 w-6 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Delete session"
                       >

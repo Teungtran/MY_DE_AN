@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { Button } from './ui/button';
@@ -7,9 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { LogOut, Upload, Send, FileText, BarChart3, MessageCircle, Brain, Database, ChevronDown, ChevronUp, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { FPTLogo } from './FPTLogo';
-import { adminAPI } from '../utils/api';
-import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { useReportContext } from '../contexts/ReportContext';
 
 interface User {
   id: string;
@@ -17,25 +16,6 @@ interface User {
   role: string;
 }
 
-interface Message {
-  id: string;
-  content: string;
-  sender: 'user' | 'ai';
-  senderName?: string;
-  timestamp: Date;
-}
-
-interface Report {
-  id: string;
-  name: string;
-  uploadedAt: Date;
-  status: 'processing' | 'ready';
-}
-
-interface UploadResponse {
-  filename: string;
-  data: Record<string, any>[];
-}
 
 interface ReportAgentPageProps {
   user: User;
@@ -44,15 +24,23 @@ interface ReportAgentPageProps {
 
 export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
   const location = useLocation();
-  const [messages, setMessages] = useState<Message[]>([]);
-  
-  const [message, setMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
-  const [reports, setReports] = useState<Report[]>([]);
-  const [uploadedData, setUploadedData] = useState<UploadResponse | null>(null);
-  const [showDataTable, setShowDataTable] = useState(false);
-  const [chatCollapsed, setChatCollapsed] = useState(false);
-  const [dataCollapsed, setDataCollapsed] = useState(false);
+  const {
+    messages,
+    message,
+    setMessage,
+    isTyping,
+    reports,
+    uploadedData,
+    showDataTable,
+    setShowDataTable,
+    chatCollapsed,
+    setChatCollapsed,
+    dataCollapsed,
+    setDataCollapsed,
+    handleFileUpload,
+    sendMessage: contextSendMessage,
+    clearChat: handleClearChat
+  } = useReportContext();
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -64,198 +52,13 @@ export function ReportAgentPage({ user, onLogout }: ReportAgentPageProps) {
     scrollToBottom();
   }, [messages]);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    if (!allowedTypes.includes(file.type)) {
-      toast.error('Please upload a CSV, XLS, or XLSX file');
-      return;
-    }
-
-    // Clear previous data when uploading new file
-    setUploadedData(null);
-    setShowDataTable(false);
-
-    const newReport: Report = {
-      id: Date.now().toString(),
-      name: file.name,
-      uploadedAt: new Date(),
-      status: 'processing'
-    };
-
-    // Replace the entire reports list with just the new report
-    setReports([newReport]);
-
-    try {
-      // Use real API to upload report
-      const response = await adminAPI.uploadReport(file);
-      
-      // Update report status
-      setReports(prev => prev.map(r => 
-        r.id === newReport.id ? { ...r, status: 'ready' } : r
-      ));
-
-      // Store uploaded data for display
-      setUploadedData(response);
-      setShowDataTable(true);
-
-      const aiMessage: Message = {
-        id: Date.now().toString(),
-        content: `I've successfully processed **${file.name}**! 📊
-
-**File Details:**
-• **Records**: ${response.data.length} rows processed
-• **Columns**: ${Object.keys(response.data[0] || {}).length} data fields
-• **Status**: Ready for analysis
-
-The data is now loaded and ready for analysis. You can ask me questions about:
-- Trends and patterns in the data
-- Statistical summaries
-- Comparisons between different segments
-- Insights and recommendations
-
-What would you like to analyze first?`,
-        sender: 'ai',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
-      toast.success('File uploaded and processed successfully!');
-    } catch (error: any) {
-      console.error('File upload error:', error);
-      
-      // Update report status to failed
-      setReports(prev => prev.map(r => 
-        r.id === newReport.id ? { ...r, status: 'ready' } : r
-      ));
-
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        content: `Sorry, I encountered an error processing **${file.name}**. 
-
-**Error**: ${error?.message || 'Upload failed'}
-
-Please try:
-- Checking the file format (CSV, XLS, XLSX)
-- Ensuring the file isn't corrupted
-- Uploading a smaller file if it's very large
-
-Would you like to try uploading the file again?`,
-        sender: 'ai',
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, errorMessage]);
-      toast.error('File upload failed. Please try again.');
-    }
-  };
-
-  const handleClearData = () => {
-    if (window.confirm('Are you sure you want to clear the current data? This will remove the uploaded file and preview.')) {
-      setUploadedData(null);
-      setShowDataTable(false);
-      setReports([]);
-      toast.success('Data cleared successfully');
-    }
-  };
-
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim()) return;
 
-    const userMessage = message;
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      content: userMessage,
-      sender: 'user',
-      senderName: user.email.split('@')[0],
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, newMessage]);
     setMessage('');
-    setIsTyping(true);
-
-    // Create AI response message that will be updated with streaming chunks
-    const aiMessageId = (Date.now() + 1).toString();
-    const aiResponse: Message = {
-      id: aiMessageId,
-      content: '',
-      sender: 'ai',
-      timestamp: new Date()
-    };
-
-    // Add empty AI message
-    setMessages(prev => [...prev, aiResponse]);
-
-    try {
-      // Check if we have uploaded data to analyze
-      if (!uploadedData) {
-        // No data uploaded, provide general response
-        setMessages(prev => prev.map(msg => 
-          msg.id === aiMessageId 
-            ? { 
-                ...msg, 
-                content: `I'd be happy to help analyze your data! However, I don't see any uploaded files yet.
-
-Please upload a CSV, XLS, or XLSX file using the upload button above, and then I can provide detailed analysis of your data.
-
-Once you upload a file, I can help you with:
-- Statistical summaries and trends
-- Data visualization insights  
-- Comparative analysis
-- Business recommendations
-- Pattern identification
-
-What type of data are you planning to analyze?`
-              }
-            : msg
-        ));
-        setIsTyping(false);
-        return;
-      }
-
-      // Use real API for report analysis (now returns JSON directly, no streaming)
-      const response = await adminAPI.analyzeReport(userMessage);
-      
-      // Update AI message with complete response
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiMessageId 
-          ? { ...msg, content: response.content || '' }
-          : msg
-      ));
-      
-      setIsTyping(false);
-    } catch (error: any) {
-      console.error('Report analysis error:', error);
-      // Update AI message with error
-      setMessages(prev => prev.map(msg => 
-        msg.id === aiMessageId 
-          ? { 
-              ...msg, 
-              content: `Sorry, I encountered an error analyzing your question: "${userMessage}"
-
-**Error**: ${error?.message || 'Analysis failed'}
-
-Please try:
-- Rephrasing your question
-- Being more specific about what you want to analyze
-- Checking if the uploaded data is in the correct format
-
-I'm here to help once you're ready to try again!`
-            }
-          : msg
-      ));
-      setIsTyping(false);
-      toast.error('Analysis failed. Please try again.');
-    }
+    await contextSendMessage();
   };
-
-  // Note: generateAIResponse function removed - now using real streaming API via adminAPI.analyzeReport()
-
 
 
   return (
@@ -633,7 +436,7 @@ I'm here to help once you're ready to try again!`
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={handleClearData}
+                      onClick={handleClearChat}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       title="Clear data"
                     >

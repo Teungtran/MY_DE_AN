@@ -1,4 +1,3 @@
-import React, { useState } from 'react';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -6,10 +5,9 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { LogOut, Upload, FileText, Link, Database, MessageCircle, Brain, CheckCircle, AlertCircle } from 'lucide-react';
-import { toast } from 'sonner';
+import { LogOut, Upload, FileText, Link, Database, MessageCircle, Brain, AlertCircle } from 'lucide-react';
 import { FPTLogo } from './FPTLogo';
-import { preprocessAPI } from '../utils/api';
+import { useAdminContext } from '../contexts/AdminContext';
 
 interface User {
   id: string;
@@ -25,277 +23,21 @@ interface DataAdminPageProps {
 
 export function DataAdminPage({ user, onLogout }: DataAdminPageProps) {
   const location = useLocation();
-  const [pdfType, setPdfType] = useState<'policy' | 'expert'>('policy');
-  const [urlType, setUrlType] = useState<'product' | 'agent-knowledge' | 'store-policy'>('product');
-  const [url, setUrl] = useState('');
-  const [confirmationDialog, setConfirmationDialog] = useState<{
-    show: boolean;
-    deviceName: string;
-    existingDevices: string[];
-    urlData: Array<{
-      source: string;
-      description: string;
-      type: string;
-      is_active: boolean;
-    }>;
-  }>({
-    show: false,
-    deviceName: '',
-    existingDevices: [],
-    urlData: []
-  });
+  const {
+    pdfType,
+    setPdfType,
+    urlType,
+    setUrlType,
+    url,
+    setUrl,
+    confirmationDialog,
+    setConfirmationDialog,
+    handleFileUpload,
+    handleUrlUpload,
+    handleConfirmReplace
+  } = useAdminContext();
 
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Validate file type
-    if (file.type !== 'application/pdf') {
-      toast.error('Please upload a PDF file');
-      return;
-    }
-
-    const typeText = pdfType === 'policy' ? 'Policy' : 'Expert Knowledge';
-    
-    // Show processing toast
-    toast.loading(`Processing ${typeText} PDF: ${file.name}`, {
-      id: 'pdf-upload'
-    });
-
-    try {
-      // Use real API based on PDF type
-      if (pdfType === 'policy') {
-        await preprocessAPI.processRagPdfs([file]);
-      } else {
-        await preprocessAPI.processExpertPdfs([file]);
-      }
-
-      toast.success(`${typeText} PDF successfully processed and added to knowledge base!`, {
-        id: 'pdf-upload',
-        icon: <CheckCircle className="h-4 w-4" />,
-        duration: 4000
-      });
-    } catch (error: any) {
-      console.error('PDF processing error:', error);
-      toast.error(`Failed to process ${typeText} PDF: ${error?.message || 'Unknown error'}`, {
-        id: 'pdf-upload',
-        duration: 5000
-      });
-    }
-
-    // Reset file input
-    event.target.value = '';
-  };
-
-  const handleUrlUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!url.trim()) return;
-
-    // Parse multiple URLs (separated by newlines or commas)
-    const urlLines = url.split(/[\n,]/).map(u => u.trim()).filter(u => u.length > 0);
-    
-    if (urlLines.length === 0) {
-      toast.error('Please enter at least one URL');
-      return;
-    }
-
-    // Validate all URL formats
-    const invalidUrls: string[] = [];
-    for (const urlLine of urlLines) {
-      try {
-        new URL(urlLine);
-      } catch {
-        invalidUrls.push(urlLine);
-      }
-    }
-
-    if (invalidUrls.length > 0) {
-      toast.error(`Invalid URL format: ${invalidUrls[0]}${invalidUrls.length > 1 ? ` and ${invalidUrls.length - 1} more` : ''}`);
-      return;
-    }
-
-    const typeText = urlType === 'product' ? 'Store Product' : 
-                    urlType === 'agent-knowledge' ? 'Agent Knowledge' : 
-                    'Store Policy';
-
-    // Show processing toast
-    const urlCount = urlLines.length;
-    toast.loading(`Processing ${urlCount} ${typeText} URL${urlCount > 1 ? 's' : ''}: ${urlLines[0]}${urlCount > 1 ? ` and ${urlCount - 1} more` : ''}`, {
-      id: 'url-upload'
-    });
-
-    try {
-      // Prepare URL data for all URLs
-      const urlData = urlLines.map(urlLine => ({
-        source: urlLine,
-        description: "URL",
-        type: urlType === 'product' ? 'RECOMMEND' : 
-              urlType === 'agent-knowledge' ? 'EXPERT_KNOWLEDGE' : 
-              'RAG',
-        is_active: true
-      }));
-
-      // Use real API based on URL type
-      let response;
-      try {
-        if (urlType === 'product') {
-          response = await preprocessAPI.processRecommendUrls(urlData);
-          
-          // Debug log to see what we're getting
-          console.log('Product URL response:', response);
-          
-          // Check if confirmation is required
-          if (response && (response.status === 'confirmation_required' || response.message?.includes('already exists'))) {
-            console.log('Confirmation required - setting dialog:', {
-              status: response.status,
-              device_name: response.device_name,
-              existing_devices: response.existing_devices,
-              message: response.message
-            });
-            
-            // Dismiss loading toast first
-            toast.dismiss('url-upload');
-            
-            // Set dialog state directly
-            const deviceName = response.device_name || '';
-            const existingDevices = response.existing_devices || (deviceName ? [deviceName] : []);
-            
-            setConfirmationDialog({
-              show: true,
-              deviceName: deviceName,
-              existingDevices: existingDevices,
-              urlData: urlData
-            });
-            console.log('Dialog state set:', { show: true, deviceName, existingDevices });
-            return;
-          }
-        } else if (urlType === 'agent-knowledge') {
-          response = await preprocessAPI.processExpertUrls(urlData);
-        } else {
-          response = await preprocessAPI.processRagUrls(urlData);
-        }
-      } catch (apiError: any) {
-        console.error('API call error:', apiError);
-        throw apiError; // Re-throw to be caught by outer catch
-      }
-      
-      // Ensure response exists before processing
-      if (!response) {
-        throw new Error('No response received from server');
-      }
-
-      // Check if there are any errors in the response message
-      // The backend returns a message string, but we need to check for error indicators
-      const message = response.message || '';
-      const hasGuardrailError = message.includes('Guardrail') || message.includes('INVALID DATA');
-      const hasErrors = message.toLowerCase().includes('failed') || message.toLowerCase().includes('error');
-      
-      if (hasGuardrailError) {
-        toast.error(
-          `Guardrail verification failed: The content from the URL${urlCount > 1 ? 's' : ''} does not match FPT Shop product requirements. Please ensure the URLs point to valid FPT Shop product pages.`,
-          {
-            id: 'url-upload',
-            duration: 8000
-          }
-        );
-      } else if (hasErrors && !message.toLowerCase().includes('success')) {
-        toast.error(message, {
-          id: 'url-upload',
-          duration: 6000
-        });
-      } else {
-        toast.success(message || `${typeText} URL${urlCount > 1 ? 's' : ''} successfully processed and content added to knowledge base!`, {
-          id: 'url-upload',
-          icon: <CheckCircle className="h-4 w-4" />,
-          duration: 4000
-        });
-      }
-    } catch (error: any) {
-      console.error('URL processing error:', error);
-      
-      // Check if error message contains guardrail information
-      const errorMessage = error?.message || error?.response?.data?.detail || 'Unknown error';
-      const isGuardrailError = errorMessage.includes('Guardrail') || errorMessage.includes('INVALID DATA');
-      
-      if (isGuardrailError) {
-        toast.error(
-          `Guardrail verification failed: The content from the URL${urlCount > 1 ? 's' : ''} does not match FPT Shop product requirements. Please ensure the URLs point to valid FPT Shop product pages.`,
-          {
-            id: 'url-upload',
-            duration: 8000
-          }
-        );
-      } else {
-        toast.error(`Failed to process ${typeText} URL${urlCount > 1 ? 's' : ''}: ${errorMessage}`, {
-          id: 'url-upload',
-          duration: 5000
-        });
-      }
-    }
-
-    setUrl('');
-  };
-
-  const handleConfirmReplace = async (replaceExisting: boolean) => {
-    const { deviceName, existingDevices, urlData } = confirmationDialog;
-    
-    // Close dialog first to prevent UI freeze
-    setConfirmationDialog({ show: false, deviceName: '', existingDevices: [], urlData: [] });
-
-    const deviceList = existingDevices && existingDevices.length > 0 ? existingDevices : [deviceName].filter(Boolean);
-    const deviceCount = deviceList.length;
-    const deviceText = deviceCount === 1 ? `device '${deviceList[0]}'` : `${deviceCount} devices`;
-
-    if (!replaceExisting) {
-      toast.info(`Processing cancelled. ${deviceText.charAt(0).toUpperCase() + deviceText.slice(1)} ${deviceCount === 1 ? 'was' : 'were'} not updated.`, {
-        duration: 3000
-      });
-      return;
-    }
-
-    // Show processing toast
-    toast.loading(`Replacing ${deviceText} with new data...`, {
-      id: 'url-replace'
-    });
-
-    try {
-      // Call the API with skip_duplicate_check=true to bypass the check and process directly
-      const response = await preprocessAPI.processRecommendUrls(urlData, true);
-
-      // Check response for errors
-      const message = response.message || '';
-      const hasGuardrailError = message.includes('Guardrail') || message.includes('INVALID DATA');
-      const hasErrors = message.toLowerCase().includes('failed') || message.toLowerCase().includes('error');
-      
-      if (hasGuardrailError) {
-        toast.error(
-          `Guardrail verification failed: The content does not match FPT Shop product requirements.`,
-          {
-            id: 'url-replace',
-            duration: 8000
-          }
-        );
-      } else if (hasErrors && !message.toLowerCase().includes('success')) {
-        toast.error(message, {
-          id: 'url-replace',
-          duration: 6000
-        });
-      } else {
-        toast.success(message || `Successfully replaced ${deviceText} with new data!`, {
-          id: 'url-replace',
-          icon: <CheckCircle className="h-4 w-4" />,
-          duration: 4000
-        });
-      }
-    } catch (error: any) {
-      console.error('URL replacement error:', error);
-      toast.error(`Failed to replace device data: ${error?.message || 'Unknown error'}`, {
-        id: 'url-replace',
-        duration: 5000
-      });
-    }
-  };
 
 
 
